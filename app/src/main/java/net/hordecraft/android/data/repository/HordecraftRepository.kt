@@ -246,7 +246,7 @@ class HordecraftRepository(
 
         val combined = LinkedHashMap<Long, AttachedLora>()
         pinned.forEach { combined[it.modelId] = it }
-        searched.forEach { combined.putIfAbsent(it.modelId, it) }
+        searched.forEach { if (!combined.containsKey(it.modelId)) combined[it.modelId] = it }
         return combined.values.toList()
     }
 
@@ -303,7 +303,7 @@ class HordecraftRepository(
 
         val combined = LinkedHashMap<Long, AttachedTi>()
         pinned.forEach { combined[it.modelId] = it }
-        searched.forEach { combined.putIfAbsent(it.modelId, it) }
+        searched.forEach { if (!combined.containsKey(it.modelId)) combined[it.modelId] = it }
         return combined.values.toList()
     }
 

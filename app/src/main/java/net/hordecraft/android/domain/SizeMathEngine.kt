@@ -1,5 +1,6 @@
 package net.hordecraft.android.domain
 
+import java.util.Locale
 import kotlin.math.roundToInt
 import kotlin.math.sqrt
 
@@ -50,6 +51,6 @@ object SizeMathEngine {
 
     fun formatMegapixels(width: Int, height: Int): String {
         val mp = (width.toLong() * height.toLong()) / 1_000_000.0
-        return String.format("%.2f MP", mp)
+        return String.format(Locale.US, "%.2f MP", mp)
     }
 }

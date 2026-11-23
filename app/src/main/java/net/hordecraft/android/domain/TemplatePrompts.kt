@@ -1,5 +1,6 @@
 package net.hordecraft.android.domain
 
+import java.util.Locale
 import kotlin.random.Random
 
 object TemplatePrompts {
@@ -72,5 +73,5 @@ object TemplatePrompts {
     }
 
     fun formatEmbeddingSnippet(modelId: Long, weight: Float): String =
-        "(embedding:$modelId:${String.format("%.2f", weight)})"
+        "(embedding:$modelId:${String.format(Locale.US, "%.2f", weight)})"
 }

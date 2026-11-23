@@ -35,6 +35,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import java.util.Locale
 import net.hordecraft.android.domain.ActivityDestination
 import net.hordecraft.android.domain.AuthMode
 import net.hordecraft.android.domain.UserStatsSummary
@@ -100,7 +101,7 @@ fun UserScreen(
                                 }
                             }
                             Text(
-                                "${String.format("%,.0f", stats.kudos)} Kudos",
+                                "${String.format(Locale.getDefault(), "%,.0f", stats.kudos)} Kudos",
                                 fontSize = 15.sp,
                                 fontFamily = FontFamily.Monospace,
                                 color = HordeColors.TealSoft,
@@ -110,11 +111,11 @@ fun UserScreen(
 
                     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         StatTile("Requests", "${stats.recordsRequests}", Modifier.weight(1f))
-                        StatTile("Megapixels", "${String.format("%.1f", stats.recordsMegapixels)} MP", Modifier.weight(1f))
+                        StatTile("Megapixels", "${String.format(Locale.getDefault(), "%.1f", stats.recordsMegapixels)} MP", Modifier.weight(1f))
                     }
                     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         StatTile("Workers", "${stats.workerCount}", Modifier.weight(1f))
-                        StatTile("Contributed MP", String.format("%.0f", stats.kudosEarnedWorkers), Modifier.weight(1f))
+                        StatTile("Contributed MP", String.format(Locale.getDefault(), "%.0f", stats.kudosEarnedWorkers), Modifier.weight(1f))
                     }
                 }
                 AuthMode.SHARED_KEY -> {

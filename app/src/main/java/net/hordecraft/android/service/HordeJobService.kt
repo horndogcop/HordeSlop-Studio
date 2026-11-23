@@ -10,6 +10,7 @@ import android.content.pm.ServiceInfo
 import android.os.Build
 import android.os.IBinder
 import androidx.core.app.NotificationCompat
+import androidx.core.app.ServiceCompat
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -81,7 +82,7 @@ class HordeJobService : Service() {
                     it.status == JobStatus.QUEUED.name || it.status == JobStatus.PROCESSING.name
                 }
                 if (jobs.isEmpty()) {
-                    stopForeground(STOP_FOREGROUND_REMOVE)
+                    ServiceCompat.stopForeground(this@HordeJobService, ServiceCompat.STOP_FOREGROUND_REMOVE)
                     stopSelf()
                     break
                 }

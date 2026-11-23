@@ -78,6 +78,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import java.util.Locale
 import net.hordecraft.android.data.local.AppSettings
 import net.hordecraft.android.domain.AttachedLora
 import net.hordecraft.android.domain.GenerateButtonPlacement
@@ -568,7 +569,7 @@ fun StudioScreen(
                                             verticalAlignment = Alignment.CenterVertically,
                                         ) {
                                             Text(
-                                                text = "Model ${String.format("%.2f", lora.strengthModel)} · Clip ${String.format("%.2f", lora.strengthClip)} · v${lora.modelVersionId}",
+                                                text = "Model ${String.format(Locale.US, "%.2f", lora.strengthModel)} · Clip ${String.format(Locale.US, "%.2f", lora.strengthClip)} · v${lora.modelVersionId}",
                                                 fontSize = 11.sp,
                                                 fontFamily = FontFamily.Monospace,
                                                 color = HordeColors.TextMuted,
@@ -1309,7 +1310,7 @@ fun LogFloatSliderRow(
     enabled: Boolean,
 ) {
     val accent = sliderZoneColor(zone)
-    var draft by remember(value) { mutableStateOf(String.format("%.${decimals}f", value)) }
+    var draft by remember(value) { mutableStateOf(String.format(Locale.US, "%.${decimals}f", value)) }
     Column {
         Row(
             modifier = Modifier.fillMaxWidth(),
