@@ -1,0 +1,129 @@
+package net.hordecraft.android.data.local
+
+import android.content.Context
+import androidx.datastore.core.DataStore
+import androidx.datastore.preferences.core.Preferences
+import androidx.datastore.preferences.core.booleanPreferencesKey
+import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.stringPreferencesKey
+import androidx.datastore.preferences.preferencesDataStore
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.map
+import net.hordecraft.android.domain.GenerateButtonPlacement
+import net.hordecraft.android.domain.HordeConstants
+import net.hordecraft.android.domain.LauncherIconChoice
+import net.hordecraft.android.domain.NavLayoutMode
+import net.hordecraft.android.domain.StorageMode
+
+private val Context.dataStore: DataStore<Preferences> by preferencesDataStore(name = "hordecraft_prefs")
+
+data class AppSettings(
+    val hordeApiKey: String = HordeConstants.ANONYMOUS_KEY,
+    val civitaiApiKey: String = "",
+    val apiBaseUrl: String = HordeConstants.DEFAULT_API_BASE_URL,
+    val navLayout: NavLayoutMode = NavLayoutMode.BOTTOM,
+    val generateButtonPlacement: GenerateButtonPlacement = GenerateButtonPlacement.SCROLLING,
+    val showModelPreviews: Boolean = true,
+    val skipGalleryModalToFullscreen: Boolean = false,
+    val launcherIcon: LauncherIconChoice = LauncherIconChoice.ROBOT_PLACEHOLDER,
+    val storageMode: StorageMode = StorageMode.DOWNLOADS,
+    val safTreeUri: String? = null,
+    val safFolderLabel: String = "Downloads/Hordecraft",
+    val advancedCollapsed: Boolean = true,
+    val onboardingCompleted: Boolean = false,
+)
+
+class SettingsDataStore(private val context: Context) {
+    private object Keys {
+        val HORDE_API_KEY = stringPreferencesKey("horde_api_key")
+        val CIVITAI_API_KEY = stringPreferencesKey("civitai_api_key")
+        val API_BASE_URL = stringPreferencesKey("api_base_url")
+        val NAV_LAYOUT = stringPreferencesKey("nav_layout")
+        val GENERATE_BUTTON_PLACEMENT = stringPreferencesKey("generate_button_placement")
+        val SHOW_MODEL_PREVIEWS = booleanPreferencesKey("show_model_previews")
+        val SKIP_GALLERY_TO_FULLSCREEN = booleanPreferencesKey("skip_gallery_to_fullscreen")
+        val LAUNCHER_ICON = stringPreferencesKey("launcher_icon")
+        val STORAGE_MODE = stringPreferencesKey("storage_mode")
+        val SAF_TREE_URI = stringPreferencesKey("saf_tree_uri")
+        val SAF_FOLDER_LABEL = stringPreferencesKey("saf_folder_label")
+        val ADVANCED_COLLAPSED = booleanPreferencesKey("advanced_collapsed")
+        val ONBOARDING_COMPLETED = booleanPreferencesKey("onboarding_completed")
+    }
+
+    val settings: Flow<AppSettings> = context.dataStore.data.map { prefs ->
+        AppSettings(
+            hordeApiKey = prefs[Keys.HORDE_API_KEY]?.ifBlank { HordeConstants.ANONYMOUS_KEY }
+                ?: HordeConstants.ANONYMOUS_KEY,
+            civitaiApiKey = prefs[Keys.CIVITAI_API_KEY] ?: "",
+            apiBaseUrl = HordeConstants.normalizeBaseUrl(
+                prefs[Keys.API_BASE_URL] ?: HordeConstants.DEFAULT_API_BASE_URL,
+            ),
+            navLayout = NavLayoutMode.fromKey(prefs[Keys.NAV_LAYOUT]),
+            generateButtonPlacement = GenerateButtonPlacement.fromKey(prefs[Keys.GENERATE_BUTTON_PLACEMENT]),
+            showModelPreviews = prefs[Keys.SHOW_MODEL_PREVIEWS] ?: true,
+            skipGalleryModalToFullscreen = prefs[Keys.SKIP_GALLERY_TO_FULLSCREEN] ?: false,
+            launcherIcon = LauncherIconChoice.fromKey(prefs[Keys.LAUNCHER_ICON]),
+            storageMode = StorageMode.fromKey(prefs[Keys.STORAGE_MODE]),
+            safTreeUri = prefs[Keys.SAF_TREE_URI],
+            safFolderLabel = prefs[Keys.SAF_FOLDER_LABEL] ?: "Downloads/Hordecraft",
+            advancedCollapsed = prefs[Keys.ADVANCED_COLLAPSED] ?: true,
+            onboardingCompleted = prefs[Keys.ONBOARDING_COMPLETED] ?: false,
+        )
+    }
+
+    suspend fun setHordeApiKey(key: String) {
+        val clean = key.trim().ifEmpty { HordeConstants.ANONYMOUS_KEY }
+        context.dataStore.edit { it[Keys.HORDE_API_KEY] = clean }
+    }
+
+    suspend fun setCivitaiApiKey(key: String) {
+        context.dataStore.edit { it[Keys.CIVITAI_API_KEY] = key.trim() }
+    }
+
+    suspend fun setApiBaseUrl(url: String) {
+        context.dataStore.edit { it[Keys.API_BASE_URL] = HordeConstants.normalizeBaseUrl(url) }
+    }
+
+    suspend fun setNavLayout(mode: NavLayoutMode) {
+        context.dataStore.edit { it[Keys.NAV_LAYOUT] = mode.storageKey }
+    }
+
+    suspend fun setGenerateButtonPlacement(placement: GenerateButtonPlacement) {
+        context.dataStore.edit { it[Keys.GENERATE_BUTTON_PLACEMENT] = placement.storageKey }
+    }
+
+    suspend fun setShowModelPreviews(enabled: Boolean) {
+        context.dataStore.edit { it[Keys.SHOW_MODEL_PREVIEWS] = enabled }
+    }
+
+    suspend fun setSkipGalleryModalToFullscreen(enabled: Boolean) {
+        context.dataStore.edit { it[Keys.SKIP_GALLERY_TO_FULLSCREEN] = enabled }
+    }
+
+    suspend fun setLauncherIcon(icon: LauncherIconChoice) {
+        context.dataStore.edit { it[Keys.LAUNCHER_ICON] = icon.storageKey }
+    }
+
+    suspend fun setStorageDownloads() {
+        context.dataStore.edit {
+            it[Keys.STORAGE_MODE] = StorageMode.DOWNLOADS.storageKey
+            it[Keys.SAF_FOLDER_LABEL] = "Downloads/Hordecraft"
+        }
+    }
+
+    suspend fun setStorageSafTree(uriString: String, displayName: String) {
+        context.dataStore.edit {
+            it[Keys.STORAGE_MODE] = StorageMode.SAF.storageKey
+            it[Keys.SAF_TREE_URI] = uriString
+            it[Keys.SAF_FOLDER_LABEL] = displayName
+        }
+    }
+
+    suspend fun setAdvancedCollapsed(collapsed: Boolean) {
+        context.dataStore.edit { it[Keys.ADVANCED_COLLAPSED] = collapsed }
+    }
+
+    suspend fun setOnboardingCompleted(completed: Boolean) {
+        context.dataStore.edit { it[Keys.ONBOARDING_COMPLETED] = completed }
+    }
+}

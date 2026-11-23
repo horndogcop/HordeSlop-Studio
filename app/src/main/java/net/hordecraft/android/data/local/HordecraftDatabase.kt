@@ -1,0 +1,187 @@
+package net.hordecraft.android.data.local
+
+import android.content.Context
+import androidx.room.Dao
+import androidx.room.Database
+import androidx.room.Entity
+import androidx.room.Insert
+import androidx.room.OnConflictStrategy
+import androidx.room.PrimaryKey
+import androidx.room.Query
+import androidx.room.Room
+import androidx.room.RoomDatabase
+import kotlinx.coroutines.flow.Flow
+
+@Entity(tableName = "prompt_history")
+data class PromptHistoryEntity(
+    @PrimaryKey val id: String,
+    val title: String?,
+    val prompt: String,
+    val negativePrompt: String,
+    val model: String,
+    val steps: Int,
+    val cfg: Float,
+    val clipSkip: Int,
+    val sampler: String,
+    val scheduler: String,
+    val timestampMillis: Long,
+    val isFavorite: Boolean,
+)
+
+@Entity(tableName = "model_defaults")
+data class ModelDefaultsEntity(
+    @PrimaryKey val modelName: String,
+    val steps: Int,
+    val sampler: String,
+    val scheduler: String,
+    val clipSkip: Int,
+)
+
+@Entity(tableName = "saved_images")
+data class SavedImageEntity(
+    @PrimaryKey val id: String,
+    val requestId: String,
+    val generationId: String,
+    val fileUri: String,
+    val prompt: String,
+    val negativePrompt: String,
+    val model: String,
+    val seed: String,
+    val steps: Int,
+    val cfg: Float,
+    val clipSkip: Int,
+    val sampler: String,
+    val scheduler: String,
+    val width: Int,
+    val height: Int,
+    val destinationLabel: String,
+    val isFavorite: Boolean,
+    val partialFromCancel: Boolean,
+    val requestJson: String,
+    val statusMetadataJson: String,
+    val createdAtMillis: Long,
+)
+
+@Entity(tableName = "active_jobs")
+data class ActiveJobEntity(
+    @PrimaryKey val id: String,
+    val requestId: String,
+    val prompt: String,
+    val negativePrompt: String,
+    val modelsJoined: String,
+    val status: String,
+    val waitTimeSeconds: Int,
+    val queuePosition: Int,
+    val finished: Int,
+    val processing: Int,
+    val total: Int,
+    val seed: String,
+    val steps: Int,
+    val cfg: Float,
+    val clipSkip: Int,
+    val sampler: String,
+    val scheduler: String,
+    val width: Int,
+    val height: Int,
+    val submittedPayloadJson: String,
+    val errorMessage: String?,
+    val createdAtMillis: Long,
+)
+
+@Dao
+interface PromptHistoryDao {
+    @Query("SELECT * FROM prompt_history ORDER BY timestampMillis DESC")
+    fun observeAll(): Flow<List<PromptHistoryEntity>>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsert(entry: PromptHistoryEntity)
+
+    @Query("UPDATE prompt_history SET isFavorite = :fav WHERE id = :id")
+    suspend fun setFavorite(id: String, fav: Boolean)
+
+    @Query("DELETE FROM prompt_history WHERE id = :id")
+    suspend fun deleteById(id: String)
+}
+
+@Dao
+interface ModelDefaultsDao {
+    @Query("SELECT * FROM model_defaults")
+    fun observeAll(): Flow<List<ModelDefaultsEntity>>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsert(entity: ModelDefaultsEntity)
+
+    @Query("DELETE FROM model_defaults WHERE modelName = :modelName")
+    suspend fun deleteByModelName(modelName: String)
+}
+
+@Dao
+interface SavedImageDao {
+    @Query("SELECT * FROM saved_images ORDER BY createdAtMillis DESC")
+    fun observeAll(): Flow<List<SavedImageEntity>>
+
+    @Query("SELECT * FROM saved_images WHERE generationId = :generationId LIMIT 1")
+    suspend fun findByGenerationId(generationId: String): SavedImageEntity?
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsert(image: SavedImageEntity)
+
+    @Query("UPDATE saved_images SET isFavorite = :fav WHERE id = :id")
+    suspend fun setFavorite(id: String, fav: Boolean)
+
+    @Query("DELETE FROM saved_images WHERE id = :id")
+    suspend fun deleteById(id: String)
+}
+
+@Dao
+interface ActiveJobDao {
+    @Query("SELECT * FROM active_jobs ORDER BY createdAtMillis DESC")
+    fun observeAll(): Flow<List<ActiveJobEntity>>
+
+    @Query("SELECT * FROM active_jobs WHERE status IN ('QUEUED', 'PROCESSING', 'PAUSED') ORDER BY createdAtMillis ASC")
+    suspend fun getPendingOrActive(): List<ActiveJobEntity>
+
+    @Query("SELECT * FROM active_jobs WHERE id = :id LIMIT 1")
+    suspend fun findById(id: String): ActiveJobEntity?
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsert(job: ActiveJobEntity)
+
+    @Query("UPDATE active_jobs SET status = :status WHERE id = :id")
+    suspend fun updateStatus(id: String, status: String)
+
+    @Query("UPDATE active_jobs SET status = 'PAUSED' WHERE status IN ('QUEUED', 'PROCESSING')")
+    suspend fun pauseAllActive()
+
+    @Query("UPDATE active_jobs SET status = 'PROCESSING' WHERE status = 'PAUSED'")
+    suspend fun resumeAllPaused()
+
+    @Query("DELETE FROM active_jobs WHERE id = :id")
+    suspend fun deleteById(id: String)
+}
+
+@Database(
+    entities = [
+        PromptHistoryEntity::class,
+        ModelDefaultsEntity::class,
+        SavedImageEntity::class,
+        ActiveJobEntity::class,
+    ],
+    version = 1,
+    exportSchema = true,
+)
+abstract class HordecraftDatabase : RoomDatabase() {
+    abstract fun promptHistoryDao(): PromptHistoryDao
+    abstract fun modelDefaultsDao(): ModelDefaultsDao
+    abstract fun savedImageDao(): SavedImageDao
+    abstract fun activeJobDao(): ActiveJobDao
+
+    companion object {
+        fun build(context: Context): HordecraftDatabase =
+            Room.databaseBuilder(
+                context.applicationContext,
+                HordecraftDatabase::class.java,
+                "hordecraft.db",
+            ).build()
+    }
+}

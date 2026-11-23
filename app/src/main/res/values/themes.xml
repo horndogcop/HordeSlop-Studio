@@ -1,0 +1,7 @@
+<resources>
+    <style name="Theme.Hordecraft" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowBackground">@android:color/black</item>
+        <item name="android:statusBarColor">#151A23</item>
+        <item name="android:navigationBarColor">#151A23</item>
+    </style>
+</resources>
