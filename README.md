@@ -18,11 +18,11 @@ All MVP milestones and difficulty-ordered Future Plans (Tiers 1–5) are tracked
 - Pure txt2img using logarithmic **Steps** (`10–25` mid-half, max `50` slider / `100` manual) and **CFG** (`1–6` first `2/3`, fading negative prompt at `CFG = 1`), `sampler_name`, **Clip Skip** slider + numeric entry (`1..12`), **yellow/red color-coded sliders** when outside suggested/slider limits (no text advisories), and persistent collapsible Advanced Settings (`Seed` and `scheduler` side-by-side on Tablet/Landscape, `nsfw`, `censor_nsfw`)
 - **Model Picker Modal** containing toggleable showcase previews, customizable per-model defaults, and the **Multiple models** dispatch setting (`Any selected model` vs `One request per model`, shown when multiple models are selected)
 - Styles API / `AI-Horde-Styles` parameter locking & minimal-diff payloads
-- Ordered Civitai LoRAs (`modelVersionId`, up to 5, collapsible to name only, sent in UI order, inline weight sliders on Tablet, `(keyword:1.0)` activation buttons for prompt/negative/API) & Embeddings / TIs (up to 5, collapsible to name only, restricted to `sd15`, `sd21`, `SDXL`, `(embedding:modelId:weight)` snippet with matching log `-5..+5` weight slider and prompt/negative/API buttons), plus `"All models"` filter bypass and numeric ID pinning
+- Ordered Civitai LoRAs (`modelVersionId`, up to 5, collapsible to name only, sent in UI order, inline weight sliders on Tablet, `(keyword:1.0)` triggers with `*all*`, `*random*`, multi-trigger comma joining, and `API` vs `+ Prompt`/`+ Neg` targeting) & Embeddings / TIs (up to 5, collapsible to name only, restricted to `sd15`, `sd21`, `SDXL`, `(embedding:modelId:weight)` snippet with matching log `-5..+5` weight slider and `API` vs `Prompt`/`Neg` targeting), plus `"All models"` filter bypass and numeric ID pinning
 - Pausable queue, background job polling with partial cancel recovery, Recents-resilient service (auto-stops when empty), and 4 Android notification channels
 - SAF document storage + `Downloads/Hordecraft` fallback with WebP EXIF/XMP metadata embedding
 - Searchable Gallery with Request filter (`Same request`), Favorites, swipeable unpadded modal & tap-to-toggle Fullscreen HUD, immediate Reroll (no seed), and storage-safe deletion prompt
-- Searchable prompt history & favorites above Prompt, inline prompt actions + fullscreen editor, OSS Licenses modal, and Privacy & Legal modals
+- Searchable prompt history & favorites above Prompt, inline prompt actions + fullscreen editor, OSS Licenses modal, and unified Privacy & Legal modal
 
 ## License
 
