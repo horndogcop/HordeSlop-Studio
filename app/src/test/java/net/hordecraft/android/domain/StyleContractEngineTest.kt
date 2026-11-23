@@ -145,4 +145,56 @@ class StyleContractEngineTest {
         assertEquals("7808", tisJson[0].jsonObject["name"]?.jsonPrimitive?.content)
         assertEquals("negprompt", tisJson[0].jsonObject["inject_ti"]?.jsonPrimitive?.content)
     }
+
+    @Test
+    fun expandsRepoStylesClientSideWithoutServerStyleKey() {
+        val repoStyle = HordeStyle(
+            id = "krea2",
+            name = "krea2",
+            source = "AI-Horde-Styles",
+            model = "Krea 2",
+            promptTemplate = "analog photo of {p}",
+            negativeTemplate = "{np}, lowres",
+            steps = 20,
+            cfg = 4.5f,
+            sampler = "k_euler",
+            scheduler = "simple",
+            rawPromptTemplate = "analog photo of {p}###{np}, lowres",
+        )
+        val spec = StudioSubmissionSpec(
+            prompt = "lighthouse",
+            negativePrompt = "blurry",
+            selectedModels = listOf("Krea 2"),
+            dispatchMode = MultiModelDispatchMode.COMBINED,
+            activeStyle = repoStyle,
+            seed = "",
+            steps = 20,
+            cfg = 4.5f,
+            clipSkip = 1,
+            width = 1024,
+            height = 1024,
+            sampler = "k_euler",
+            scheduler = "simple",
+            nsfw = false,
+            censorNsfw = true,
+            imageCount = 1,
+            loras = emptyList(),
+            tis = emptyList(),
+        )
+        val payload = StyleContractEngine.buildSinglePayload(spec, listOf("Krea 2"), 1)
+        assertFalse(payload.containsKey("style"))
+        assertEquals("analog photo of lighthouse ### blurry, lowres", payload["prompt"]?.jsonPrimitive?.content)
+        assertTrue(payload["params"]!!.jsonObject.containsKey("steps"))
+    }
+
+    @Test
+    fun embeddingFiltersIncludePonyIllustriousNoobAiAndFullSamplerFallback() {
+        val tiIds = HordeConstants.CIVITAI_TI_GROUPS.map { it.id }.toSet()
+        assertTrue("pony" in tiIds)
+        assertTrue("illustrious" in tiIds)
+        assertTrue("noobai" in tiIds)
+
+        val allSamplers = (HordeConstants.RECOMMENDED_SAMPLERS + HordeConstants.ADVANCED_SAMPLERS).distinct()
+        assertTrue(allSamplers.size >= 40)
+    }
 }

@@ -337,9 +337,9 @@ fun StudioScreen(
                         label = "Sampler",
                         selected = studio.sampler,
                         options = if (studio.showAllSamplers) {
-                            HordeConstants.RECOMMENDED_SAMPLERS + HordeConstants.ADVANCED_SAMPLERS
+                            studio.allSamplers
                         } else {
-                            HordeConstants.RECOMMENDED_SAMPLERS
+                            studio.recommendedSamplers
                         },
                         enabled = !studio.isFieldLocked(StyleFieldLock.SAMPLER),
                         onSelect = vm::updateSampler,
@@ -441,12 +441,7 @@ fun StudioScreen(
                 }
             }
 
-            // 4. Generate Bar Below Sampling when Inline/Scrolling
-            if (settings.generateButtonPlacement == GenerateButtonPlacement.SCROLLING) {
-                renderGenerateBlock(false)
-            }
-
-            // 5. Ordered LoRAs & Embeddings
+            // 4. Ordered LoRAs & Embeddings
             StudioCard {
                 CollapsibleSectionHeader(
                     title = "LoRAs & Embeddings (${studio.loras.size}/${HordeConstants.MAX_ATTACHED_LORAS} · ${studio.tis.size}/${HordeConstants.MAX_ATTACHED_TIS})",
@@ -725,6 +720,11 @@ fun StudioScreen(
                 }
             }
 
+            // 5. Generate Bar Below Sampling & LoRAs when Inline/Scrolling
+            if (settings.generateButtonPlacement == GenerateButtonPlacement.SCROLLING) {
+                renderGenerateBlock(false)
+            }
+
             // 6. Active & Recent Jobs Queue
             if (jobs.isNotEmpty()) {
                 StudioCard {
@@ -839,12 +839,14 @@ fun StudioScreen(
         ModelPickerDialog(
             models = studio.models,
             selectedModels = studio.selectedModels,
+            multiModelEnabled = studio.multiModelEnabled,
             dispatchMode = studio.dispatchMode,
             showModelPreviews = settings.showModelPreviews,
             currentSteps = studio.steps,
             currentSampler = studio.sampler,
             currentScheduler = studio.scheduler,
             currentClipSkip = studio.clipSkip,
+            onToggleMultiModel = vm::setMultiModelEnabled,
             onToggleModel = vm::toggleModelSelection,
             onChangeDispatchMode = vm::updateDispatchMode,
             onTogglePreviews = vm::setShowModelPreviews,

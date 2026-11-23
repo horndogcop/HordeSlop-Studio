@@ -160,6 +160,8 @@ data class HordeStyle(
     val height: Int? = null,
     val lockedFields: Set<StyleFieldLock> = emptySet(),
     val previewImageUrl: String? = null,
+    val previewImageUrls: List<String> = emptyList(),
+    val rawPromptTemplate: String? = null,
 )
 
 @Serializable
@@ -345,15 +347,39 @@ object HordeConstants {
     )
 
     val ADVANCED_SAMPLERS = listOf(
-        "dpmpp_3m_sde",
-        "dpmpp_2m_sde_heun",
-        "k_dpmpp_2s_a",
-        "res_multistep",
-        "dpmpp_2m_cfg_pp",
-        "euler_cfg_pp",
-        "sa_solver_pece",
+        "ddpm",
         "deis",
+        "dpmpp_2m_cfg_pp",
+        "dpmpp_2m_sde_heun",
+        "dpmpp_2s_ancestral_cfg_pp",
+        "dpmpp_3m_sde",
+        "dpmsolver",
+        "er_sde",
+        "euler_ancestral_cfg_pp",
+        "euler_cfg_pp",
+        "exp_heun_2_x0",
+        "exp_heun_2_x0_sde",
+        "gradient_estimation",
+        "gradient_estimation_cfg_pp",
+        "heunpp2",
+        "ipndm",
         "ipndm_v",
+        "k_dpm_2",
+        "k_dpm_2_a",
+        "k_dpm_adaptive",
+        "k_dpm_fast",
+        "k_dpmpp_2s_a",
+        "k_heun",
+        "k_lms",
+        "res_multistep",
+        "res_multistep_ancestral",
+        "res_multistep_ancestral_cfg_pp",
+        "res_multistep_cfg_pp",
+        "sa_solver",
+        "sa_solver_pece",
+        "seeds_2",
+        "seeds_3",
+        "uni_pc_bh2",
     )
 
     val CIVITAI_LORA_GROUPS = listOf(
@@ -379,7 +405,6 @@ object HordeConstants {
         CivitaiBaseModelGroup("z_image_turbo", "Z-Image-Turbo", listOf("ZImageTurbo")),
     )
 
-    // AI Horde TIs are supported only for SD 1.5, SD 2.1, and SDXL
     val CIVITAI_TI_GROUPS = listOf(
         CivitaiBaseModelGroup(
             id = "sd15",
@@ -396,6 +421,9 @@ object HordeConstants {
             label = "SDXL",
             apiValues = listOf("SDXL 1.0", "SDXL 0.9", "SDXL", "SDXL 1.0 LCM", "SDXL Turbo", "SDXL Lightning", "SDXL Hyper"),
         ),
+        CivitaiBaseModelGroup("pony", "Pony", listOf("Pony")),
+        CivitaiBaseModelGroup("illustrious", "Illustrious", listOf("Illustrious")),
+        CivitaiBaseModelGroup("noobai", "NoobAI", listOf("NoobAI")),
     )
 
     val OSS_CREDITS = listOf(

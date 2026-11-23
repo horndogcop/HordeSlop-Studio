@@ -4,6 +4,8 @@ import android.app.Application
 import android.content.Intent
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -41,6 +43,7 @@ data class StudioUiState(
     val negativePrompt: String = "blurry, watermark, oversaturated, plastic",
     val models: List<HordeModel> = HordeConstants.FALLBACK_SEED_MODELS,
     val selectedModels: List<String> = listOf("Juggernaut XL"),
+    val multiModelEnabled: Boolean = false,
     val dispatchMode: MultiModelDispatchMode = MultiModelDispatchMode.COMBINED,
     val styles: List<HordeStyle> = listOf(HordeStyle(id = "none", name = "Raw Prompt", source = "None")),
     val selectedStyleId: String = "none",
@@ -53,6 +56,8 @@ data class StudioUiState(
     val sampler: String = "dpmpp_2m_sde",
     val scheduler: String = "karras",
     val showAllSamplers: Boolean = false,
+    val recommendedSamplers: List<String> = HordeConstants.RECOMMENDED_SAMPLERS,
+    val allSamplers: List<String> = (HordeConstants.RECOMMENDED_SAMPLERS + HordeConstants.ADVANCED_SAMPLERS).distinct(),
     val nsfw: Boolean = false,
     val censorNsfw: Boolean = true,
     val imageCount: Int = 1,
@@ -108,7 +113,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     val studio: StateFlow<StudioUiState> = _studio.asStateFlow()
 
     init {
-        refreshCatalogs()
+        refreshCatalogs(force = false)
         refreshUserStats()
     }
 
@@ -120,11 +125,19 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         _studio.update { it.copy(toastMessage = message) }
     }
 
-    fun refreshCatalogs() {
+    fun refreshCatalogs(force: Boolean = true) {
+        if (!force && app.container.catalogsLoadedOnce) return
         viewModelScope.launch {
             _studio.update { it.copy(loadingModels = true) }
-            val fetchedModels = runCatching { repo.fetchModels() }.getOrNull()
-            val fetchedStyles = runCatching { repo.fetchStyles() }.getOrNull()
+            val (fetchedModels, fetchedStyles, fetchedSamplers) = coroutineScope {
+                val modelsDeferred = async { runCatching { repo.fetchModels() }.getOrNull() }
+                val stylesDeferred = async { runCatching { repo.fetchStyles() }.getOrNull() }
+                val samplersDeferred = async { runCatching { repo.fetchSamplers() }.getOrNull() }
+                Triple(modelsDeferred.await(), stylesDeferred.await(), samplersDeferred.await())
+            }
+            if (!fetchedModels.isNullOrEmpty() || (fetchedStyles?.size ?: 0) > 1) {
+                app.container.catalogsLoadedOnce = true
+            }
             _studio.update { state ->
                 val nextModels = fetchedModels?.ifEmpty { state.models } ?: state.models
                 val nextSelected = state.selectedModels.filter { sel -> nextModels.any { it.name == sel } }
@@ -133,6 +146,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     models = nextModels,
                     selectedModels = nextSelected,
                     styles = fetchedStyles ?: state.styles,
+                    recommendedSamplers = fetchedSamplers?.first ?: state.recommendedSamplers,
+                    allSamplers = fetchedSamplers?.second ?: state.allSamplers,
                     loadingModels = false,
                 )
             }
@@ -169,8 +184,22 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    fun setMultiModelEnabled(enabled: Boolean) {
+        _studio.update { state ->
+            val trimmed = if (!enabled && state.selectedModels.size > 1) {
+                listOf(state.selectedModels.first())
+            } else {
+                state.selectedModels
+            }
+            state.copy(multiModelEnabled = enabled, selectedModels = trimmed)
+        }
+    }
+
     fun toggleModelSelection(modelName: String) {
         _studio.update { state ->
+            if (!state.multiModelEnabled) {
+                return@update state.copy(selectedModels = listOf(modelName))
+            }
             val exists = modelName in state.selectedModels
             val next = if (exists) {
                 if (state.selectedModels.size > 1) state.selectedModels - modelName else state.selectedModels
@@ -217,7 +246,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 state.copy(selectedStyleId = "none")
             } else {
                 val nextModels = style.model?.let { m ->
-                    if (state.models.any { it.name == m }) listOf(m) else state.selectedModels
+                    state.models.firstOrNull { it.name.equals(m, ignoreCase = true) }?.name?.let(::listOf)
+                        ?: state.selectedModels
                 } ?: state.selectedModels
                 state.copy(
                     selectedStyleId = style.id,

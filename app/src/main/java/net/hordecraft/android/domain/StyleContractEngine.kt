@@ -77,12 +77,13 @@ object StyleContractEngine {
         chunkN: Int,
     ): JsonObject {
         val style = spec.activeStyle?.takeIf { it.id != "none" }
-        val locked = style?.lockedFields ?: emptySet()
+        val isServerStyle = style != null && style.source == "Styles API"
+        val locked = if (isServerStyle) style?.lockedFields ?: emptySet() else emptySet()
 
         val params = buildJsonObject {
             put("n", chunkN.coerceIn(1, HordeConstants.MAX_IMAGES_PER_REQUEST))
 
-            if (style == null) {
+            if (!isServerStyle || style == null) {
                 put("steps", spec.steps)
                 put("cfg_scale", spec.cfg)
                 put("clip_skip", spec.clipSkip)
@@ -164,7 +165,9 @@ object StyleContractEngine {
             }
         }
 
-        val combinedPrompt = if (spec.negativePrompt.isBlank()) {
+        val combinedPrompt = if (style != null && !isServerStyle) {
+            expandClientStylePrompt(style, spec.prompt, spec.negativePrompt)
+        } else if (spec.negativePrompt.isBlank()) {
             spec.prompt.trim()
         } else {
             "${spec.prompt.trim()} ### ${spec.negativePrompt.trim()}"
@@ -172,10 +175,10 @@ object StyleContractEngine {
 
         return buildJsonObject {
             put("prompt", combinedPrompt)
-            if (style != null) {
+            if (isServerStyle && style != null) {
                 put("style", style.id)
             }
-            if (style == null || StyleFieldLock.MODEL !in locked) {
+            if (!isServerStyle || StyleFieldLock.MODEL !in locked) {
                 if (chunkModels.isNotEmpty()) {
                     put(
                         "models",
@@ -187,5 +190,24 @@ object StyleContractEngine {
             put("censor_nsfw", spec.censorNsfw)
             put("params", params)
         }
+    }
+
+    fun expandClientStylePrompt(style: HordeStyle, positive: String, negative: String): String {
+        val raw = style.rawPromptTemplate ?: "${style.promptTemplate}###${style.negativeTemplate}"
+        val cleanPos = positive.trim()
+        val cleanNeg = negative.trim()
+        if (raw.contains("###")) {
+            val parts = raw.split("###", limit = 2)
+            val expandedPos = parts.getOrElse(0) { "{p}" }.replace("{p}", cleanPos).trim()
+            val negTpl = parts.getOrElse(1) { "{np}" }
+            val expandedNeg = negTpl.replace("{np}", cleanNeg)
+                .trim()
+                .trimStart(',')
+                .trimEnd(',')
+                .trim()
+            return if (expandedNeg.isBlank()) expandedPos else "$expandedPos ### $expandedNeg"
+        }
+        val withoutNp = raw.replace("{np}", "").replace("{p}", cleanPos).trim().trimEnd(',').trim()
+        return if (cleanNeg.isBlank()) withoutNp else "$withoutNp ### $cleanNeg"
     }
 }

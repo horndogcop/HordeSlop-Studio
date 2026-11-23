@@ -6,6 +6,7 @@ import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.floatOrNull
 import kotlinx.serialization.json.intOrNull
@@ -24,8 +25,8 @@ private const val MODEL_REF_URL =
     "https://raw.githubusercontent.com/Haidra-Org/AI-Horde-image-model-reference/main/stable_diffusion.json"
 private const val STYLES_REPO_URL =
     "https://raw.githubusercontent.com/Haidra-Org/AI-Horde-Styles/main/styles.json"
-private const val STYLE_PREVIEWS_BASE =
-    "https://raw.githubusercontent.com/Haidra-Org/AI-Horde-Styles-Previews/main/"
+private const val STYLE_PREVIEWS_JSON_URL =
+    "https://raw.githubusercontent.com/amiantos/AI-Horde-Styles-Previews/main/previews.json"
 
 data class ModelRefEntry(
     val baseline: String = "SD 1.5",
@@ -159,7 +160,39 @@ class ModelReferenceRepository(
         }.sortedByDescending { it.workers }
     }
 
-    suspend fun loadFallbackGitHubStyles(): List<HordeStyle> = withContext(Dispatchers.IO) {
+    private var cachedStylePreviews: Map<String, List<String>>? = null
+
+    suspend fun loadStylePreviews(): Map<String, List<String>> = withContext(Dispatchers.IO) {
+        cachedStylePreviews?.let { return@withContext it }
+        val result = mutableMapOf<String, List<String>>()
+        runCatching {
+            val req = Request.Builder().url(STYLE_PREVIEWS_JSON_URL).build()
+            rawOkHttpClient.newCall(req).execute().use { resp ->
+                if (!resp.isSuccessful) return@use
+                val body = resp.body?.string().orEmpty()
+                val root = json.parseToJsonElement(body).jsonObject
+                for ((styleName, elem) in root) {
+                    val obj = elem as? JsonObject ?: continue
+                    val urls = listOfNotNull(
+                        obj["place"]?.jsonPrimitiveOrNull()?.contentOrNull,
+                        obj["person"]?.jsonPrimitiveOrNull()?.contentOrNull,
+                        obj["thing"]?.jsonPrimitiveOrNull()?.contentOrNull,
+                    ).filter { it.isNotBlank() }
+                    if (urls.isNotEmpty()) {
+                        result[styleName.trim().lowercase()] = urls
+                    }
+                }
+            }
+        }
+        if (result.isNotEmpty()) {
+            cachedStylePreviews = result
+        }
+        result
+    }
+
+    suspend fun loadGitHubRepoStyles(
+        previewsMap: Map<String, List<String>>,
+    ): List<HordeStyle> = withContext(Dispatchers.IO) {
         val result = mutableListOf<HordeStyle>()
         runCatching {
             val req = Request.Builder().url(STYLES_REPO_URL).build()
@@ -168,24 +201,23 @@ class ModelReferenceRepository(
                 val body = resp.body?.string().orEmpty()
                 val root = json.parseToJsonElement(body).jsonObject
                 for ((styleName, elem) in root) {
-                    val obj = elem.jsonObject
-                    val rawPrompt = obj["prompt"]?.jsonPrimitive?.contentOrNull ?: "{p}###{np}"
+                    val obj = elem as? JsonObject ?: continue
+                    val rawPrompt = obj["prompt"]?.jsonPrimitiveOrNull()?.contentOrNull ?: "{p}###{np}"
                     val parts = rawPrompt.split("###", limit = 2)
-                    val locks = mutableSetOf<StyleFieldLock>()
-                    val modelName = (obj["models"] as? JsonArray)
-                        ?.firstOrNull()?.jsonPrimitive?.contentOrNull
-                    if (modelName != null) locks += StyleFieldLock.MODEL
+                    val modelName = obj["model"]?.jsonPrimitiveOrNull()?.contentOrNull
+                        ?: (obj["models"] as? JsonArray)?.firstOrNull()?.jsonPrimitiveOrNull()?.contentOrNull
 
-                    val steps = obj["steps"]?.jsonPrimitive?.intOrNull?.also { locks += StyleFieldLock.STEPS }
-                    val cfg = obj["cfg_scale"]?.jsonPrimitive?.floatOrNull?.also { locks += StyleFieldLock.CFG }
-                    val sampler = obj["sampler_name"]?.jsonPrimitive?.contentOrNull?.also { locks += StyleFieldLock.SAMPLER }
-                    val scheduler = obj["scheduler"]?.jsonPrimitive?.contentOrNull?.also { locks += StyleFieldLock.SCHEDULER }
-                    val clipSkip = obj["clip_skip"]?.jsonPrimitive?.intOrNull?.also { locks += StyleFieldLock.CLIP_SKIP }
-                    val w = obj["width"]?.jsonPrimitive?.intOrNull
-                    val h = obj["height"]?.jsonPrimitive?.intOrNull
-                    if (w != null && h != null) locks += StyleFieldLock.SIZE
+                    val steps = obj["steps"]?.jsonPrimitiveOrNull()?.intOrNull
+                    val cfg = obj["cfg_scale"]?.jsonPrimitiveOrNull()?.floatOrNull
+                    val sampler = obj["sampler_name"]?.jsonPrimitiveOrNull()?.contentOrNull
+                    val karras = obj["karras"]?.jsonPrimitiveOrNull()?.booleanOrNull
+                    val scheduler = obj["scheduler"]?.jsonPrimitiveOrNull()?.contentOrNull
+                        ?: karras?.let { if (it) "karras" else "normal" }
+                    val clipSkip = obj["clip_skip"]?.jsonPrimitiveOrNull()?.intOrNull
+                    val w = obj["width"]?.jsonPrimitiveOrNull()?.intOrNull
+                    val h = obj["height"]?.jsonPrimitiveOrNull()?.intOrNull
 
-                    val previewSlug = styleName.replace(" ", "%20") + ".webp"
+                    val previewUrls = previewsMap[styleName.trim().lowercase()].orEmpty()
                     result += HordeStyle(
                         id = styleName,
                         name = styleName,
@@ -200,8 +232,10 @@ class ModelReferenceRepository(
                         clipSkip = clipSkip,
                         width = w,
                         height = h,
-                        lockedFields = locks,
-                        previewImageUrl = "$STYLE_PREVIEWS_BASE$previewSlug",
+                        lockedFields = emptySet(),
+                        previewImageUrl = previewUrls.firstOrNull(),
+                        previewImageUrls = previewUrls,
+                        rawPromptTemplate = rawPrompt,
                     )
                 }
             }
@@ -209,7 +243,10 @@ class ModelReferenceRepository(
         result
     }
 
-    fun mapApiStyle(dto: HordeStyleDto): HordeStyle {
+    fun mapApiStyle(
+        dto: HordeStyleDto,
+        previewsMap: Map<String, List<String>> = emptyMap(),
+    ): HordeStyle {
         val parts = dto.prompt.split("###", limit = 2)
         val params = dto.params
         val locks = mutableSetOf<StyleFieldLock>()
@@ -224,7 +261,10 @@ class ModelReferenceRepository(
         val h = params?.get("height")?.jsonPrimitiveOrNull()?.intOrNull
         if (w != null && h != null) locks += StyleFieldLock.SIZE
 
-        val slug = dto.name.replace(" ", "%20") + ".webp"
+        val exampleUrls = dto.examples.mapNotNull { it.url?.takeIf { u -> u.isNotBlank() } }
+        val repoPreviewUrls = previewsMap[dto.name.trim().lowercase()].orEmpty()
+        val combinedPreviews = (exampleUrls + repoPreviewUrls).distinct()
+
         return HordeStyle(
             id = dto.id.ifBlank { dto.name },
             name = dto.name,
@@ -240,7 +280,9 @@ class ModelReferenceRepository(
             width = w,
             height = h,
             lockedFields = locks,
-            previewImageUrl = "$STYLE_PREVIEWS_BASE$slug",
+            previewImageUrl = combinedPreviews.firstOrNull(),
+            previewImageUrls = combinedPreviews,
+            rawPromptTemplate = dto.prompt,
         )
     }
 

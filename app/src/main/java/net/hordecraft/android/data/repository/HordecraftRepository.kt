@@ -3,6 +3,8 @@ package net.hordecraft.android.data.repository
 import android.content.Context
 import android.util.Base64
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
@@ -10,11 +12,12 @@ import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.floatOrNull
 import kotlinx.serialization.json.intOrNull
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
-import kotlinx.serialization.json.floatOrNull
 import kotlinx.serialization.json.put
 import net.hordecraft.android.data.local.ActiveJobDao
 import net.hordecraft.android.data.local.ActiveJobEntity
@@ -148,13 +151,70 @@ class HordecraftRepository(
         return modelRefRepo.mergeModels(live, refMap, savedDefaults)
     }
 
-    suspend fun fetchStyles(): List<HordeStyle> {
+    suspend fun fetchStyles(): List<HordeStyle> = coroutineScope {
         val rawStyle = HordeStyle(id = "none", name = "Raw Prompt", source = "None")
-        val apiStyles = runCatching { hordeApi.getImageStyles(page = 1) }
-            .getOrDefault(emptyList())
-            .map(modelRefRepo::mapApiStyle)
-        val merged = apiStyles.ifEmpty { modelRefRepo.loadFallbackGitHubStyles() }
-        return listOf(rawStyle) + merged.sortedBy { it.name.lowercase() }
+        val previewsDeferred = async { runCatching { modelRefRepo.loadStylePreviews() }.getOrDefault(emptyMap()) }
+        val apiDeferred = async {
+            val collected = mutableListOf<net.hordecraft.android.data.remote.HordeStyleDto>()
+            for (page in 1..4) {
+                val batch = runCatching { hordeApi.getImageStyles(page = page) }.getOrNull() ?: break
+                if (batch.isEmpty()) break
+                collected += batch
+                if (batch.size < 25) break
+            }
+            collected
+        }
+
+        val previewsMap = previewsDeferred.await()
+        val repoStyles = runCatching { modelRefRepo.loadGitHubRepoStyles(previewsMap) }.getOrDefault(emptyList())
+        val apiStyles = apiDeferred.await().map { modelRefRepo.mapApiStyle(it, previewsMap) }
+
+        val byKey = LinkedHashMap<String, HordeStyle>()
+        // Load all AI-Horde-Styles repo entries first so the full catalog + previews are always present
+        repoStyles.forEach { st ->
+            byKey[st.name.trim().lowercase()] = st
+        }
+        // Merge official Styles API entries (retaining API UUIDs & supplementing previews/model if missing)
+        apiStyles.forEach { api ->
+            val key = api.name.trim().lowercase()
+            val existing = byKey[key]
+            byKey[key] = if (existing != null) {
+                api.copy(
+                    previewImageUrl = api.previewImageUrl ?: existing.previewImageUrl,
+                    previewImageUrls = (api.previewImageUrls + existing.previewImageUrls).distinct(),
+                )
+            } else {
+                api
+            }
+        }
+        listOf(rawStyle) + byKey.values.sortedBy { it.name.lowercase() }
+    }
+
+    suspend fun fetchSamplers(): Pair<List<String>, List<String>> {
+        val doc = runCatching { hordeApi.getSamplerConstraints() }.getOrNull()
+        val samplersObj = doc?.get("samplers")?.let { runCatching { it.jsonObject }.getOrNull() }
+        if (samplersObj.isNullOrEmpty()) {
+            return HordeConstants.RECOMMENDED_SAMPLERS to
+                (HordeConstants.RECOMMENDED_SAMPLERS + HordeConstants.ADVANCED_SAMPLERS).distinct()
+        }
+        val recommended = mutableListOf<String>()
+        val advanced = mutableListOf<String>()
+        for ((name, elem) in samplersObj) {
+            val tier = runCatching {
+                elem.jsonObject["presentation_tier"]?.jsonPrimitive?.contentOrNull
+            }.getOrNull()
+            if (tier == "recommended") {
+                recommended += name
+            } else {
+                advanced += name
+            }
+        }
+        val orderedRecommended = (
+            HordeConstants.RECOMMENDED_SAMPLERS.filter { it in recommended } +
+                recommended.filterNot { it in HordeConstants.RECOMMENDED_SAMPLERS }.sorted()
+            ).ifEmpty { HordeConstants.RECOMMENDED_SAMPLERS }
+        val all = (orderedRecommended + advanced.sorted()).distinct()
+        return orderedRecommended to all
     }
 
     suspend fun fetchUserStats(): UserStatsSummary {

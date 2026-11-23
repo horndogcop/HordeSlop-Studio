@@ -28,4 +28,19 @@ class SizeMathEngineTest {
         assertEquals("1:1", SizeMathEngine.formatAspectRatioLabel(1024, 1024))
         assertEquals("2:3", SizeMathEngine.formatAspectRatioLabel(512, 768))
     }
+
+    @Test
+    fun includesOnePointFiveAndTwoMegapixelPresets() {
+        val mps = SizeMathEngine.MP_PRESETS.map { it.megapixels }
+        org.junit.Assert.assertTrue(1.5 in mps)
+        org.junit.Assert.assertTrue(2.0 in mps)
+
+        val (w15, h15) = SizeMathEngine.computeNearestSizeForRatioAndMp(1, 1, 1.5)
+        assertEquals(0, w15 % 64)
+        assertEquals(0, h15 % 64)
+
+        val (w20, h20) = SizeMathEngine.computeNearestSizeForRatioAndMp(3, 4, 2.0)
+        assertEquals(0, w20 % 64)
+        assertEquals(0, h20 % 64)
+    }
 }

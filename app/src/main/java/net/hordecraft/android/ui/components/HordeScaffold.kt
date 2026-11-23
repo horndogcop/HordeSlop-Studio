@@ -109,7 +109,7 @@ fun launchActivityForDestination(context: Context, destination: ActivityDestinat
         ActivityDestination.TEXT_GEN_STUB -> TextGenActivity::class.java
         ActivityDestination.ALCHEMIST_STUB -> AlchemistActivity::class.java
     }
-    val intent = Intent(context, cls).addFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT)
+    val intent = Intent(context, cls).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
     context.startActivity(intent)
 }
 

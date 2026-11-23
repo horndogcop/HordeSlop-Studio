@@ -77,11 +77,18 @@ data class ActiveModelDto(
 )
 
 @Serializable
+data class StyleExampleDto(
+    val id: String = "",
+    val url: String? = null,
+)
+
+@Serializable
 data class HordeStyleDto(
     val id: String = "",
     val name: String = "",
     val prompt: String = "{p}###{np}",
     val models: List<String> = emptyList(),
+    val examples: List<StyleExampleDto> = emptyList(),
     @SerialName("shared_key") val sharedKey: String? = null,
     val params: JsonObject? = null,
 )
@@ -143,6 +150,9 @@ interface HordeApiService {
 
     @GET("styles/image")
     suspend fun getImageStyles(@Query("page") page: Int = 1): List<HordeStyleDto>
+
+    @GET("status/sampler_constraints")
+    suspend fun getSamplerConstraints(): JsonObject
 
     @GET("find_user")
     suspend fun findUser(): HordeUserDto

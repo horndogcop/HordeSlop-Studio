@@ -84,6 +84,8 @@ class AppContainer(context: Application) {
     val civitaiApi: CivitaiApiService = civitaiRetrofit.create(CivitaiApiService::class.java)
     val modelReferenceRepo = ModelReferenceRepository(rawOkHttp, json)
     val sharedStudioState = MutableStateFlow(StudioUiState())
+    @Volatile
+    var catalogsLoadedOnce: Boolean = false
 
     val repository = HordecraftRepository(
         context = context,

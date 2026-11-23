@@ -20,6 +20,8 @@ object SizeMathEngine {
     val MP_PRESETS = listOf(
         MegapixelPreset("0.25 MP", 0.25),
         MegapixelPreset("1 MP", 1.0),
+        MegapixelPreset("1.5 MP", 1.5),
+        MegapixelPreset("2 MP", 2.0),
         MegapixelPreset("2.5 MP", 2.5),
         MegapixelPreset("4 MP", 4.0),
     )
