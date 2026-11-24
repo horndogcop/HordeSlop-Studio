@@ -16,7 +16,15 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.AutoAwesome
+import androidx.compose.material.icons.outlined.ChevronRight
+import androidx.compose.material.icons.outlined.Collections
+import androidx.compose.material.icons.outlined.Description
 import androidx.compose.material.icons.outlined.Dns
+import androidx.compose.material.icons.outlined.Image
+import androidx.compose.material.icons.outlined.Memory
+import androidx.compose.material.icons.outlined.Public
+import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material.icons.outlined.Person
 import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material.icons.outlined.Schedule
@@ -30,6 +38,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -39,10 +49,159 @@ import androidx.compose.ui.unit.sp
 import java.util.Locale
 import net.hordeslop.studio.domain.ActivityDestination
 import net.hordeslop.studio.domain.AuthMode
+import net.hordeslop.studio.domain.HordeJob
 import net.hordeslop.studio.domain.HordePerformanceSummary
+import net.hordeslop.studio.domain.JobStatus
 import net.hordeslop.studio.domain.UserStatsSummary
 import net.hordeslop.studio.ui.components.launchActivityForDestination
 import net.hordeslop.studio.ui.theme.HordeColors
+
+@Composable
+fun MainHubScreen(
+    userStats: UserStatsSummary,
+    activeJobs: List<HordeJob>,
+    savedImageCount: Int,
+    apiBaseUrl: String,
+    onOpenDestination: (ActivityDestination) -> Unit,
+) {
+    val isWide = LocalConfiguration.current.screenWidthDp >= 600
+    val pendingJobs = activeJobs.count {
+        it.status == JobStatus.QUEUED || it.status == JobStatus.PROCESSING || it.status == JobStatus.PAUSED
+    }
+    val authSubtitle = when (userStats.authMode) {
+        AuthMode.USER_KEY -> "${userStats.username ?: "Signed in"} · ${userStats.kudos.toInt()} kudos"
+        AuthMode.SHARED_KEY -> "Shared key · ${userStats.sharedKeyRemainingKudos ?: 0} kudos"
+        AuthMode.ANONYMOUS -> "Anonymous · Tap to inspect Horde stats"
+    }
+    val primaryCards = listOf(
+        Triple(
+            ActivityDestination.IMAGE_GEN,
+            Icons.Outlined.Image,
+            if (pendingJobs > 0) "$pendingJobs active in queue" else "Generate images, styles, LoRAs & TIs",
+        ),
+        Triple(
+            ActivityDestination.GALLERY,
+            Icons.Outlined.Collections,
+            "$savedImageCount saved WebP image(s)",
+        ),
+        Triple(
+            ActivityDestination.USER,
+            Icons.Outlined.Public,
+            authSubtitle,
+        ),
+        Triple(
+            ActivityDestination.SETTINGS,
+            Icons.Outlined.Settings,
+            apiBaseUrl.removePrefix("https://").removeSuffix("/"),
+        ),
+    )
+    val futureCards = listOf(
+        Triple(ActivityDestination.MODELS_STUB, Icons.Outlined.Memory, "Model & style browser (Coming later)"),
+        Triple(ActivityDestination.TEXT_GEN_STUB, Icons.Outlined.Description, "Text & chat generation (Coming later)"),
+        Triple(ActivityDestination.ALCHEMIST_STUB, Icons.Outlined.AutoAwesome, "Interrogation & post-processing (Coming later)"),
+    )
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            .padding(12.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        StudioCard {
+            Text("HordeSlop Studio", fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = HordeColors.TextPrimary)
+            Text(
+                "Choose a workspace to open. Each screen can run in its own window or inside Home.",
+                fontSize = 12.sp,
+                color = HordeColors.TextMuted,
+            )
+            if (isWide) {
+                primaryCards.chunked(2).forEach { rowItems ->
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        rowItems.forEach { (dest, icon, subtitle) ->
+                            Box(modifier = Modifier.weight(1f)) {
+                                HubDestinationButton(
+                                    title = dest.label,
+                                    subtitle = subtitle,
+                                    icon = icon,
+                                    accent = dest == ActivityDestination.IMAGE_GEN,
+                                    onClick = { onOpenDestination(dest) },
+                                )
+                            }
+                        }
+                        if (rowItems.size == 1) Spacer(Modifier.weight(1f))
+                    }
+                }
+            } else {
+                primaryCards.forEach { (dest, icon, subtitle) ->
+                    HubDestinationButton(
+                        title = dest.label,
+                        subtitle = subtitle,
+                        icon = icon,
+                        accent = dest == ActivityDestination.IMAGE_GEN,
+                        onClick = { onOpenDestination(dest) },
+                    )
+                }
+            }
+        }
+
+        StudioCard {
+            Text("More Tools", fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = HordeColors.TextPrimary)
+            futureCards.forEach { (dest, icon, subtitle) ->
+                HubDestinationButton(
+                    title = dest.label,
+                    subtitle = subtitle,
+                    icon = icon,
+                    accent = false,
+                    onClick = { onOpenDestination(dest) },
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun HubDestinationButton(
+    title: String,
+    subtitle: String,
+    icon: ImageVector,
+    accent: Boolean,
+    onClick: () -> Unit,
+) {
+    Surface(
+        color = if (accent) HordeColors.TealContainer else HordeColors.SubCardSurface,
+        shape = RoundedCornerShape(12.dp),
+        modifier = Modifier
+            .fillMaxWidth()
+            .border(
+                1.dp,
+                if (accent) HordeColors.TealPrimary else HordeColors.BorderSubtle,
+                RoundedCornerShape(12.dp),
+            )
+            .clickable(onClick = onClick),
+    ) {
+        Row(
+            modifier = Modifier.padding(12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = title,
+                tint = if (accent) HordeColors.TealSoft else HordeColors.TextSecondary,
+                modifier = Modifier.size(24.dp),
+            )
+            Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Text(title, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = HordeColors.TextPrimary)
+                Text(subtitle, fontSize = 11.sp, color = HordeColors.TextMuted)
+            }
+            Icon(Icons.Outlined.ChevronRight, null, tint = HordeColors.TextMuted, modifier = Modifier.size(18.dp))
+        }
+    }
+}
 
 @Composable
 fun UserScreen(

@@ -21,6 +21,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.AutoAwesome
 import androidx.compose.material.icons.outlined.Collections
 import androidx.compose.material.icons.outlined.Description
+import androidx.compose.material.icons.outlined.Home
 import androidx.compose.material.icons.outlined.Image
 import androidx.compose.material.icons.outlined.Memory
 import androidx.compose.material.icons.outlined.Menu
@@ -77,6 +78,7 @@ import net.hordeslop.studio.domain.UserStatsSummary
 import net.hordeslop.studio.ui.activities.AlchemistActivity
 import net.hordeslop.studio.ui.activities.GalleryActivity
 import net.hordeslop.studio.ui.activities.ImageGenActivity
+import net.hordeslop.studio.ui.activities.MainActivity
 import net.hordeslop.studio.ui.activities.ModelsActivity
 import net.hordeslop.studio.ui.activities.SettingsActivity
 import net.hordeslop.studio.ui.activities.TextGenActivity
@@ -90,6 +92,7 @@ private data class NavEntry(
 )
 
 private val NAV_ENTRIES = listOf(
+    NavEntry(ActivityDestination.MAIN, Icons.Outlined.Home, true),
     NavEntry(ActivityDestination.IMAGE_GEN, Icons.Outlined.Image, true),
     NavEntry(ActivityDestination.GALLERY, Icons.Outlined.Collections, true),
     NavEntry(ActivityDestination.USER, Icons.Outlined.Public, true),
@@ -101,6 +104,7 @@ private val NAV_ENTRIES = listOf(
 
 fun launchActivityForDestination(context: Context, destination: ActivityDestination) {
     val cls = when (destination) {
+        ActivityDestination.MAIN -> MainActivity::class.java
         ActivityDestination.IMAGE_GEN -> ImageGenActivity::class.java
         ActivityDestination.GALLERY -> GalleryActivity::class.java
         ActivityDestination.USER -> UserActivity::class.java

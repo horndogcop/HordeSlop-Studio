@@ -4,6 +4,7 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonObject
 
 enum class ActivityDestination(val label: String, val routeKey: String) {
+    MAIN("Home", "main"),
     IMAGE_GEN("Image", "image_gen"),
     GALLERY("Gallery", "gallery"),
     USER("Horde", "account"),

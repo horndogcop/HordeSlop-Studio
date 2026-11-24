@@ -10,6 +10,7 @@ import net.hordeslop.studio.domain.ActivityDestination
 import net.hordeslop.studio.ui.MainViewModel
 import net.hordeslop.studio.ui.components.HordeModeScaffold
 import net.hordeslop.studio.ui.screens.FutureStubScreen
+import net.hordeslop.studio.ui.screens.MainHubScreen
 import net.hordeslop.studio.ui.screens.GalleryScreen
 import net.hordeslop.studio.ui.screens.SettingsScreen
 import net.hordeslop.studio.ui.screens.StudioScreen
@@ -40,6 +41,16 @@ abstract class BaseHordeActivity : ComponentActivity() {
                     onDismissOnboarding = vm::completeOnboarding,
                 ) {
                     when (destination) {
+                        ActivityDestination.MAIN -> MainHubScreen(
+                            userStats = studio.userStats,
+                            activeJobs = activeJobs,
+                            savedImageCount = savedImages.size,
+                            apiBaseUrl = settings.apiBaseUrl,
+                            onOpenDestination = { dest ->
+                                net.hordeslop.studio.ui.components.launchActivityForDestination(this@BaseHordeActivity, dest)
+                            },
+                        )
+
                         ActivityDestination.IMAGE_GEN -> StudioScreen(
                             vm = vm,
                             studio = studio,
@@ -81,6 +92,10 @@ abstract class BaseHordeActivity : ComponentActivity() {
             }
         }
     }
+}
+
+class MainActivity : BaseHordeActivity() {
+    override val destination = ActivityDestination.MAIN
 }
 
 class ImageGenActivity : BaseHordeActivity() {
