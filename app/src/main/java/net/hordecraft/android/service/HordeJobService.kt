@@ -77,17 +77,21 @@ class HordeJobService : Service() {
 
         pollingJob = scope.launch {
             while (isActive) {
-                val jobs = repo.getPendingJobs()
-                val activeRunnable = jobs.filter {
+                repo.syncDismissedJobs().forEach { notif ->
+                    postResultNotification(notif.title, notif.body)
+                }
+
+                val visiblePending = repo.getTrackedJobsForPolling().filter { !it.dismissed }
+                val activeRunnable = visiblePending.filter {
                     it.status == JobStatus.QUEUED.name || it.status == JobStatus.PROCESSING.name
                 }
-                if (jobs.isEmpty()) {
+                if (visiblePending.isEmpty()) {
                     ServiceCompat.stopForeground(this@HordeJobService, ServiceCompat.STOP_FOREGROUND_REMOVE)
                     stopSelf()
                     break
                 }
                 if (activeRunnable.isEmpty()) {
-                    updateProgressNotification("Paused (${jobs.size} waiting)")
+                    updateProgressNotification("Paused (${visiblePending.size} waiting)")
                     delay(2_500L)
                     continue
                 }
@@ -96,48 +100,9 @@ class HordeJobService : Service() {
 
                 for (job in activeRunnable) {
                     if (!isActive) break
-                    val checkResult = runCatching { repo.checkJobProgress(job.id) }.getOrNull() ?: continue
-
-                    repo.updateJobRecord(
-                        job.copy(
-                            status = JobStatus.PROCESSING.name,
-                            waitTimeSeconds = checkResult.waitTime,
-                            queuePosition = checkResult.queuePosition,
-                            finished = checkResult.finished,
-                            processing = checkResult.processing,
-                        ),
-                    )
-
-                    if (checkResult.faulted || !checkResult.isPossible) {
-                        val saved = runCatching {
-                            repo.fetchFullStatusAndSave(job, partialFromCancel = true)
-                        }.getOrDefault(0)
-                        repo.updateJobRecord(
-                            job.copy(
-                                status = if (saved > 0) JobStatus.CANCELLED_PARTIAL.name else JobStatus.FAILED.name,
-                                finished = saved,
-                                waitTimeSeconds = 0,
-                                errorMessage = "Request could not be completed",
-                            ),
-                        )
-                        postResultNotification(
-                            title = if (saved > 0) "Partial images saved" else "Generation failed",
-                            body = if (saved > 0) "Saved $saved image(s) before stop." else "Workers could not process this request.",
-                        )
-                    } else if (checkResult.done) {
-                        val saved = runCatching { repo.fetchFullStatusAndSave(job) }.getOrDefault(0)
-                        repo.updateJobRecord(
-                            job.copy(
-                                status = JobStatus.COMPLETED.name,
-                                finished = saved.coerceAtLeast(checkResult.finished),
-                                processing = 0,
-                                waitTimeSeconds = 0,
-                            ),
-                        )
-                        postResultNotification(
-                            title = "Saved $saved WebP image(s)",
-                            body = job.modelsJoined.replace("||", ", "),
-                        )
+                    val notif = runCatching { repo.pollVisibleRunnableJob(job) }.getOrNull()
+                    if (notif != null) {
+                        postResultNotification(notif.title, notif.body)
                     }
                 }
                 delay(2_000L)

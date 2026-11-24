@@ -24,7 +24,7 @@ import androidx.compose.material.icons.outlined.Description
 import androidx.compose.material.icons.outlined.Image
 import androidx.compose.material.icons.outlined.Memory
 import androidx.compose.material.icons.outlined.Menu
-import androidx.compose.material.icons.outlined.Person
+import androidx.compose.material.icons.outlined.Public
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -92,7 +92,7 @@ private data class NavEntry(
 private val NAV_ENTRIES = listOf(
     NavEntry(ActivityDestination.IMAGE_GEN, Icons.Outlined.Image, true),
     NavEntry(ActivityDestination.GALLERY, Icons.Outlined.Collections, true),
-    NavEntry(ActivityDestination.USER, Icons.Outlined.Person, true),
+    NavEntry(ActivityDestination.USER, Icons.Outlined.Public, true),
     NavEntry(ActivityDestination.SETTINGS, Icons.Outlined.Settings, true),
     NavEntry(ActivityDestination.MODELS_STUB, Icons.Outlined.Memory, false),
     NavEntry(ActivityDestination.TEXT_GEN_STUB, Icons.Outlined.Description, false),

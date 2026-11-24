@@ -28,6 +28,7 @@ abstract class BaseHordeActivity : ComponentActivity() {
             val history by vm.history.collectAsStateWithLifecycle()
             val savedImages by vm.savedImages.collectAsStateWithLifecycle()
             val activeJobs by vm.activeJobs.collectAsStateWithLifecycle()
+            val pendingGalleryQuery by vm.pendingGallerySearchQuery.collectAsStateWithLifecycle()
 
             HordecraftTheme {
                 HordeModeScaffold(
@@ -51,9 +52,11 @@ abstract class BaseHordeActivity : ComponentActivity() {
                             images = savedImages,
                             settings = settings,
                             toastMessage = studio.toastMessage,
+                            pendingSearchQuery = pendingGalleryQuery,
                         )
                         ActivityDestination.USER -> UserScreen(
                             stats = studio.userStats,
+                            performance = studio.hordePerformance,
                             onRefreshStats = vm::refreshUserStats,
                         )
                         ActivityDestination.SETTINGS -> SettingsScreen(

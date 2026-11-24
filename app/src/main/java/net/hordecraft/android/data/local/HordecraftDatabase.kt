@@ -10,6 +10,8 @@ import androidx.room.PrimaryKey
 import androidx.room.Query
 import androidx.room.Room
 import androidx.room.RoomDatabase
+import androidx.room.migration.Migration
+import androidx.sqlite.db.SupportSQLiteDatabase
 import kotlinx.coroutines.flow.Flow
 
 @Entity(tableName = "prompt_history")
@@ -86,6 +88,8 @@ data class ActiveJobEntity(
     val submittedPayloadJson: String,
     val errorMessage: String?,
     val createdAtMillis: Long,
+    val dismissed: Boolean = false,
+    val dismissedAtFinishedCount: Int = 0,
 )
 
 @Dao
@@ -135,11 +139,14 @@ interface SavedImageDao {
 
 @Dao
 interface ActiveJobDao {
-    @Query("SELECT * FROM active_jobs ORDER BY createdAtMillis DESC")
-    fun observeAll(): Flow<List<ActiveJobEntity>>
+    @Query("SELECT * FROM active_jobs WHERE dismissed = 0 ORDER BY createdAtMillis DESC")
+    fun observeVisible(): Flow<List<ActiveJobEntity>>
 
-    @Query("SELECT * FROM active_jobs WHERE status IN ('QUEUED', 'PROCESSING', 'PAUSED') ORDER BY createdAtMillis ASC")
-    suspend fun getPendingOrActive(): List<ActiveJobEntity>
+    @Query("SELECT * FROM active_jobs WHERE (dismissed = 0 AND status IN ('QUEUED', 'PROCESSING', 'PAUSED')) OR dismissed = 1 ORDER BY createdAtMillis ASC")
+    suspend fun getTrackedForPolling(): List<ActiveJobEntity>
+
+    @Query("SELECT * FROM active_jobs WHERE dismissed = 1")
+    suspend fun getDismissed(): List<ActiveJobEntity>
 
     @Query("SELECT * FROM active_jobs WHERE id = :id LIMIT 1")
     suspend fun findById(id: String): ActiveJobEntity?
@@ -150,11 +157,17 @@ interface ActiveJobDao {
     @Query("UPDATE active_jobs SET status = :status WHERE id = :id")
     suspend fun updateStatus(id: String, status: String)
 
-    @Query("UPDATE active_jobs SET status = 'PAUSED' WHERE status IN ('QUEUED', 'PROCESSING')")
+    @Query("UPDATE active_jobs SET status = 'PAUSED' WHERE status IN ('QUEUED', 'PROCESSING') AND dismissed = 0")
     suspend fun pauseAllActive()
 
-    @Query("UPDATE active_jobs SET status = 'PROCESSING' WHERE status = 'PAUSED'")
+    @Query("UPDATE active_jobs SET status = 'PROCESSING' WHERE status = 'PAUSED' AND dismissed = 0")
     suspend fun resumeAllPaused()
+
+    @Query("UPDATE active_jobs SET dismissed = 1, dismissedAtFinishedCount = :finishedAtDismiss WHERE id = :id")
+    suspend fun dismissById(id: String, finishedAtDismiss: Int)
+
+    @Query("UPDATE active_jobs SET dismissed = 1, dismissedAtFinishedCount = finished WHERE status IN ('COMPLETED', 'CANCELLED_PARTIAL', 'FAILED') AND dismissed = 0")
+    suspend fun dismissCompleted()
 
     @Query("DELETE FROM active_jobs WHERE id = :id")
     suspend fun deleteById(id: String)
@@ -167,7 +180,7 @@ interface ActiveJobDao {
         SavedImageEntity::class,
         ActiveJobEntity::class,
     ],
-    version = 1,
+    version = 2,
     exportSchema = true,
 )
 abstract class HordecraftDatabase : RoomDatabase() {
@@ -177,11 +190,20 @@ abstract class HordecraftDatabase : RoomDatabase() {
     abstract fun activeJobDao(): ActiveJobDao
 
     companion object {
+        val MIGRATION_1_2 = object : Migration(1, 2) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE active_jobs ADD COLUMN dismissed INTEGER NOT NULL DEFAULT 0")
+                db.execSQL("ALTER TABLE active_jobs ADD COLUMN dismissedAtFinishedCount INTEGER NOT NULL DEFAULT 0")
+            }
+        }
+
         fun build(context: Context): HordecraftDatabase =
             Room.databaseBuilder(
                 context.applicationContext,
                 HordecraftDatabase::class.java,
                 "hordecraft.db",
-            ).build()
+            ).addMigrations(MIGRATION_1_2)
+                .fallbackToDestructiveMigration()
+                .build()
     }
 }

@@ -30,6 +30,7 @@ import androidx.compose.material.icons.outlined.ArrowUpward
 import androidx.compose.material.icons.outlined.ChevronLeft
 import androidx.compose.material.icons.outlined.ChevronRight
 import androidx.compose.material.icons.outlined.Clear
+import androidx.compose.material.icons.outlined.Collections
 import androidx.compose.material.icons.outlined.ContentCopy
 import androidx.compose.material.icons.outlined.ContentPaste
 import androidx.compose.material.icons.outlined.DeleteOutline
@@ -80,6 +81,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import java.util.Locale
 import net.hordecraft.android.data.local.AppSettings
+import net.hordecraft.android.domain.ActivityDestination
 import net.hordecraft.android.domain.AttachedLora
 import net.hordecraft.android.domain.GenerateButtonPlacement
 import net.hordecraft.android.domain.HordeConstants
@@ -96,6 +98,7 @@ import net.hordecraft.android.domain.TemplatePrompts
 import net.hordecraft.android.domain.TiInjectMode
 import net.hordecraft.android.ui.MainViewModel
 import net.hordecraft.android.ui.StudioUiState
+import net.hordecraft.android.ui.components.launchActivityForDestination
 import net.hordecraft.android.ui.theme.HordeColors
 import net.hordecraft.android.ui.theme.sliderZoneColor
 import kotlin.math.roundToInt
@@ -131,6 +134,10 @@ fun StudioScreen(
 
     val primaryModel = studio.primaryModel
     val activeStyle = studio.activeStyle
+
+    LaunchedEffect(Unit) {
+        vm.refreshQueueTracking()
+    }
 
     val renderGenerateBlock: @Composable (Boolean) -> Unit = { isPinnedTop ->
         GenerateActionBar(
@@ -727,6 +734,12 @@ fun StudioScreen(
 
             // 6. Active & Recent Jobs Queue
             if (jobs.isNotEmpty()) {
+                val hasActive = jobs.any {
+                    it.status == JobStatus.QUEUED || it.status == JobStatus.PROCESSING || it.status == JobStatus.PAUSED
+                }
+                val hasClearable = jobs.any {
+                    it.status == JobStatus.COMPLETED || it.status == JobStatus.CANCELLED_PARTIAL || it.status == JobStatus.FAILED
+                }
                 StudioCard {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
@@ -734,13 +747,37 @@ fun StudioScreen(
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         Text("Queue (${jobs.size})", fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = HordeColors.TextPrimary)
-                        OutlinedButton(onClick = vm::toggleQueuePause) {
-                            Icon(if (studio.queuePaused) Icons.Outlined.PlayArrow else Icons.Outlined.Pause, null, modifier = Modifier.size(16.dp))
-                            Spacer(Modifier.width(4.dp))
-                            Text(if (studio.queuePaused) "Resume" else "Pause", fontSize = 12.sp)
+                        Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+                            if (hasClearable) {
+                                OutlinedButton(onClick = vm::clearCompletedJobs) {
+                                    Text("Clear done", fontSize = 11.sp)
+                                }
+                            }
+                            if (hasActive) {
+                                OutlinedButton(onClick = vm::toggleQueuePause) {
+                                    Icon(
+                                        if (studio.queuePaused) Icons.Outlined.PlayArrow else Icons.Outlined.Pause,
+                                        null,
+                                        modifier = Modifier.size(16.dp),
+                                    )
+                                    Spacer(Modifier.width(4.dp))
+                                    Text(if (studio.queuePaused) "Resume" else "Pause", fontSize = 11.sp)
+                                }
+                            }
                         }
                     }
-                    jobs.take(8).forEach { job ->
+                    jobs.take(12).forEach { job ->
+                        val isActive = job.status == JobStatus.QUEUED ||
+                            job.status == JobStatus.PROCESSING ||
+                            job.status == JobStatus.PAUSED
+                        val statusText = when (job.status) {
+                            JobStatus.QUEUED -> "Queued"
+                            JobStatus.PROCESSING -> if (job.waitTimeSeconds > 0) "Wait ~${job.waitTimeSeconds}s · #${job.queuePosition}" else "Processing"
+                            JobStatus.PAUSED -> "Paused"
+                            JobStatus.COMPLETED -> "Completed"
+                            JobStatus.CANCELLED_PARTIAL -> "Partial"
+                            JobStatus.FAILED -> job.errorMessage ?: "Failed"
+                        }
                         Surface(
                             color = HordeColors.SubCardSurface,
                             shape = RoundedCornerShape(10.dp),
@@ -754,24 +791,54 @@ fun StudioScreen(
                                     horizontalArrangement = Arrangement.SpaceBetween,
                                     verticalAlignment = Alignment.CenterVertically,
                                 ) {
-                                    Text(
-                                        text = "${job.models.joinToString(", ")} · ${job.finished}/${job.total}",
-                                        fontSize = 12.sp,
-                                        color = HordeColors.TextPrimary,
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis,
-                                        modifier = Modifier.weight(1f),
-                                    )
-                                    if (job.status == JobStatus.QUEUED || job.status == JobStatus.PROCESSING || job.status == JobStatus.PAUSED) {
-                                        IconButton(onClick = { vm.cancelJob(job.id) }, modifier = Modifier.size(28.dp)) {
-                                            Icon(Icons.Outlined.Stop, "Cancel", tint = HordeColors.RoseText, modifier = Modifier.size(16.dp))
-                                        }
-                                    } else {
+                                    Column(modifier = Modifier.weight(1f)) {
                                         Text(
-                                            text = job.status.name.lowercase().replace('_', ' '),
+                                            text = "${job.models.joinToString(", ")} · ${job.finished}/${job.total}",
+                                            fontSize = 12.sp,
+                                            color = HordeColors.TextPrimary,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis,
+                                        )
+                                        Text(
+                                            text = statusText,
                                             fontSize = 11.sp,
                                             color = HordeColors.TextMuted,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis,
                                         )
+                                    }
+                                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                                        if (job.finished > 0) {
+                                            Row(
+                                                modifier = Modifier
+                                                    .clip(RoundedCornerShape(8.dp))
+                                                    .background(HordeColors.TealContainer)
+                                                    .clickable {
+                                                        vm.openRequestInGallery(job.requestId)
+                                                        launchActivityForDestination(context, ActivityDestination.GALLERY)
+                                                    }
+                                                    .padding(horizontal = 8.dp, vertical = 4.dp),
+                                                verticalAlignment = Alignment.CenterVertically,
+                                                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                                            ) {
+                                                Icon(
+                                                    Icons.Outlined.Collections,
+                                                    contentDescription = "View in gallery",
+                                                    tint = HordeColors.TealSoft,
+                                                    modifier = Modifier.size(14.dp),
+                                                )
+                                                Text("View", fontSize = 11.sp, color = HordeColors.TealSoft)
+                                            }
+                                        }
+                                        if (isActive) {
+                                            IconButton(onClick = { vm.cancelJob(job.id) }, modifier = Modifier.size(28.dp)) {
+                                                Icon(Icons.Outlined.Stop, "Cancel", tint = HordeColors.RoseText, modifier = Modifier.size(16.dp))
+                                            }
+                                        } else {
+                                            IconButton(onClick = { vm.dismissJob(job.id) }, modifier = Modifier.size(28.dp)) {
+                                                Icon(Icons.Outlined.DeleteOutline, "Clear", tint = HordeColors.TextSecondary, modifier = Modifier.size(16.dp))
+                                            }
+                                        }
                                     }
                                 }
                                 if (job.status == JobStatus.QUEUED || job.status == JobStatus.PROCESSING) {

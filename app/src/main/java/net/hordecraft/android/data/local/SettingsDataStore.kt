@@ -25,6 +25,8 @@ data class AppSettings(
     val generateButtonPlacement: GenerateButtonPlacement = GenerateButtonPlacement.SCROLLING,
     val showModelPreviews: Boolean = true,
     val skipGalleryModalToFullscreen: Boolean = false,
+    val autoClearCompletedQueue: Boolean = false,
+    val stylesRepoUrls: List<String> = listOf(HordeConstants.DEFAULT_STYLES_REPO_URL),
     val launcherIcon: LauncherIconChoice = LauncherIconChoice.ROBOT_PLACEHOLDER,
     val storageMode: StorageMode = StorageMode.DOWNLOADS,
     val safTreeUri: String? = null,
@@ -42,6 +44,8 @@ class SettingsDataStore(private val context: Context) {
         val GENERATE_BUTTON_PLACEMENT = stringPreferencesKey("generate_button_placement")
         val SHOW_MODEL_PREVIEWS = booleanPreferencesKey("show_model_previews")
         val SKIP_GALLERY_TO_FULLSCREEN = booleanPreferencesKey("skip_gallery_to_fullscreen")
+        val AUTO_CLEAR_COMPLETED_QUEUE = booleanPreferencesKey("auto_clear_completed_queue")
+        val STYLES_REPO_URLS = stringPreferencesKey("styles_repo_urls")
         val LAUNCHER_ICON = stringPreferencesKey("launcher_icon")
         val STORAGE_MODE = stringPreferencesKey("storage_mode")
         val SAF_TREE_URI = stringPreferencesKey("saf_tree_uri")
@@ -51,6 +55,15 @@ class SettingsDataStore(private val context: Context) {
     }
 
     val settings: Flow<AppSettings> = context.dataStore.data.map { prefs ->
+        val rawRepos = prefs[Keys.STYLES_REPO_URLS]
+        val parsedRepos = if (rawRepos == null) {
+            listOf(HordeConstants.DEFAULT_STYLES_REPO_URL)
+        } else {
+            rawRepos.split('\n')
+                .map { it.trim() }
+                .filter { it.isNotEmpty() }
+                .distinct()
+        }
         AppSettings(
             hordeApiKey = prefs[Keys.HORDE_API_KEY]?.ifBlank { HordeConstants.ANONYMOUS_KEY }
                 ?: HordeConstants.ANONYMOUS_KEY,
@@ -62,6 +75,8 @@ class SettingsDataStore(private val context: Context) {
             generateButtonPlacement = GenerateButtonPlacement.fromKey(prefs[Keys.GENERATE_BUTTON_PLACEMENT]),
             showModelPreviews = prefs[Keys.SHOW_MODEL_PREVIEWS] ?: true,
             skipGalleryModalToFullscreen = prefs[Keys.SKIP_GALLERY_TO_FULLSCREEN] ?: false,
+            autoClearCompletedQueue = prefs[Keys.AUTO_CLEAR_COMPLETED_QUEUE] ?: false,
+            stylesRepoUrls = parsedRepos,
             launcherIcon = LauncherIconChoice.fromKey(prefs[Keys.LAUNCHER_ICON]),
             storageMode = StorageMode.fromKey(prefs[Keys.STORAGE_MODE]),
             safTreeUri = prefs[Keys.SAF_TREE_URI],
@@ -98,6 +113,19 @@ class SettingsDataStore(private val context: Context) {
 
     suspend fun setSkipGalleryModalToFullscreen(enabled: Boolean) {
         context.dataStore.edit { it[Keys.SKIP_GALLERY_TO_FULLSCREEN] = enabled }
+    }
+
+    suspend fun setAutoClearCompletedQueue(enabled: Boolean) {
+        context.dataStore.edit { it[Keys.AUTO_CLEAR_COMPLETED_QUEUE] = enabled }
+    }
+
+    suspend fun setStylesRepoUrls(urls: List<String>) {
+        val clean = urls.map { it.trim() }.filter { it.isNotEmpty() }.distinct()
+        context.dataStore.edit { it[Keys.STYLES_REPO_URLS] = clean.joinToString("\n") }
+    }
+
+    suspend fun resetStylesRepoUrls() {
+        context.dataStore.edit { it.remove(Keys.STYLES_REPO_URLS) }
     }
 
     suspend fun setLauncherIcon(icon: LauncherIconChoice) {

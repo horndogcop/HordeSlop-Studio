@@ -574,15 +574,45 @@ fun StylesPickerDialog(
     onDismiss: () -> Unit,
 ) {
     var query by remember { mutableStateOf("") }
-    val filtered = styles.filter {
-        query.isBlank() || it.name.contains(query, ignoreCase = true) || (it.model?.contains(query, ignoreCase = true) == true)
+    var showApiStyles by remember { mutableStateOf(true) }
+    var showRepoStyles by remember { mutableStateOf(true) }
+    var selectedCategory by remember { mutableStateOf("All") }
+    var categoryMenuOpen by remember { mutableStateOf(false) }
+
+    val availableCategories = remember(styles) {
+        styles.flatMap { it.categories }
+            .map { it.trim() }
+            .filter { it.isNotEmpty() }
+            .distinctBy { it.lowercase() }
+            .sortedBy { it.lowercase() }
+    }
+
+    val filtered = remember(styles, query, showApiStyles, showRepoStyles, selectedCategory) {
+        styles.filter { st ->
+            if (st.id == "none") {
+                return@filter query.isBlank() || st.name.contains(query, ignoreCase = true)
+            }
+            val matchesSource = (showApiStyles && st.inApi) ||
+                (showRepoStyles && st.inRepo) ||
+                (!st.inApi && !st.inRepo)
+            if (!matchesSource) return@filter false
+
+            val matchesCategory = selectedCategory == "All" ||
+                st.categories.any { it.equals(selectedCategory, ignoreCase = true) }
+            if (!matchesCategory) return@filter false
+
+            if (query.isBlank()) return@filter true
+            st.name.contains(query, ignoreCase = true) ||
+                (st.model?.contains(query, ignoreCase = true) == true) ||
+                st.categories.any { it.contains(query, ignoreCase = true) }
+        }
     }
 
     HordeModalDialog(
         onDismiss = onDismiss,
         header = {
             Text(
-                text = "Select Style (${styles.size - 1})",
+                text = "Select Style (${(filtered.count { it.id != "none" })})",
                 color = HordeColors.TextPrimary,
                 fontSize = 16.sp,
                 fontWeight = FontWeight.SemiBold,
@@ -599,6 +629,77 @@ fun StylesPickerDialog(
             placeholder = { Text("Search styles...") },
             modifier = Modifier.fillMaxWidth(),
         )
+
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.clickable { showApiStyles = !showApiStyles },
+                ) {
+                    Checkbox(checked = showApiStyles, onCheckedChange = { showApiStyles = it })
+                    Text("Styles API", fontSize = 11.sp, color = HordeColors.TextSecondary)
+                }
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.clickable { showRepoStyles = !showRepoStyles },
+                ) {
+                    Checkbox(checked = showRepoStyles, onCheckedChange = { showRepoStyles = it })
+                    Text("Styles repo", fontSize = 11.sp, color = HordeColors.TextSecondary)
+                }
+            }
+
+            if (availableCategories.isNotEmpty()) {
+                Box {
+                    Row(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(HordeColors.SubCardSurface)
+                            .border(1.dp, HordeColors.BorderSubtle, RoundedCornerShape(8.dp))
+                            .clickable { categoryMenuOpen = true }
+                            .padding(horizontal = 8.dp, vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    ) {
+                        Text(
+                            text = if (selectedCategory == "All") "Category: All" else selectedCategory,
+                            fontSize = 11.sp,
+                            color = if (selectedCategory == "All") HordeColors.TextSecondary else HordeColors.TealSoft,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.widthIn(max = 120.dp),
+                        )
+                        Icon(Icons.Outlined.ArrowDropDown, null, tint = HordeColors.TextMuted, modifier = Modifier.size(16.dp))
+                    }
+                    DropdownMenu(
+                        expanded = categoryMenuOpen,
+                        onDismissRequest = { categoryMenuOpen = false },
+                        modifier = Modifier.heightIn(max = 320.dp),
+                    ) {
+                        DropdownMenuItem(
+                            text = { Text("All", fontSize = 12.sp) },
+                            onClick = {
+                                selectedCategory = "All"
+                                categoryMenuOpen = false
+                            },
+                        )
+                        availableCategories.forEach { cat ->
+                            DropdownMenuItem(
+                                text = { Text(cat, fontSize = 12.sp) },
+                                onClick = {
+                                    selectedCategory = cat
+                                    categoryMenuOpen = false
+                                },
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
         LazyColumn(
             modifier = Modifier
                 .fillMaxWidth()
@@ -610,6 +711,20 @@ fun StylesPickerDialog(
                 val previews = style.previewImageUrls.ifEmpty {
                     listOfNotNull(style.previewImageUrl)
                 }.take(3)
+                val sourceLabel = when {
+                    style.inApi && style.inRepo -> "Styles API · Repo"
+                    style.inApi -> "Styles API"
+                    style.inRepo -> "Styles repo"
+                    else -> style.source
+                }
+                val subtitle = buildList {
+                    add(sourceLabel)
+                    style.model?.let { add(it) }
+                    if (style.categories.isNotEmpty()) {
+                        add(style.categories.take(2).joinToString(", "))
+                    }
+                }.joinToString(" · ")
+
                 Surface(
                     color = HordeColors.SubCardSurface,
                     shape = RoundedCornerShape(10.dp),
@@ -637,17 +752,34 @@ fun StylesPickerDialog(
                                 }
                             }
                         }
-                        Column(Modifier.weight(1f)) {
+                        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                            ) {
+                                Text(
+                                    text = style.name,
+                                    fontSize = 13.sp,
+                                    fontWeight = FontWeight.Medium,
+                                    color = HordeColors.TextPrimary,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                    modifier = Modifier.weight(1f, fill = false),
+                                )
+                                if (style.isUserCreated) {
+                                    Text(
+                                        text = "Yours",
+                                        fontSize = 10.sp,
+                                        color = HordeColors.TealSoft,
+                                        modifier = Modifier
+                                            .clip(RoundedCornerShape(4.dp))
+                                            .background(HordeColors.TealContainer)
+                                            .padding(horizontal = 5.dp, vertical = 1.dp),
+                                    )
+                                }
+                            }
                             Text(
-                                text = style.name,
-                                fontSize = 13.sp,
-                                fontWeight = FontWeight.Medium,
-                                color = HordeColors.TextPrimary,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
-                            )
-                            Text(
-                                text = listOfNotNull(style.source, style.model).joinToString(" · "),
+                                text = subtitle,
                                 fontSize = 11.sp,
                                 color = HordeColors.TextMuted,
                                 maxLines = 1,

@@ -84,6 +84,7 @@ class AppContainer(context: Application) {
     val civitaiApi: CivitaiApiService = civitaiRetrofit.create(CivitaiApiService::class.java)
     val modelReferenceRepo = ModelReferenceRepository(rawOkHttp, json)
     val sharedStudioState = MutableStateFlow(StudioUiState())
+    val pendingGallerySearchQuery = MutableStateFlow<String?>(null)
     @Volatile
     var catalogsLoadedOnce: Boolean = false
 

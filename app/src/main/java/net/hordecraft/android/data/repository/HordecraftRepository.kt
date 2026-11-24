@@ -46,6 +46,7 @@ import net.hordecraft.android.domain.GenerationChunk
 import net.hordecraft.android.domain.HordeConstants
 import net.hordecraft.android.domain.HordeJob
 import net.hordecraft.android.domain.HordeModel
+import net.hordecraft.android.domain.HordePerformanceSummary
 import net.hordecraft.android.domain.HordeStyle
 import net.hordecraft.android.domain.JobStatus
 import net.hordecraft.android.domain.PromptRecord
@@ -56,6 +57,7 @@ import net.hordecraft.android.domain.TiInjectMode
 import net.hordecraft.android.domain.UserStatsSummary
 import okhttp3.OkHttpClient
 import okhttp3.Request
+import retrofit2.HttpException
 import java.util.UUID
 
 class HordecraftRepository(
@@ -124,7 +126,7 @@ class HordecraftRepository(
         }
     }
 
-    val activeJobsFlow: Flow<List<HordeJob>> = activeJobDao.observeAll().map { list ->
+    val activeJobsFlow: Flow<List<HordeJob>> = activeJobDao.observeVisible().map { list ->
         list.map { e ->
             HordeJob(
                 id = e.id,
@@ -151,12 +153,19 @@ class HordecraftRepository(
         return modelRefRepo.mergeModels(live, refMap, savedDefaults)
     }
 
-    suspend fun fetchStyles(): List<HordeStyle> = coroutineScope {
+    suspend fun fetchStyles(knownUsername: String? = null): List<HordeStyle> = coroutineScope {
         val rawStyle = HordeStyle(id = "none", name = "Raw Prompt", source = "None")
+        val settings = settingsStore.settings.first()
+        val resolvedUsername = knownUsername ?: if (AuthMode.inferFromKey(settings.hordeApiKey) == AuthMode.USER_KEY) {
+            runCatching { hordeApi.findUser().username }.getOrNull()
+        } else {
+            null
+        }
+
         val previewsDeferred = async { runCatching { modelRefRepo.loadStylePreviews() }.getOrDefault(emptyMap()) }
         val apiDeferred = async {
             val collected = mutableListOf<net.hordecraft.android.data.remote.HordeStyleDto>()
-            for (page in 1..4) {
+            for (page in 1..15) {
                 val batch = runCatching { hordeApi.getImageStyles(page = page) }.getOrNull() ?: break
                 if (batch.isEmpty()) break
                 collected += batch
@@ -166,28 +175,19 @@ class HordecraftRepository(
         }
 
         val previewsMap = previewsDeferred.await()
-        val repoStyles = runCatching { modelRefRepo.loadGitHubRepoStyles(previewsMap) }.getOrDefault(emptyList())
-        val apiStyles = apiDeferred.await().map { modelRefRepo.mapApiStyle(it, previewsMap) }
+        val (repoStyles, repoCategoriesMap) = runCatching {
+            modelRefRepo.loadRepoStylesFromUrls(settings.stylesRepoUrls, previewsMap)
+        }.getOrDefault(emptyList<HordeStyle>() to emptyMap())
+        val apiStyles = apiDeferred.await().map {
+            modelRefRepo.mapApiStyle(
+                dto = it,
+                previewsMap = previewsMap,
+                repoCategories = repoCategoriesMap,
+                currentUsername = resolvedUsername,
+            )
+        }
 
-        val byKey = LinkedHashMap<String, HordeStyle>()
-        // Load all AI-Horde-Styles repo entries first so the full catalog + previews are always present
-        repoStyles.forEach { st ->
-            byKey[st.name.trim().lowercase()] = st
-        }
-        // Merge official Styles API entries (retaining API UUIDs & supplementing previews/model if missing)
-        apiStyles.forEach { api ->
-            val key = api.name.trim().lowercase()
-            val existing = byKey[key]
-            byKey[key] = if (existing != null) {
-                api.copy(
-                    previewImageUrl = api.previewImageUrl ?: existing.previewImageUrl,
-                    previewImageUrls = (api.previewImageUrls + existing.previewImageUrls).distinct(),
-                )
-            } else {
-                api
-            }
-        }
-        listOf(rawStyle) + byKey.values.sortedBy { it.name.lowercase() }
+        mergeAndSortStyles(rawStyle = rawStyle, repoStyles = repoStyles, apiStyles = apiStyles)
     }
 
     suspend fun fetchSamplers(): Pair<List<String>, List<String>> {
@@ -215,6 +215,22 @@ class HordecraftRepository(
             ).ifEmpty { HordeConstants.RECOMMENDED_SAMPLERS }
         val all = (orderedRecommended + advanced.sorted()).distinct()
         return orderedRecommended to all
+    }
+
+    suspend fun fetchPerformance(): HordePerformanceSummary {
+        val dto = hordeApi.getPerformance()
+        return HordePerformanceSummary(
+            workerCount = dto.workerCount,
+            threadCount = dto.threadCount,
+            queuedRequests = dto.queuedRequests,
+            queuedMegapixelsteps = dto.queuedMegapixelsteps,
+            pastMinuteMegapixelsteps = dto.pastMinuteMegapixelsteps,
+            textWorkerCount = dto.textWorkerCount,
+            textThreadCount = dto.textThreadCount,
+            queuedTextRequests = dto.queuedTextRequests,
+            queuedTokens = dto.queuedTokens,
+            pastMinuteTokens = dto.pastMinuteTokens,
+        )
     }
 
     suspend fun fetchUserStats(): UserStatsSummary {
@@ -570,18 +586,141 @@ class HordecraftRepository(
 
     suspend fun cancelJobWithPartialRecovery(jobId: String): Int {
         val job = activeJobDao.findById(jobId) ?: return 0
-        val statusDto = hordeApi.cancelGeneration(jobId)
-        val savedCount = persistGenerationsFromStatus(job, statusDto, partialFromCancel = true)
+        val statusResult = runCatching { hordeApi.cancelGeneration(jobId) }
+        val statusDto = statusResult.getOrNull()
+        val err = statusResult.exceptionOrNull()
+        if (err != null && isHttp404(err)) {
+            activeJobDao.deleteById(jobId)
+            return 0
+        }
+        val savedCount = if (statusDto != null) {
+            persistGenerationsFromStatus(job, statusDto, partialFromCancel = true)
+        } else {
+            0
+        }
+        val finalFinished = maxOf(job.finished, savedCount)
         activeJobDao.upsert(
             job.copy(
-                status = if (savedCount > 0) JobStatus.CANCELLED_PARTIAL.name else JobStatus.FAILED.name,
-                finished = savedCount,
+                status = if (finalFinished > 0) JobStatus.CANCELLED_PARTIAL.name else JobStatus.FAILED.name,
+                finished = finalFinished,
                 processing = 0,
                 waitTimeSeconds = 0,
-                errorMessage = if (savedCount == 0) "Cancelled" else null,
+                errorMessage = if (finalFinished == 0) "Cancelled" else null,
             ),
         )
         return savedCount
+    }
+
+    suspend fun pollVisibleRunnableJob(job: ActiveJobEntity): JobPollNotification? {
+        val checkResult = try {
+            hordeApi.checkGeneration(job.id)
+        } catch (t: Throwable) {
+            if (isHttp404(t)) {
+                activeJobDao.deleteById(job.id)
+            }
+            return null
+        }
+
+        val updated = job.copy(
+            status = JobStatus.PROCESSING.name,
+            waitTimeSeconds = checkResult.waitTime,
+            queuePosition = checkResult.queuePosition,
+            finished = checkResult.finished,
+            processing = checkResult.processing,
+        )
+        activeJobDao.upsert(updated)
+
+        if (checkResult.faulted || !checkResult.isPossible) {
+            val saved = runCatching {
+                fetchFullStatusAndSave(updated, partialFromCancel = true)
+            }.getOrDefault(0)
+            val totalFinished = maxOf(updated.finished, saved)
+            activeJobDao.upsert(
+                updated.copy(
+                    status = if (totalFinished > 0) JobStatus.CANCELLED_PARTIAL.name else JobStatus.FAILED.name,
+                    finished = totalFinished,
+                    processing = 0,
+                    waitTimeSeconds = 0,
+                    errorMessage = "Request could not be completed",
+                ),
+            )
+            return JobPollNotification(
+                title = if (totalFinished > 0) "Partial images saved" else "Generation failed",
+                body = if (totalFinished > 0) "Saved $totalFinished image(s) before stop." else "Workers could not process this request.",
+            )
+        }
+
+        if (checkResult.done) {
+            val saved = runCatching { fetchFullStatusAndSave(updated) }.getOrDefault(0)
+            val finalFinished = maxOf(saved, checkResult.finished)
+            val autoClear = settingsStore.settings.first().autoClearCompletedQueue
+            activeJobDao.upsert(
+                updated.copy(
+                    status = JobStatus.COMPLETED.name,
+                    finished = finalFinished,
+                    processing = 0,
+                    waitTimeSeconds = 0,
+                    dismissed = autoClear,
+                    dismissedAtFinishedCount = if (autoClear) finalFinished else 0,
+                ),
+            )
+            return JobPollNotification(
+                title = "Saved $saved WebP image(s)",
+                body = job.modelsJoined.replace("||", ", "),
+            )
+        }
+        return null
+    }
+
+    suspend fun syncDismissedJobs(): List<JobPollNotification> {
+        val dismissedJobs = activeJobDao.getDismissed()
+        val notifications = mutableListOf<JobPollNotification>()
+        for (job in dismissedJobs) {
+            val checkResult = try {
+                hordeApi.checkGeneration(job.id)
+            } catch (t: Throwable) {
+                if (isHttp404(t)) {
+                    activeJobDao.deleteById(job.id)
+                }
+                continue
+            }
+
+            if (shouldResurfaceDismissedJob(job.dismissedAtFinishedCount, checkResult.finished)) {
+                val partial = job.status == JobStatus.CANCELLED_PARTIAL.name || job.status == JobStatus.FAILED.name
+                val saved = runCatching { fetchFullStatusAndSave(job, partialFromCancel = partial) }.getOrDefault(0)
+                val finalFinished = maxOf(checkResult.finished, saved)
+                val nextStatus = when {
+                    checkResult.done && !checkResult.faulted -> JobStatus.COMPLETED.name
+                    checkResult.processing > 0 || checkResult.waiting > 0 -> JobStatus.PROCESSING.name
+                    else -> job.status
+                }
+                activeJobDao.upsert(
+                    job.copy(
+                        status = nextStatus,
+                        finished = finalFinished,
+                        processing = checkResult.processing,
+                        waitTimeSeconds = checkResult.waitTime,
+                        queuePosition = checkResult.queuePosition,
+                        dismissed = false,
+                        dismissedAtFinishedCount = 0,
+                    ),
+                )
+                notifications += JobPollNotification(
+                    title = "New result for request",
+                    body = "${job.modelsJoined.replace("||", ", ")} · $finalFinished/${job.total}",
+                )
+            }
+        }
+        return notifications
+    }
+
+    suspend fun dismissJob(jobId: String) {
+        val job = activeJobDao.findById(jobId) ?: return
+        activeJobDao.dismissById(job.id, job.finished)
+    }
+
+    suspend fun clearCompletedJobs() {
+        activeJobDao.dismissCompleted()
     }
 
     suspend fun persistGenerationsFromStatus(
@@ -670,7 +809,52 @@ class HordecraftRepository(
     suspend fun pauseQueue() = activeJobDao.pauseAllActive()
     suspend fun resumeQueue() = activeJobDao.resumeAllPaused()
 
-    suspend fun getPendingJobs(): List<ActiveJobEntity> = activeJobDao.getPendingOrActive()
+    suspend fun getTrackedJobsForPolling(): List<ActiveJobEntity> = activeJobDao.getTrackedForPolling()
 
     suspend fun updateJobRecord(job: ActiveJobEntity) = activeJobDao.upsert(job)
+
+    private fun isHttp404(t: Throwable): Boolean =
+        t is HttpException && t.code() == 404
+
+    data class JobPollNotification(
+        val title: String,
+        val body: String,
+    )
+
+    companion object {
+        fun mergeAndSortStyles(
+            rawStyle: HordeStyle,
+            repoStyles: List<HordeStyle>,
+            apiStyles: List<HordeStyle>,
+        ): List<HordeStyle> {
+            val byKey = LinkedHashMap<String, HordeStyle>()
+            repoStyles.forEach { st ->
+                val key = st.name.trim().lowercase()
+                byKey[key] = st.copy(inRepo = true)
+            }
+            apiStyles.forEach { api ->
+                val key = api.name.trim().lowercase()
+                val existing = byKey[key]
+                byKey[key] = if (existing != null) {
+                    api.copy(
+                        inApi = true,
+                        inRepo = true,
+                        categories = (api.categories + existing.categories).distinct(),
+                        previewImageUrl = api.previewImageUrl ?: existing.previewImageUrl,
+                        previewImageUrls = (api.previewImageUrls + existing.previewImageUrls).distinct(),
+                    )
+                } else {
+                    api.copy(inApi = true)
+                }
+            }
+            val sorted = byKey.values.sortedWith(
+                compareByDescending<HordeStyle> { it.isUserCreated }
+                    .thenBy { it.name.lowercase() },
+            )
+            return listOf(rawStyle) + sorted
+        }
+
+        fun shouldResurfaceDismissedJob(dismissedAtFinishedCount: Int, apiFinishedCount: Int): Boolean =
+            apiFinishedCount > dismissedAtFinishedCount
+    }
 }

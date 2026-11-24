@@ -89,8 +89,25 @@ data class HordeStyleDto(
     val prompt: String = "{p}###{np}",
     val models: List<String> = emptyList(),
     val examples: List<StyleExampleDto> = emptyList(),
+    val creator: String? = null,
+    val tags: List<String> = emptyList(),
+    @SerialName("parameter_policy") val parameterPolicy: JsonObject? = null,
     @SerialName("shared_key") val sharedKey: String? = null,
     val params: JsonObject? = null,
+)
+
+@Serializable
+data class HordePerformanceDto(
+    @SerialName("queued_requests") val queuedRequests: Int = 0,
+    @SerialName("worker_count") val workerCount: Int = 0,
+    @SerialName("thread_count") val threadCount: Int = 0,
+    @SerialName("queued_megapixelsteps") val queuedMegapixelsteps: Double = 0.0,
+    @SerialName("past_minute_megapixelsteps") val pastMinuteMegapixelsteps: Double = 0.0,
+    @SerialName("queued_text_requests") val queuedTextRequests: Int = 0,
+    @SerialName("text_worker_count") val textWorkerCount: Int = 0,
+    @SerialName("text_thread_count") val textThreadCount: Int = 0,
+    @SerialName("queued_tokens") val queuedTokens: Double = 0.0,
+    @SerialName("past_minute_tokens") val pastMinuteTokens: Double = 0.0,
 )
 
 @Serializable
@@ -153,6 +170,9 @@ interface HordeApiService {
 
     @GET("status/sampler_constraints")
     suspend fun getSamplerConstraints(): JsonObject
+
+    @GET("status/performance")
+    suspend fun getPerformance(): HordePerformanceDto
 
     @GET("find_user")
     suspend fun findUser(): HordeUserDto

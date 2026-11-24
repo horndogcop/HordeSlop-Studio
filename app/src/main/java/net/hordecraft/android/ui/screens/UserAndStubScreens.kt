@@ -16,6 +16,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Dns
 import androidx.compose.material.icons.outlined.Person
 import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material.icons.outlined.Schedule
@@ -38,6 +39,7 @@ import androidx.compose.ui.unit.sp
 import java.util.Locale
 import net.hordecraft.android.domain.ActivityDestination
 import net.hordecraft.android.domain.AuthMode
+import net.hordecraft.android.domain.HordePerformanceSummary
 import net.hordecraft.android.domain.UserStatsSummary
 import net.hordecraft.android.ui.components.launchActivityForDestination
 import net.hordecraft.android.ui.theme.HordeColors
@@ -45,6 +47,7 @@ import net.hordecraft.android.ui.theme.HordeColors
 @Composable
 fun UserScreen(
     stats: UserStatsSummary,
+    performance: HordePerformanceSummary?,
     onRefreshStats: () -> Unit,
 ) {
     val context = LocalContext.current
@@ -63,22 +66,78 @@ fun UserScreen(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Icon(Icons.Outlined.Dns, null, tint = HordeColors.TealSoft)
+                    Text("Horde Status", fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = HordeColors.TextPrimary)
+                }
+                IconButton(onClick = onRefreshStats, modifier = Modifier.size(30.dp)) {
+                    Icon(Icons.Outlined.Refresh, "Refresh", tint = HordeColors.TextSecondary, modifier = Modifier.size(16.dp))
+                }
+            }
+
+            if (performance == null) {
+                Text(
+                    text = "Loading Horde performance stats...",
+                    fontSize = 12.sp,
+                    color = HordeColors.TextMuted,
+                )
+            } else {
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    StatTile(
+                        "Image Workers",
+                        "${performance.workerCount} (${performance.threadCount} threads)",
+                        Modifier.weight(1f),
+                    )
+                    StatTile(
+                        "Queued Image",
+                        "${performance.queuedRequests} reqs",
+                        Modifier.weight(1f),
+                    )
+                }
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    StatTile(
+                        "Queued Work",
+                        "${String.format(Locale.getDefault(), "%,.0f", performance.queuedMegapixelsteps)} MPsteps",
+                        Modifier.weight(1f),
+                    )
+                    StatTile(
+                        "Speed (1m)",
+                        "${String.format(Locale.getDefault(), "%,.0f", performance.pastMinuteMegapixelsteps)} MPsteps",
+                        Modifier.weight(1f),
+                    )
+                }
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    StatTile(
+                        "Text Workers",
+                        "${performance.textWorkerCount} (${performance.textThreadCount} threads)",
+                        Modifier.weight(1f),
+                    )
+                    StatTile(
+                        "Text Queue",
+                        "${performance.queuedTextRequests} reqs · ${String.format(Locale.getDefault(), "%,.0f", performance.pastMinuteTokens)} tok/m",
+                        Modifier.weight(1f),
+                    )
+                }
+            }
+        }
+
+        StudioCard {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Icon(Icons.Outlined.Person, null, tint = HordeColors.TealSoft)
                     Text("Account", fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = HordeColors.TextPrimary)
                 }
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    IconButton(onClick = onRefreshStats, modifier = Modifier.size(30.dp)) {
-                        Icon(Icons.Outlined.Refresh, "Refresh", tint = HordeColors.TextSecondary, modifier = Modifier.size(16.dp))
-                    }
-                    Text(
-                        text = "API Key in Settings",
-                        fontSize = 12.sp,
-                        color = HordeColors.TealSoft,
-                        modifier = Modifier.clickable {
-                            launchActivityForDestination(context, ActivityDestination.SETTINGS)
-                        },
-                    )
-                }
+                Text(
+                    text = "API Key in Settings",
+                    fontSize = 12.sp,
+                    color = HordeColors.TealSoft,
+                    modifier = Modifier.clickable {
+                        launchActivityForDestination(context, ActivityDestination.SETTINGS)
+                    },
+                )
             }
 
             when (stats.authMode) {

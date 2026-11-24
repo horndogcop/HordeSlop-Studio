@@ -77,7 +77,7 @@ object StyleContractEngine {
         chunkN: Int,
     ): JsonObject {
         val style = spec.activeStyle?.takeIf { it.id != "none" }
-        val isServerStyle = style != null && style.source == "Styles API"
+        val isServerStyle = style != null && (style.inApi || style.source == "Styles API")
         val locked = if (isServerStyle) style?.lockedFields ?: emptySet() else emptySet()
 
         val params = buildJsonObject {

@@ -23,10 +23,14 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.Android
 import androidx.compose.material.icons.outlined.Balance
+import androidx.compose.material.icons.outlined.DeleteOutline
+import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.OpenInNew
+import androidx.compose.material.icons.outlined.RestartAlt
 import androidx.compose.material.icons.outlined.Visibility
 import androidx.compose.material.icons.outlined.VisibilityOff
 import androidx.compose.material3.AlertDialog
@@ -56,6 +60,7 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.documentfile.provider.DocumentFile
@@ -67,7 +72,6 @@ import net.hordecraft.android.domain.GenerateButtonPlacement
 import net.hordecraft.android.domain.HordeConstants
 import net.hordecraft.android.domain.LauncherIconChoice
 import net.hordecraft.android.domain.NavLayoutMode
-import net.hordecraft.android.domain.StorageMode
 import net.hordecraft.android.ui.MainViewModel
 import net.hordecraft.android.ui.theme.HordeColors
 
@@ -90,6 +94,9 @@ fun SettingsScreen(
     var showLauncherIconModal by remember { mutableStateOf(false) }
     var showOssCreditsModal by remember { mutableStateOf(false) }
     var showPrivacyLegalModal by remember { mutableStateOf(false) }
+
+    var editingRepoIndex by remember { mutableStateOf<Int?>(null) } // -1 for add, >=0 for edit
+    var draftRepoUrl by remember { mutableStateOf("") }
 
     val safFolderLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.OpenDocumentTree(),
@@ -142,12 +149,12 @@ fun SettingsScreen(
             }
         }
 
-        // API Keys
+        // AI Horde section: Horde API Key + Server URL (#89)
         StudioCard {
-            Text("API Keys", fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = HordeColors.TextPrimary)
+            Text("AI Horde", fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = HordeColors.TextPrimary)
 
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                Text("AI Horde", fontSize = 12.sp, color = HordeColors.TextSecondary)
+                Text("API Key", fontSize = 12.sp, color = HordeColors.TextSecondary)
                 Text(
                     text = when (currentAuthMode) {
                         AuthMode.USER_KEY -> "Personal Key"
@@ -181,50 +188,45 @@ fun SettingsScreen(
 
             HorizontalDivider(color = HordeColors.BorderSubtle)
 
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                Text("Civitai (Optional)", fontSize = 12.sp, color = HordeColors.TextSecondary)
-                Text(if (settings.civitaiApiKey.isNotBlank()) "Saved" else "None", fontSize = 11.sp, color = HordeColors.TextMuted)
-            }
-            Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
-                OutlinedTextField(
-                    value = draftCivitaiKey,
-                    onValueChange = { draftCivitaiKey = it },
-                    singleLine = true,
-                    placeholder = { Text("Civitai key...") },
-                    visualTransformation = if (showCivitaiKey) VisualTransformation.None else PasswordVisualTransformation(),
-                    trailingIcon = {
-                        IconButton(onClick = { showCivitaiKey = !showCivitaiKey }) {
-                            Icon(if (showCivitaiKey) Icons.Outlined.VisibilityOff else Icons.Outlined.Visibility, null)
-                        }
+            Text("Server", fontSize = 12.sp, color = HordeColors.TextSecondary)
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                ToggleChipButton(
+                    text = "aihorde.net",
+                    selected = !endpointModeOther,
+                    onClick = {
+                        endpointModeOther = false
+                        draftEndpointUrl = HordeConstants.DEFAULT_API_BASE_URL
+                        vm.saveApiBaseUrl(HordeConstants.DEFAULT_API_BASE_URL)
                     },
-                    modifier = Modifier.weight(1f),
                 )
-                Button(
-                    onClick = { vm.saveCivitaiApiKey(draftCivitaiKey) },
-                    colors = ButtonDefaults.buttonColors(containerColor = HordeColors.TealPrimary),
-                ) {
-                    Text("Save", color = Color(0xFF020617), fontWeight = FontWeight.SemiBold)
-                }
+                ToggleChipButton(
+                    text = "Other",
+                    selected = endpointModeOther,
+                    onClick = {
+                        endpointModeOther = true
+                        if (draftEndpointUrl.isBlank()) draftEndpointUrl = HordeConstants.DEFAULT_API_BASE_URL
+                    },
+                )
             }
-        }
-
-        // Navigation
-        StudioCard {
-            Text("Navigation", fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = HordeColors.TextPrimary)
-            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                NavLayoutMode.entries.forEach { mode ->
-                    Box(modifier = Modifier.weight(1f)) {
-                        ToggleChipButton(
-                            text = mode.label,
-                            selected = settings.navLayout == mode,
-                            onClick = { vm.setNavLayout(mode) },
-                        )
+            if (endpointModeOther) {
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+                    OutlinedTextField(
+                        value = draftEndpointUrl,
+                        onValueChange = { draftEndpointUrl = it },
+                        singleLine = true,
+                        modifier = Modifier.weight(1f),
+                    )
+                    Button(
+                        onClick = { vm.saveApiBaseUrl(draftEndpointUrl) },
+                        colors = ButtonDefaults.buttonColors(containerColor = HordeColors.TealPrimary),
+                    ) {
+                        Text("Apply", color = Color(0xFF020617), fontWeight = FontWeight.SemiBold)
                     }
                 }
             }
         }
 
-        // Preferences
+        // Preferences (#90: Navigation, Civitai key, Storage location, Styles Repos, Auto-clear, App Icon, Generate Button, Previews, Full-screen)
         StudioCard {
             Text("Preferences", fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = HordeColors.TextPrimary)
 
@@ -261,6 +263,20 @@ fun SettingsScreen(
                     }
                 }
                 Text("Change", fontSize = 12.sp, color = HordeColors.TealSoft)
+            }
+
+            // Navigation layout
+            Text("Navigation", fontSize = 12.sp, color = HordeColors.TextSecondary)
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                NavLayoutMode.entries.forEach { mode ->
+                    Box(modifier = Modifier.weight(1f)) {
+                        ToggleChipButton(
+                            text = mode.label,
+                            selected = settings.navLayout == mode,
+                            onClick = { vm.setNavLayout(mode) },
+                        )
+                    }
+                }
             }
 
             // Generate Button Placement
@@ -305,11 +321,57 @@ fun SettingsScreen(
                     onCheckedChange = vm::setSkipGalleryModalToFullscreen,
                 )
             }
-        }
 
-        // Save Folder
-        StudioCard {
-            Text("Save Folder", fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = HordeColors.TextPrimary)
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { vm.setAutoClearCompletedQueue(!settings.autoClearCompletedQueue) },
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Column(Modifier.weight(1f)) {
+                    Text("Auto-clear completed requests", fontSize = 13.sp, color = HordeColors.TextPrimary)
+                    Text("Automatically clear finished items from Queue", fontSize = 11.sp, color = HordeColors.TextMuted)
+                }
+                Checkbox(
+                    checked = settings.autoClearCompletedQueue,
+                    onCheckedChange = vm::setAutoClearCompletedQueue,
+                )
+            }
+
+            HorizontalDivider(color = HordeColors.BorderSubtle)
+
+            // Civitai API key inside Preferences (#90)
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                Text("Civitai API Key (Optional)", fontSize = 12.sp, color = HordeColors.TextSecondary)
+                Text(if (settings.civitaiApiKey.isNotBlank()) "Saved" else "None", fontSize = 11.sp, color = HordeColors.TextMuted)
+            }
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+                OutlinedTextField(
+                    value = draftCivitaiKey,
+                    onValueChange = { draftCivitaiKey = it },
+                    singleLine = true,
+                    placeholder = { Text("Civitai key...") },
+                    visualTransformation = if (showCivitaiKey) VisualTransformation.None else PasswordVisualTransformation(),
+                    trailingIcon = {
+                        IconButton(onClick = { showCivitaiKey = !showCivitaiKey }) {
+                            Icon(if (showCivitaiKey) Icons.Outlined.VisibilityOff else Icons.Outlined.Visibility, null)
+                        }
+                    },
+                    modifier = Modifier.weight(1f),
+                )
+                Button(
+                    onClick = { vm.saveCivitaiApiKey(draftCivitaiKey) },
+                    colors = ButtonDefaults.buttonColors(containerColor = HordeColors.TealPrimary),
+                ) {
+                    Text("Save", color = Color(0xFF020617), fontWeight = FontWeight.SemiBold)
+                }
+            }
+
+            HorizontalDivider(color = HordeColors.BorderSubtle)
+
+            // Storage location inside Preferences (#90)
+            Text("Storage Location", fontSize = 12.sp, color = HordeColors.TextSecondary)
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 OutlinedButton(
                     onClick = { vm.setStorageDownloads() },
@@ -326,43 +388,79 @@ fun SettingsScreen(
                 }
             }
             Text("Saving to: ${settings.safFolderLabel}", fontSize = 11.sp, color = HordeColors.TextMuted)
-        }
 
-        // Server Selector (text box hidden unless Other chosen)
-        StudioCard {
-            Text("Server", fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = HordeColors.TextPrimary)
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                ToggleChipButton(
-                    text = "aihorde.net",
-                    selected = !endpointModeOther,
-                    onClick = {
-                        endpointModeOther = false
-                        draftEndpointUrl = HordeConstants.DEFAULT_API_BASE_URL
-                        vm.saveApiBaseUrl(HordeConstants.DEFAULT_API_BASE_URL)
-                    },
-                )
-                ToggleChipButton(
-                    text = "Other",
-                    selected = endpointModeOther,
-                    onClick = {
-                        endpointModeOther = true
-                        if (draftEndpointUrl.isBlank()) draftEndpointUrl = HordeConstants.DEFAULT_API_BASE_URL
-                    },
-                )
-            }
-            if (endpointModeOther) {
-                Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
-                    OutlinedTextField(
-                        value = draftEndpointUrl,
-                        onValueChange = { draftEndpointUrl = it },
-                        singleLine = true,
-                        modifier = Modifier.weight(1f),
-                    )
-                    Button(
-                        onClick = { vm.saveApiBaseUrl(draftEndpointUrl) },
-                        colors = ButtonDefaults.buttonColors(containerColor = HordeColors.TealPrimary),
+            HorizontalDivider(color = HordeColors.BorderSubtle)
+
+            // Styles Repos (#83, #84)
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text("Styles Repos (${settings.stylesRepoUrls.size})", fontSize = 12.sp, color = HordeColors.TextSecondary)
+                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    TextButton(
+                        onClick = { vm.resetStylesRepoUrls() },
                     ) {
-                        Text("Apply", color = Color(0xFF020617), fontWeight = FontWeight.SemiBold)
+                        Icon(Icons.Outlined.RestartAlt, null, modifier = Modifier.size(14.dp))
+                        Spacer(Modifier.size(3.dp))
+                        Text("Reset", fontSize = 11.sp)
+                    }
+                    TextButton(
+                        onClick = {
+                            draftRepoUrl = ""
+                            editingRepoIndex = -1
+                        },
+                    ) {
+                        Icon(Icons.Outlined.Add, null, modifier = Modifier.size(14.dp))
+                        Spacer(Modifier.size(3.dp))
+                        Text("Add", fontSize = 11.sp)
+                    }
+                }
+            }
+            if (settings.stylesRepoUrls.isEmpty()) {
+                Text("No styles repos configured.", fontSize = 11.sp, color = HordeColors.TextMuted)
+            } else {
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    settings.stylesRepoUrls.forEachIndexed { idx, repoUrl ->
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(HordeColors.SubCardSurface)
+                                .border(1.dp, HordeColors.BorderSubtle, RoundedCornerShape(8.dp))
+                                .padding(horizontal = 10.dp, vertical = 6.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Text(
+                                text = repoUrl,
+                                fontSize = 11.sp,
+                                fontFamily = FontFamily.Monospace,
+                                color = HordeColors.TextPrimary,
+                                maxLines = 2,
+                                overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.weight(1f),
+                            )
+                            IconButton(
+                                onClick = {
+                                    draftRepoUrl = repoUrl
+                                    editingRepoIndex = idx
+                                },
+                                modifier = Modifier.size(28.dp),
+                            ) {
+                                Icon(Icons.Outlined.Edit, "Edit repo", tint = HordeColors.TextSecondary, modifier = Modifier.size(15.dp))
+                            }
+                            IconButton(
+                                onClick = {
+                                    val updated = settings.stylesRepoUrls.toMutableList().apply { removeAt(idx) }
+                                    vm.saveStylesRepoUrls(updated)
+                                },
+                                modifier = Modifier.size(28.dp),
+                            ) {
+                                Icon(Icons.Outlined.DeleteOutline, "Remove repo", tint = HordeColors.RoseText, modifier = Modifier.size(15.dp))
+                            }
+                        }
                     }
                 }
             }
@@ -442,6 +540,52 @@ fun SettingsScreen(
                 Text("View", fontSize = 12.sp, color = HordeColors.TealSoft)
             }
         }
+    }
+
+    // Add/Edit Styles Repo Modal
+    editingRepoIndex?.let { targetIdx ->
+        AlertDialog(
+            onDismissRequest = { editingRepoIndex = null },
+            containerColor = HordeColors.CardSurface,
+            title = { Text(if (targetIdx < 0) "Add Styles Repo" else "Edit Styles Repo", color = HordeColors.TextPrimary) },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(
+                        "Enter a GitHub repository URL or raw styles.json URL.",
+                        fontSize = 12.sp,
+                        color = HordeColors.TextSecondary,
+                    )
+                    OutlinedTextField(
+                        value = draftRepoUrl,
+                        onValueChange = { draftRepoUrl = it },
+                        singleLine = true,
+                        placeholder = { Text("https://github.com/...") },
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                }
+            },
+            dismissButton = { OutlinedButton(onClick = { editingRepoIndex = null }) { Text("Cancel") } },
+            confirmButton = {
+                Button(
+                    colors = ButtonDefaults.buttonColors(containerColor = HordeColors.TealPrimary),
+                    onClick = {
+                        val trimmed = draftRepoUrl.trim()
+                        if (trimmed.isNotEmpty()) {
+                            val list = settings.stylesRepoUrls.toMutableList()
+                            if (targetIdx < 0) {
+                                list += trimmed
+                            } else if (targetIdx in list.indices) {
+                                list[targetIdx] = trimmed
+                            }
+                            vm.saveStylesRepoUrls(list)
+                        }
+                        editingRepoIndex = null
+                    },
+                ) {
+                    Text("Save", color = Color(0xFF020617), fontWeight = FontWeight.SemiBold)
+                }
+            },
+        )
     }
 
     // Launcher Icon Modal

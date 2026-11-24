@@ -6,7 +6,7 @@ import kotlinx.serialization.json.JsonObject
 enum class ActivityDestination(val label: String, val routeKey: String) {
     IMAGE_GEN("Image", "image_gen"),
     GALLERY("Gallery", "gallery"),
-    USER("User", "account"),
+    USER("Horde", "account"),
     SETTINGS("Settings", "settings"),
     MODELS_STUB("Models", "models_stub"),
     TEXT_GEN_STUB("Text", "text_gen_stub"),
@@ -162,6 +162,11 @@ data class HordeStyle(
     val previewImageUrl: String? = null,
     val previewImageUrls: List<String> = emptyList(),
     val rawPromptTemplate: String? = null,
+    val categories: List<String> = emptyList(),
+    val creator: String? = null,
+    val isUserCreated: Boolean = false,
+    val inApi: Boolean = false,
+    val inRepo: Boolean = false,
 )
 
 @Serializable
@@ -298,6 +303,19 @@ data class UserStatsSummary(
     val sharedKeyExpiry: String? = null,
 )
 
+data class HordePerformanceSummary(
+    val workerCount: Int = 0,
+    val threadCount: Int = 0,
+    val queuedRequests: Int = 0,
+    val queuedMegapixelsteps: Double = 0.0,
+    val pastMinuteMegapixelsteps: Double = 0.0,
+    val textWorkerCount: Int = 0,
+    val textThreadCount: Int = 0,
+    val queuedTextRequests: Int = 0,
+    val queuedTokens: Double = 0.0,
+    val pastMinuteTokens: Double = 0.0,
+)
+
 data class OssCredit(
     val name: String,
     val license: String,
@@ -313,6 +331,10 @@ data class NotificationChannelSpec(
 
 object HordeConstants {
     const val DEFAULT_API_BASE_URL = "https://aihorde.net/api/v2/"
+    const val DEFAULT_STYLES_REPO_URL =
+        "https://raw.githubusercontent.com/Haidra-Org/AI-Horde-Styles/main/styles.json"
+    const val DEFAULT_STYLES_PREVIEWS_URL =
+        "https://raw.githubusercontent.com/amiantos/AI-Horde-Styles-Previews/main/previews.json"
     const val ANONYMOUS_KEY = "0000000000"
     const val HAIDRA_LOGO_URL = "https://haidra.net/content/images/2024/11/haidra-transparent.png"
     const val HORDECRAFT_REPO_URL = "https://github.com/horndogcop/hordecraft-android"

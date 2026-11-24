@@ -2,7 +2,7 @@
     <string name="app_name">Hordecraft</string>
     <string name="title_activity_image">Hordecraft · Image</string>
     <string name="title_activity_gallery">Hordecraft · Gallery</string>
-    <string name="title_activity_user">Hordecraft · User</string>
+    <string name="title_activity_user">Hordecraft · Horde</string>
     <string name="title_activity_settings">Hordecraft · Settings</string>
     <string name="title_activity_models">Hordecraft · Models</string>
     <string name="title_activity_text">Hordecraft · Text</string>

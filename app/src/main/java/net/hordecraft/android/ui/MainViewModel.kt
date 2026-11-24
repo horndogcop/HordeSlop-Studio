@@ -21,6 +21,7 @@ import net.hordecraft.android.domain.GenerateButtonPlacement
 import net.hordecraft.android.domain.HordeConstants
 import net.hordecraft.android.domain.HordeJob
 import net.hordecraft.android.domain.HordeModel
+import net.hordecraft.android.domain.HordePerformanceSummary
 import net.hordecraft.android.domain.HordeStyle
 import net.hordecraft.android.domain.LauncherIconChoice
 import net.hordecraft.android.domain.LauncherIconManager
@@ -68,6 +69,7 @@ data class StudioUiState(
     val civitaiResultsTis: List<AttachedTi> = emptyList(),
     val civitaiLoading: Boolean = false,
     val userStats: UserStatsSummary = UserStatsSummary(authMode = net.hordecraft.android.domain.AuthMode.ANONYMOUS),
+    val hordePerformance: HordePerformanceSummary? = null,
     val loadingModels: Boolean = false,
     val toastMessage: String? = null,
 ) {
@@ -112,9 +114,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val _studio = app.container.sharedStudioState
     val studio: StateFlow<StudioUiState> = _studio.asStateFlow()
 
+    val pendingGallerySearchQuery: StateFlow<String?> = app.container.pendingGallerySearchQuery.asStateFlow()
+
     init {
         refreshCatalogs(force = false)
         refreshUserStats()
+        refreshQueueTracking()
     }
 
     fun clearToast() {
@@ -156,8 +161,18 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun refreshUserStats() {
         viewModelScope.launch {
-            val summary = runCatching { repo.fetchUserStats() }.getOrNull() ?: return@launch
-            _studio.update { it.copy(userStats = summary) }
+            coroutineScope {
+                val userDeferred = async { runCatching { repo.fetchUserStats() }.getOrNull() }
+                val perfDeferred = async { runCatching { repo.fetchPerformance() }.getOrNull() }
+                val summary = userDeferred.await()
+                val perf = perfDeferred.await()
+                _studio.update {
+                    it.copy(
+                        userStats = summary ?: it.userStats,
+                        hordePerformance = perf ?: it.hordePerformance,
+                    )
+                }
+            }
         }
     }
 
@@ -460,6 +475,37 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         showToast("Stopping request & saving finished images")
     }
 
+    fun dismissJob(jobId: String) {
+        viewModelScope.launch { repo.dismissJob(jobId) }
+    }
+
+    fun clearCompletedJobs() {
+        viewModelScope.launch { repo.clearCompletedJobs() }
+    }
+
+    fun refreshQueueTracking() {
+        viewModelScope.launch {
+            runCatching { repo.syncDismissedJobs() }
+            val hasVisiblePending = repo.getTrackedJobsForPolling().any {
+                !it.dismissed && (
+                    it.status == net.hordecraft.android.domain.JobStatus.QUEUED.name ||
+                        it.status == net.hordecraft.android.domain.JobStatus.PROCESSING.name
+                    )
+            }
+            if (hasVisiblePending) {
+                HordeJobService.startPolling(app)
+            }
+        }
+    }
+
+    fun openRequestInGallery(requestId: String) {
+        app.container.pendingGallerySearchQuery.value = requestId
+    }
+
+    fun clearPendingGallerySearchQuery() {
+        app.container.pendingGallerySearchQuery.value = null
+    }
+
     fun toggleHistoryFavorite(id: String, current: Boolean) {
         viewModelScope.launch { repo.toggleHistoryFavorite(id, !current) }
     }
@@ -495,6 +541,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             repo.settingsStore.setHordeApiKey(key)
             refreshUserStats()
+            refreshCatalogs(force = true)
         }
     }
 
@@ -523,6 +570,24 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun setSkipGalleryModalToFullscreen(enabled: Boolean) {
         viewModelScope.launch { repo.settingsStore.setSkipGalleryModalToFullscreen(enabled) }
+    }
+
+    fun setAutoClearCompletedQueue(enabled: Boolean) {
+        viewModelScope.launch { repo.settingsStore.setAutoClearCompletedQueue(enabled) }
+    }
+
+    fun saveStylesRepoUrls(urls: List<String>) {
+        viewModelScope.launch {
+            repo.settingsStore.setStylesRepoUrls(urls)
+            refreshCatalogs(force = true)
+        }
+    }
+
+    fun resetStylesRepoUrls() {
+        viewModelScope.launch {
+            repo.settingsStore.resetStylesRepoUrls()
+            refreshCatalogs(force = true)
+        }
     }
 
     fun setLauncherIcon(icon: LauncherIconChoice) {

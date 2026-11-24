@@ -23,10 +23,6 @@ import okhttp3.Request
 
 private const val MODEL_REF_URL =
     "https://raw.githubusercontent.com/Haidra-Org/AI-Horde-image-model-reference/main/stable_diffusion.json"
-private const val STYLES_REPO_URL =
-    "https://raw.githubusercontent.com/Haidra-Org/AI-Horde-Styles/main/styles.json"
-private const val STYLE_PREVIEWS_JSON_URL =
-    "https://raw.githubusercontent.com/amiantos/AI-Horde-Styles-Previews/main/previews.json"
 
 data class ModelRefEntry(
     val baseline: String = "SD 1.5",
@@ -162,11 +158,23 @@ class ModelReferenceRepository(
 
     private var cachedStylePreviews: Map<String, List<String>>? = null
 
-    suspend fun loadStylePreviews(): Map<String, List<String>> = withContext(Dispatchers.IO) {
-        cachedStylePreviews?.let { return@withContext it }
+    suspend fun loadStylePreviews(
+        previewsUrl: String = HordeConstants.DEFAULT_STYLES_PREVIEWS_URL,
+    ): Map<String, List<String>> = withContext(Dispatchers.IO) {
+        if (previewsUrl == HordeConstants.DEFAULT_STYLES_PREVIEWS_URL) {
+            cachedStylePreviews?.let { return@withContext it }
+        }
+        val result = fetchPreviewsMapFromUrl(previewsUrl)
+        if (previewsUrl == HordeConstants.DEFAULT_STYLES_PREVIEWS_URL && result.isNotEmpty()) {
+            cachedStylePreviews = result
+        }
+        result
+    }
+
+    private fun fetchPreviewsMapFromUrl(url: String): Map<String, List<String>> {
         val result = mutableMapOf<String, List<String>>()
         runCatching {
-            val req = Request.Builder().url(STYLE_PREVIEWS_JSON_URL).build()
+            val req = Request.Builder().url(url).build()
             rawOkHttpClient.newCall(req).execute().use { resp ->
                 if (!resp.isSuccessful) return@use
                 val body = resp.body?.string().orEmpty()
@@ -184,86 +192,148 @@ class ModelReferenceRepository(
                 }
             }
         }
-        if (result.isNotEmpty()) {
-            cachedStylePreviews = result
-        }
-        result
+        return result
     }
 
-    suspend fun loadGitHubRepoStyles(
-        previewsMap: Map<String, List<String>>,
-    ): List<HordeStyle> = withContext(Dispatchers.IO) {
-        val result = mutableListOf<HordeStyle>()
+    private fun fetchCategoriesMapFromUrl(categoriesUrl: String): Map<String, List<String>> {
+        val result = mutableMapOf<String, MutableList<String>>()
         runCatching {
-            val req = Request.Builder().url(STYLES_REPO_URL).build()
+            val req = Request.Builder().url(categoriesUrl).build()
             rawOkHttpClient.newCall(req).execute().use { resp ->
                 if (!resp.isSuccessful) return@use
                 val body = resp.body?.string().orEmpty()
                 val root = json.parseToJsonElement(body).jsonObject
-                for ((styleName, elem) in root) {
-                    val obj = elem as? JsonObject ?: continue
-                    val rawPrompt = obj["prompt"]?.jsonPrimitiveOrNull()?.contentOrNull ?: "{p}###{np}"
-                    val parts = rawPrompt.split("###", limit = 2)
-                    val modelName = obj["model"]?.jsonPrimitiveOrNull()?.contentOrNull
-                        ?: (obj["models"] as? JsonArray)?.firstOrNull()?.jsonPrimitiveOrNull()?.contentOrNull
-
-                    val steps = obj["steps"]?.jsonPrimitiveOrNull()?.intOrNull
-                    val cfg = obj["cfg_scale"]?.jsonPrimitiveOrNull()?.floatOrNull
-                    val sampler = obj["sampler_name"]?.jsonPrimitiveOrNull()?.contentOrNull
-                    val karras = obj["karras"]?.jsonPrimitiveOrNull()?.booleanOrNull
-                    val scheduler = obj["scheduler"]?.jsonPrimitiveOrNull()?.contentOrNull
-                        ?: karras?.let { if (it) "karras" else "normal" }
-                    val clipSkip = obj["clip_skip"]?.jsonPrimitiveOrNull()?.intOrNull
-                    val w = obj["width"]?.jsonPrimitiveOrNull()?.intOrNull
-                    val h = obj["height"]?.jsonPrimitiveOrNull()?.intOrNull
-
-                    val previewUrls = previewsMap[styleName.trim().lowercase()].orEmpty()
-                    result += HordeStyle(
-                        id = styleName,
-                        name = styleName,
-                        source = "AI-Horde-Styles",
-                        model = modelName,
-                        promptTemplate = parts.getOrElse(0) { "{p}" }.trim(),
-                        negativeTemplate = parts.getOrElse(1) { "{np}" }.trim(),
-                        steps = steps,
-                        cfg = cfg,
-                        sampler = sampler,
-                        scheduler = scheduler,
-                        clipSkip = clipSkip,
-                        width = w,
-                        height = h,
-                        lockedFields = emptySet(),
-                        previewImageUrl = previewUrls.firstOrNull(),
-                        previewImageUrls = previewUrls,
-                        rawPromptTemplate = rawPrompt,
-                    )
+                for ((categoryName, elem) in root) {
+                    val cleanCat = categoryName.trim()
+                    if (cleanCat.isEmpty()) continue
+                    val styleNames = elem as? JsonArray ?: continue
+                    for (entry in styleNames) {
+                        val nameKey = entry.jsonPrimitiveOrNull()?.contentOrNull?.trim()?.lowercase()
+                            ?: continue
+                        if (nameKey.isEmpty()) continue
+                        val list = result.getOrPut(nameKey) { mutableListOf() }
+                        if (cleanCat !in list) list += cleanCat
+                    }
                 }
             }
         }
-        result
+        return result
+    }
+
+    suspend fun loadRepoStylesFromUrls(
+        repoUrls: List<String>,
+        previewsMap: Map<String, List<String>>,
+    ): Pair<List<HordeStyle>, Map<String, List<String>>> = withContext(Dispatchers.IO) {
+        val stylesByKey = LinkedHashMap<String, HordeStyle>()
+        val categoriesByStyleKey = mutableMapOf<String, MutableList<String>>()
+
+        for (rawUrl in repoUrls) {
+            val stylesUrl = normalizeStylesRepoUrl(rawUrl)
+            if (stylesUrl.isBlank()) continue
+
+            val categoriesUrl = siblingJsonUrl(stylesUrl, "categories.json")
+            val repoCategories = fetchCategoriesMapFromUrl(categoriesUrl)
+            repoCategories.forEach { (styleKey, cats) ->
+                val target = categoriesByStyleKey.getOrPut(styleKey) { mutableListOf() }
+                cats.forEach { c -> if (c !in target) target += c }
+            }
+
+            val siblingPreviewsUrl = siblingJsonUrl(stylesUrl, "previews.json")
+            val repoPreviews = fetchPreviewsMapFromUrl(siblingPreviewsUrl)
+
+            runCatching {
+                val req = Request.Builder().url(stylesUrl).build()
+                rawOkHttpClient.newCall(req).execute().use { resp ->
+                    if (!resp.isSuccessful) return@use
+                    val body = resp.body?.string().orEmpty()
+                    val root = json.parseToJsonElement(body).jsonObject
+                    for ((styleName, elem) in root) {
+                        val obj = elem as? JsonObject ?: continue
+                        val key = styleName.trim().lowercase()
+                        val rawPrompt = obj["prompt"]?.jsonPrimitiveOrNull()?.contentOrNull ?: "{p}###{np}"
+                        val parts = rawPrompt.split("###", limit = 2)
+                        val modelName = obj["model"]?.jsonPrimitiveOrNull()?.contentOrNull
+                            ?: (obj["models"] as? JsonArray)?.firstOrNull()?.jsonPrimitiveOrNull()?.contentOrNull
+
+                        val steps = obj["steps"]?.jsonPrimitiveOrNull()?.intOrNull
+                        val cfg = obj["cfg_scale"]?.jsonPrimitiveOrNull()?.floatOrNull
+                        val sampler = obj["sampler_name"]?.jsonPrimitiveOrNull()?.contentOrNull
+                        val karras = obj["karras"]?.jsonPrimitiveOrNull()?.booleanOrNull
+                        val scheduler = obj["scheduler"]?.jsonPrimitiveOrNull()?.contentOrNull
+                            ?: karras?.let { if (it) "karras" else "normal" }
+                        val clipSkip = obj["clip_skip"]?.jsonPrimitiveOrNull()?.intOrNull
+                        val w = obj["width"]?.jsonPrimitiveOrNull()?.intOrNull
+                        val h = obj["height"]?.jsonPrimitiveOrNull()?.intOrNull
+
+                        val combinedPreviews = (repoPreviews[key].orEmpty() + previewsMap[key].orEmpty()).distinct()
+                        val cats = categoriesByStyleKey[key]?.toList().orEmpty()
+
+                        val mapped = HordeStyle(
+                            id = styleName,
+                            name = styleName,
+                            source = "Styles repo",
+                            model = modelName,
+                            promptTemplate = parts.getOrElse(0) { "{p}" }.trim(),
+                            negativeTemplate = parts.getOrElse(1) { "{np}" }.trim(),
+                            steps = steps,
+                            cfg = cfg,
+                            sampler = sampler,
+                            scheduler = scheduler,
+                            clipSkip = clipSkip,
+                            width = w,
+                            height = h,
+                            lockedFields = emptySet(),
+                            previewImageUrl = combinedPreviews.firstOrNull(),
+                            previewImageUrls = combinedPreviews,
+                            rawPromptTemplate = rawPrompt,
+                            categories = cats,
+                            inApi = false,
+                            inRepo = true,
+                        )
+                        val existing = stylesByKey[key]
+                        stylesByKey[key] = if (existing == null) {
+                            mapped
+                        } else {
+                            mapped.copy(
+                                categories = (existing.categories + mapped.categories).distinct(),
+                                previewImageUrls = (existing.previewImageUrls + mapped.previewImageUrls).distinct(),
+                                previewImageUrl = existing.previewImageUrl ?: mapped.previewImageUrl,
+                            )
+                        }
+                    }
+                }
+            }
+        }
+        stylesByKey.values.toList() to categoriesByStyleKey.mapValues { it.value.toList() }
     }
 
     fun mapApiStyle(
         dto: HordeStyleDto,
         previewsMap: Map<String, List<String>> = emptyMap(),
+        repoCategories: Map<String, List<String>> = emptyMap(),
+        currentUsername: String? = null,
     ): HordeStyle {
         val parts = dto.prompt.split("###", limit = 2)
         val params = dto.params
-        val locks = mutableSetOf<StyleFieldLock>()
-        val modelName = dto.models.firstOrNull()?.also { locks += StyleFieldLock.MODEL }
+        val locks = resolveLockedFields(dto.parameterPolicy, hasModels = dto.models.isNotEmpty())
+        val modelName = dto.models.firstOrNull()
 
-        val steps = params?.get("steps")?.jsonPrimitiveOrNull()?.intOrNull?.also { locks += StyleFieldLock.STEPS }
-        val cfg = params?.get("cfg_scale")?.jsonPrimitiveOrNull()?.floatOrNull?.also { locks += StyleFieldLock.CFG }
-        val sampler = params?.get("sampler_name")?.jsonPrimitiveOrNull()?.contentOrNull?.also { locks += StyleFieldLock.SAMPLER }
-        val scheduler = params?.get("scheduler")?.jsonPrimitiveOrNull()?.contentOrNull?.also { locks += StyleFieldLock.SCHEDULER }
-        val clipSkip = params?.get("clip_skip")?.jsonPrimitiveOrNull()?.intOrNull?.also { locks += StyleFieldLock.CLIP_SKIP }
+        val steps = params?.get("steps")?.jsonPrimitiveOrNull()?.intOrNull
+        val cfg = params?.get("cfg_scale")?.jsonPrimitiveOrNull()?.floatOrNull
+        val sampler = params?.get("sampler_name")?.jsonPrimitiveOrNull()?.contentOrNull
+        val karras = params?.get("karras")?.jsonPrimitiveOrNull()?.booleanOrNull
+        val scheduler = params?.get("scheduler")?.jsonPrimitiveOrNull()?.contentOrNull
+            ?: karras?.let { if (it) "karras" else "normal" }
+        val clipSkip = params?.get("clip_skip")?.jsonPrimitiveOrNull()?.intOrNull
         val w = params?.get("width")?.jsonPrimitiveOrNull()?.intOrNull
         val h = params?.get("height")?.jsonPrimitiveOrNull()?.intOrNull
-        if (w != null && h != null) locks += StyleFieldLock.SIZE
 
+        val key = dto.name.trim().lowercase()
         val exampleUrls = dto.examples.mapNotNull { it.url?.takeIf { u -> u.isNotBlank() } }
-        val repoPreviewUrls = previewsMap[dto.name.trim().lowercase()].orEmpty()
+        val repoPreviewUrls = previewsMap[key].orEmpty()
         val combinedPreviews = (exampleUrls + repoPreviewUrls).distinct()
+        val combinedCategories = (dto.tags.map { it.trim() }.filter { it.isNotEmpty() } +
+            repoCategories[key].orEmpty()).distinct()
 
         return HordeStyle(
             id = dto.id.ifBlank { dto.name },
@@ -283,7 +353,100 @@ class ModelReferenceRepository(
             previewImageUrl = combinedPreviews.firstOrNull(),
             previewImageUrls = combinedPreviews,
             rawPromptTemplate = dto.prompt,
+            categories = combinedCategories,
+            creator = dto.creator?.trim()?.takeIf { it.isNotEmpty() },
+            isUserCreated = matchesCurrentUserCreator(dto.creator, currentUsername),
+            inApi = true,
+            inRepo = false,
         )
+    }
+
+    companion object {
+        fun resolveLockedFields(
+            parameterPolicy: JsonObject?,
+            hasModels: Boolean,
+        ): Set<StyleFieldLock> {
+            val policy = parameterPolicy ?: return emptySet()
+            val override = policy["override"]?.jsonPrimitive?.contentOrNull?.trim()?.lowercase()
+                ?: return emptySet()
+            if (override == "all") return emptySet()
+            if (override != "listed") return emptySet()
+
+            val overridable = (policy["overridable"] as? JsonArray)
+                ?.mapNotNull { runCatching { it.jsonPrimitive.contentOrNull?.trim()?.lowercase() }.getOrNull() }
+                ?.toSet()
+                ?: emptySet()
+
+            val locks = mutableSetOf<StyleFieldLock>()
+            if (hasModels && "models" !in overridable && "model" !in overridable) {
+                locks += StyleFieldLock.MODEL
+            }
+            if ("steps" !in overridable) locks += StyleFieldLock.STEPS
+            if ("cfg_scale" !in overridable) locks += StyleFieldLock.CFG
+            if ("sampler_name" !in overridable) locks += StyleFieldLock.SAMPLER
+            if ("scheduler" !in overridable && "karras" !in overridable) {
+                locks += StyleFieldLock.SCHEDULER
+            }
+            if ("clip_skip" !in overridable) locks += StyleFieldLock.CLIP_SKIP
+            if ("width" !in overridable && "height" !in overridable) {
+                locks += StyleFieldLock.SIZE
+            }
+            return locks
+        }
+
+        fun matchesCurrentUserCreator(creator: String?, currentUsername: String?): Boolean {
+            val c = creator?.trim()?.lowercase().orEmpty()
+            val u = currentUsername?.trim()?.lowercase().orEmpty()
+            if (c.isEmpty() || u.isEmpty()) return false
+            if (c == u) return true
+            if (c.contains('#') && u.contains('#')) return false
+            val cBase = c.substringBefore('#')
+            val uBase = u.substringBefore('#')
+            return cBase.isNotEmpty() && cBase == uBase
+        }
+
+        fun normalizeStylesRepoUrl(rawUrl: String): String {
+            val trimmed = rawUrl.trim().trimEnd('/')
+            if (trimmed.isEmpty()) return ""
+            val withScheme = if (trimmed.startsWith("http://") || trimmed.startsWith("https://")) {
+                trimmed
+            } else {
+                "https://$trimmed"
+            }
+            val githubBlob = Regex("^https?://github\\.com/([^/]+)/([^/]+)/blob/([^/]+)/(.+)$")
+                .matchEntire(withScheme)
+            if (githubBlob != null) {
+                val (owner, repo, branch, path) = githubBlob.destructured
+                return "https://raw.githubusercontent.com/$owner/$repo/$branch/$path"
+            }
+            val githubTree = Regex("^https?://github\\.com/([^/]+)/([^/]+)/tree/([^/]+)(?:/(.*))?$")
+                .matchEntire(withScheme)
+            if (githubTree != null) {
+                val (owner, repo, branch, subPath) = githubTree.destructured
+                val base = "https://raw.githubusercontent.com/$owner/$repo/$branch"
+                return if (subPath.isBlank()) "$base/styles.json" else "$base/${subPath.trimEnd('/')}/styles.json"
+            }
+            val githubRoot = Regex("^https?://github\\.com/([^/]+)/([^/]+)$")
+                .matchEntire(withScheme)
+            if (githubRoot != null) {
+                val (owner, repo) = githubRoot.destructured
+                return "https://raw.githubusercontent.com/$owner/$repo/main/styles.json"
+            }
+            return if (withScheme.endsWith(".json", ignoreCase = true)) {
+                withScheme
+            } else {
+                "$withScheme/styles.json"
+            }
+        }
+
+        fun siblingJsonUrl(stylesJsonUrl: String, fileName: String): String {
+            val idx = stylesJsonUrl.lastIndexOf('/')
+            return if (idx >= 0) {
+                "${stylesJsonUrl.substring(0, idx + 1)}$fileName"
+            } else {
+                "$stylesJsonUrl/$fileName"
+            }
+        }
     }
 
     private fun JsonElement.jsonPrimitiveOrNull() = runCatching { this.jsonPrimitive }.getOrNull()

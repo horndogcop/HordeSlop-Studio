@@ -21,7 +21,10 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.itemsIndexed
@@ -34,15 +37,14 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.ChevronLeft
 import androidx.compose.material.icons.outlined.ChevronRight
+import androidx.compose.material.icons.outlined.Clear
 import androidx.compose.material.icons.outlined.Close
-import androidx.compose.material.icons.outlined.ContentCopy
 import androidx.compose.material.icons.outlined.DeleteOutline
 import androidx.compose.material.icons.outlined.Favorite
 import androidx.compose.material.icons.outlined.FavoriteBorder
-import androidx.compose.material.icons.outlined.FilterList
 import androidx.compose.material.icons.outlined.FolderOpen
 import androidx.compose.material.icons.outlined.Fullscreen
-import androidx.compose.material.icons.outlined.Layers
+import androidx.compose.material.icons.outlined.FullscreenExit
 import androidx.compose.material.icons.outlined.MoreHoriz
 import androidx.compose.material.icons.outlined.OpenInNew
 import androidx.compose.material.icons.outlined.Refresh
@@ -98,33 +100,38 @@ fun GalleryScreen(
     images: List<SavedImage>,
     settings: AppSettings,
     toastMessage: String?,
+    pendingSearchQuery: String? = null,
 ) {
     val context = LocalContext.current
     val config = LocalConfiguration.current
     val scope = rememberCoroutineScope()
 
     var searchQuery by remember { mutableStateOf("") }
-    var requestIdFilter by remember { mutableStateOf("") }
-    var showRequestFilterInput by remember { mutableStateOf(false) }
     var favoritesOnly by remember { mutableStateOf(false) }
 
     var viewerStartIndex by remember { mutableStateOf<Int?>(null) }
     var isFullscreen by remember { mutableStateOf(false) }
-    var fullscreenHudVisible by remember { mutableStateOf(true) }
+    var fullscreenHudVisible by remember { mutableStateOf(false) }
 
-    val filtered = remember(images, searchQuery, requestIdFilter, favoritesOnly) {
+    LaunchedEffect(pendingSearchQuery) {
+        if (!pendingSearchQuery.isNullOrBlank()) {
+            searchQuery = pendingSearchQuery
+            viewerStartIndex = null
+            isFullscreen = false
+            vm.clearPendingGallerySearchQuery()
+        }
+    }
+
+    val filtered = remember(images, searchQuery, favoritesOnly) {
         images.filter { img ->
             if (favoritesOnly && !img.isFavorite) return@filter false
-            if (requestIdFilter.isNotBlank() && !img.requestId.contains(requestIdFilter.trim(), ignoreCase = true)) {
-                return@filter false
-            }
             if (searchQuery.isBlank()) return@filter true
-            val q = searchQuery.lowercase()
+            val q = searchQuery.trim().lowercase()
             img.prompt.lowercase().contains(q) ||
                 img.model.lowercase().contains(q) ||
                 img.requestId.lowercase().contains(q) ||
                 img.generationId.lowercase().contains(q) ||
-                img.seed.contains(q)
+                img.seed.lowercase().contains(q)
         }
     }
 
@@ -161,13 +168,15 @@ fun GalleryScreen(
                 value = searchQuery,
                 onValueChange = { searchQuery = it },
                 singleLine = true,
-                placeholder = { Text("Search gallery...", fontSize = 12.sp) },
+                placeholder = { Text("Search prompt, model, or request ID...", fontSize = 12.sp) },
+                trailingIcon = {
+                    if (searchQuery.isNotBlank()) {
+                        IconButton(onClick = { searchQuery = "" }) {
+                            Icon(Icons.Outlined.Clear, "Clear search", tint = HordeColors.TextSecondary)
+                        }
+                    }
+                },
                 modifier = Modifier.weight(1f),
-            )
-            ToggleChipButton(
-                text = "Request",
-                selected = showRequestFilterInput || requestIdFilter.isNotBlank(),
-                onClick = { showRequestFilterInput = !showRequestFilterInput },
             )
             IconButton(
                 onClick = { favoritesOnly = !favoritesOnly },
@@ -189,25 +198,6 @@ fun GalleryScreen(
             }
         }
 
-        if (showRequestFilterInput || requestIdFilter.isNotBlank()) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(6.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                OutlinedTextField(
-                    value = requestIdFilter,
-                    onValueChange = { requestIdFilter = it },
-                    singleLine = true,
-                    placeholder = { Text("Request ID...") },
-                    modifier = Modifier.weight(1f),
-                )
-                if (requestIdFilter.isNotBlank()) {
-                    TextButton(onClick = { requestIdFilter = "" }) { Text("Clear") }
-                }
-            }
-        }
-
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
@@ -222,7 +212,11 @@ fun GalleryScreen(
 
         if (filtered.isEmpty()) {
             Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                Text("No saved WebP images yet", fontSize = 13.sp, color = HordeColors.TextMuted)
+                Text(
+                    text = if (searchQuery.isNotBlank() || favoritesOnly) "No matching images" else "No saved WebP images yet",
+                    fontSize = 13.sp,
+                    color = HordeColors.TextMuted,
+                )
             }
         } else {
             LazyVerticalGrid(
@@ -243,7 +237,7 @@ fun GalleryScreen(
                             .clickable {
                                 viewerStartIndex = idx
                                 isFullscreen = settings.skipGalleryModalToFullscreen
-                                fullscreenHudVisible = true
+                                fullscreenHudVisible = false
                             },
                     ) {
                         AsyncImage(
@@ -295,25 +289,29 @@ fun GalleryScreen(
                 initialIndex = safeStart,
                 isFullscreen = isFullscreen,
                 fullscreenHudVisible = fullscreenHudVisible,
-                onToggleFullscreen = {
-                    isFullscreen = !isFullscreen
-                    fullscreenHudVisible = true
+                onEnterFullscreen = {
+                    isFullscreen = true
+                    fullscreenHudVisible = false
+                },
+                onExitFullscreen = {
+                    isFullscreen = false
+                    fullscreenHudVisible = false
                 },
                 onToggleHudVisibility = {
-                    if (isFullscreen) fullscreenHudVisible = !fullscreenHudVisible
+                    fullscreenHudVisible = !fullscreenHudVisible
                 },
                 onToggleFavorite = { vm.toggleImageFavorite(it.id, it.isFavorite) },
                 onReroll = { vm.rerollImage(it) },
                 onUseSettings = { img ->
                     vm.applySavedImageParameters(img)
                     viewerStartIndex = null
+                    isFullscreen = false
                     launchActivityForDestination(context, ActivityDestination.IMAGE_GEN)
                 },
                 onSameRequest = { reqId ->
                     viewerStartIndex = null
                     isFullscreen = false
-                    requestIdFilter = reqId
-                    showRequestFilterInput = true
+                    searchQuery = reqId
                 },
                 onCopyImage = { img -> vm.copyImage(img.fileUri) },
                 onCopyText = vm::copyText,
@@ -333,11 +331,15 @@ fun GalleryScreen(
                 },
                 onDelete = { img, deleteFile ->
                     vm.deleteImage(img, deleteFile)
-                    if (filtered.size <= 1) viewerStartIndex = null
+                    if (filtered.size <= 1) {
+                        viewerStartIndex = null
+                        isFullscreen = false
+                    }
                 },
                 onDismiss = {
                     viewerStartIndex = null
                     isFullscreen = false
+                    fullscreenHudVisible = false
                 },
             )
         }
@@ -350,7 +352,8 @@ private fun GalleryViewerModal(
     initialIndex: Int,
     isFullscreen: Boolean,
     fullscreenHudVisible: Boolean,
-    onToggleFullscreen: () -> Unit,
+    onEnterFullscreen: () -> Unit,
+    onExitFullscreen: () -> Unit,
     onToggleHudVisibility: () -> Unit,
     onToggleFavorite: (SavedImage) -> Unit,
     onReroll: (SavedImage) -> Unit,
@@ -364,6 +367,7 @@ private fun GalleryViewerModal(
     onDismiss: () -> Unit,
 ) {
     val context = LocalContext.current
+    val config = LocalConfiguration.current
     val scope = rememberCoroutineScope()
     val pagerState = rememberPagerState(initialPage = initialIndex) { images.size }
     val activeImage = images.getOrNull(pagerState.currentPage) ?: return
@@ -388,193 +392,316 @@ private fun GalleryViewerModal(
         jsonToSave = null
     }
 
-    val showHud = !isFullscreen || fullscreenHudVisible
+    @Composable
+    fun TopActionBar(
+        fullscreenMode: Boolean,
+        modifier: Modifier = Modifier,
+    ) {
+        Row(
+            modifier = modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            IconButton(
+                onClick = onDismiss,
+                modifier = Modifier.clip(CircleShape).background(Color.Black.copy(alpha = 0.55f)),
+            ) {
+                Icon(Icons.Outlined.Close, "Close", tint = Color.White)
+            }
+
+            Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                IconButton(
+                    onClick = { onToggleFavorite(activeImage) },
+                    modifier = Modifier.clip(CircleShape).background(Color.Black.copy(alpha = 0.55f)),
+                ) {
+                    Icon(
+                        if (activeImage.isFavorite) Icons.Outlined.Favorite else Icons.Outlined.FavoriteBorder,
+                        "Favorite",
+                        tint = if (activeImage.isFavorite) HordeColors.RoseZone else Color.White,
+                    )
+                }
+                IconButton(
+                    onClick = { onReroll(activeImage) },
+                    modifier = Modifier.clip(CircleShape).background(Color.Black.copy(alpha = 0.55f)),
+                ) {
+                    Icon(Icons.Outlined.Refresh, "Reroll", tint = HordeColors.TealSoft)
+                }
+                IconButton(
+                    onClick = { onUseSettings(activeImage) },
+                    modifier = Modifier.clip(CircleShape).background(Color.Black.copy(alpha = 0.55f)),
+                ) {
+                    Icon(Icons.Outlined.Send, "Use settings", tint = Color.White)
+                }
+                IconButton(
+                    onClick = if (fullscreenMode) onExitFullscreen else onEnterFullscreen,
+                    modifier = Modifier.clip(CircleShape).background(Color.Black.copy(alpha = 0.55f)),
+                ) {
+                    Icon(
+                        if (fullscreenMode) Icons.Outlined.FullscreenExit else Icons.Outlined.Fullscreen,
+                        if (fullscreenMode) "Exit full screen" else "Full screen",
+                        tint = Color.White,
+                    )
+                }
+                Box {
+                    IconButton(
+                        onClick = { showMoreMenu = true },
+                        modifier = Modifier.clip(CircleShape).background(Color.Black.copy(alpha = 0.55f)),
+                    ) {
+                        Icon(Icons.Outlined.MoreHoriz, "More", tint = Color.White)
+                    }
+                    DropdownMenu(expanded = showMoreMenu, onDismissRequest = { showMoreMenu = false }) {
+                        DropdownMenuItem(
+                            text = { Text("Request info") },
+                            onClick = {
+                                showMoreMenu = false
+                                metadataSubMode = "request"
+                            },
+                        )
+                        DropdownMenuItem(
+                            text = { Text("Server response") },
+                            onClick = {
+                                showMoreMenu = false
+                                metadataSubMode = "response"
+                            },
+                        )
+                        DropdownMenuItem(
+                            text = { Text("Open in...") },
+                            leadingIcon = { Icon(Icons.Outlined.OpenInNew, null) },
+                            onClick = {
+                                showMoreMenu = false
+                                onOpenIn(activeImage)
+                            },
+                        )
+                    }
+                }
+            }
+        }
+    }
+
+    @Composable
+    fun BottomMetadataSection(modifier: Modifier = Modifier) {
+        Column(
+            modifier = modifier.fillMaxWidth(),
+            verticalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+            ) {
+                Text(
+                    text = "${activeImage.requestId.take(8)} · ${activeImage.generationId.take(8)}",
+                    fontSize = 11.sp,
+                    fontFamily = FontFamily.Monospace,
+                    color = HordeColors.TextSecondary,
+                )
+                Text(
+                    text = activeImage.model,
+                    fontSize = 11.sp,
+                    fontFamily = FontFamily.Monospace,
+                    color = HordeColors.TealSoft,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+            Text(
+                text = activeImage.prompt,
+                fontSize = 12.sp,
+                color = HordeColors.TextPrimary,
+                maxLines = 3,
+                overflow = TextOverflow.Ellipsis,
+            )
+            Row(
+                modifier = Modifier.horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                OverlayPill("Same request") { onSameRequest(activeImage.requestId) }
+                OverlayPill("Details") { metadataSubMode = "details" }
+                OverlayPill("Copy") { onCopyImage(activeImage) }
+                OverlayPill("Share") { onShare(activeImage) }
+                OverlayPill("Delete", isDanger = true) {
+                    deleteFileChecked = true
+                    deleteConfirmTarget = activeImage
+                }
+            }
+        }
+    }
 
     Dialog(
         onDismissRequest = onDismiss,
         properties = DialogProperties(usePlatformDefaultWidth = false),
     ) {
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(Color.Black),
-        ) {
-            HorizontalPager(
-                state = pagerState,
+        if (isFullscreen) {
+            Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .clickable(onClick = onToggleHudVisibility),
-            ) { page ->
-                val item = images[page]
-                AsyncImage(
-                    model = Uri.parse(item.fileUri),
-                    contentDescription = item.prompt,
-                    contentScale = ContentScale.Fit,
+                    .background(Color.Black),
+            ) {
+                HorizontalPager(
+                    state = pagerState,
                     modifier = Modifier.fillMaxSize(),
-                )
-            }
-
-            if (showHud) {
-                // Top Floating Overlay Bar
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .align(Alignment.TopCenter)
-                        .background(Brush.verticalGradient(listOf(Color.Black.copy(alpha = 0.85f), Color.Transparent)))
-                        .padding(horizontal = 8.dp, vertical = 10.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    IconButton(
-                        onClick = onDismiss,
-                        modifier = Modifier.clip(CircleShape).background(Color.Black.copy(alpha = 0.55f)),
+                ) { page ->
+                    val item = images[page]
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .clickable(onClick = onToggleHudVisibility),
+                        contentAlignment = Alignment.Center,
                     ) {
-                        Icon(Icons.Outlined.Close, "Close", tint = Color.White)
-                    }
-
-                    Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                        IconButton(
-                            onClick = { onToggleFavorite(activeImage) },
-                            modifier = Modifier.clip(CircleShape).background(Color.Black.copy(alpha = 0.55f)),
-                        ) {
-                            Icon(
-                                if (activeImage.isFavorite) Icons.Outlined.Favorite else Icons.Outlined.FavoriteBorder,
-                                "Favorite",
-                                tint = if (activeImage.isFavorite) HordeColors.RoseZone else Color.White,
-                            )
-                        }
-                        IconButton(
-                            onClick = { onReroll(activeImage) },
-                            modifier = Modifier.clip(CircleShape).background(Color.Black.copy(alpha = 0.55f)),
-                        ) {
-                            Icon(Icons.Outlined.Refresh, "Reroll", tint = HordeColors.TealSoft)
-                        }
-                        IconButton(
-                            onClick = { onUseSettings(activeImage) },
-                            modifier = Modifier.clip(CircleShape).background(Color.Black.copy(alpha = 0.55f)),
-                        ) {
-                            Icon(Icons.Outlined.Send, "Use settings", tint = Color.White)
-                        }
-                        IconButton(
-                            onClick = onToggleFullscreen,
-                            modifier = Modifier.clip(CircleShape).background(Color.Black.copy(alpha = 0.55f)),
-                        ) {
-                            Icon(Icons.Outlined.Fullscreen, "Full screen", tint = Color.White)
-                        }
-                        Box {
-                            IconButton(
-                                onClick = { showMoreMenu = true },
-                                modifier = Modifier.clip(CircleShape).background(Color.Black.copy(alpha = 0.55f)),
-                            ) {
-                                Icon(Icons.Outlined.MoreHoriz, "More", tint = Color.White)
-                            }
-                            DropdownMenu(expanded = showMoreMenu, onDismissRequest = { showMoreMenu = false }) {
-                                DropdownMenuItem(
-                                    text = { Text("Request info") },
-                                    onClick = {
-                                        showMoreMenu = false
-                                        metadataSubMode = "request"
-                                    },
-                                )
-                                DropdownMenuItem(
-                                    text = { Text("Server response") },
-                                    onClick = {
-                                        showMoreMenu = false
-                                        metadataSubMode = "response"
-                                    },
-                                )
-                                DropdownMenuItem(
-                                    text = { Text("Open in...") },
-                                    leadingIcon = { Icon(Icons.Outlined.OpenInNew, null) },
-                                    onClick = {
-                                        showMoreMenu = false
-                                        onOpenIn(activeImage)
-                                    },
-                                )
-                            }
-                        }
+                        AsyncImage(
+                            model = Uri.parse(item.fileUri),
+                            contentDescription = item.prompt,
+                            contentScale = ContentScale.Fit,
+                            modifier = Modifier.fillMaxSize(),
+                        )
                     }
                 }
 
-                // Prev / Next Arrows
-                if (images.size > 1) {
-                    IconButton(
-                        onClick = {
-                            scope.launch {
-                                val prev = if (pagerState.currentPage == 0) images.lastIndex else pagerState.currentPage - 1
-                                pagerState.animateScrollToPage(prev)
-                            }
-                        },
+                if (fullscreenHudVisible) {
+                    TopActionBar(
+                        fullscreenMode = true,
                         modifier = Modifier
-                            .align(Alignment.CenterStart)
-                            .padding(start = 8.dp)
-                            .clip(CircleShape)
-                            .background(Color.Black.copy(alpha = 0.55f)),
-                    ) {
-                        Icon(Icons.Outlined.ChevronLeft, "Previous", tint = Color.White)
-                    }
-                    IconButton(
-                        onClick = {
-                            scope.launch {
-                                val next = (pagerState.currentPage + 1) % images.size
-                                pagerState.animateScrollToPage(next)
-                            }
-                        },
-                        modifier = Modifier
-                            .align(Alignment.CenterEnd)
-                            .padding(end = 8.dp)
-                            .clip(CircleShape)
-                            .background(Color.Black.copy(alpha = 0.55f)),
-                    ) {
-                        Icon(Icons.Outlined.ChevronRight, "Next", tint = Color.White)
-                    }
-                }
-
-                // Bottom Overlay Info + Actions
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .align(Alignment.BottomCenter)
-                        .background(Brush.verticalGradient(listOf(Color.Transparent, Color.Black.copy(alpha = 0.92f))))
-                        .padding(12.dp),
-                    verticalArrangement = Arrangement.spacedBy(6.dp),
-                ) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                    ) {
-                        Text(
-                            text = "${activeImage.requestId.take(8)} · ${activeImage.generationId.take(8)}",
-                            fontSize = 11.sp,
-                            fontFamily = FontFamily.Monospace,
-                            color = HordeColors.TextSecondary,
-                        )
-                        Text(
-                            text = activeImage.model,
-                            fontSize = 11.sp,
-                            fontFamily = FontFamily.Monospace,
-                            color = HordeColors.TealSoft,
-                        )
-                    }
-                    Text(
-                        text = activeImage.prompt,
-                        fontSize = 12.sp,
-                        color = HordeColors.TextPrimary,
-                        maxLines = 3,
-                        overflow = TextOverflow.Ellipsis,
+                            .align(Alignment.TopCenter)
+                            .systemBarsPadding()
+                            .background(Brush.verticalGradient(listOf(Color.Black.copy(alpha = 0.85f), Color.Transparent)))
+                            .padding(horizontal = 8.dp, vertical = 10.dp),
                     )
-                    Row(
-                        modifier = Modifier.horizontalScroll(rememberScrollState()),
-                        horizontalArrangement = Arrangement.spacedBy(6.dp),
-                    ) {
-                        OverlayPill("Same request") { onSameRequest(activeImage.requestId) }
-                        OverlayPill("Details") { metadataSubMode = "details" }
-                        OverlayPill("Copy") { onCopyImage(activeImage) }
-                        OverlayPill("Share") { onShare(activeImage) }
-                        OverlayPill("Delete", isDanger = true) {
-                            deleteFileChecked = true
-                            deleteConfirmTarget = activeImage
+
+                    if (images.size > 1) {
+                        IconButton(
+                            onClick = {
+                                scope.launch {
+                                    val prev = if (pagerState.currentPage == 0) images.lastIndex else pagerState.currentPage - 1
+                                    pagerState.animateScrollToPage(prev)
+                                }
+                            },
+                            modifier = Modifier
+                                .align(Alignment.CenterStart)
+                                .padding(start = 8.dp)
+                                .clip(CircleShape)
+                                .background(Color.Black.copy(alpha = 0.55f)),
+                        ) {
+                            Icon(Icons.Outlined.ChevronLeft, "Previous", tint = Color.White)
                         }
+                        IconButton(
+                            onClick = {
+                                scope.launch {
+                                    val next = (pagerState.currentPage + 1) % images.size
+                                    pagerState.animateScrollToPage(next)
+                                }
+                            },
+                            modifier = Modifier
+                                .align(Alignment.CenterEnd)
+                                .padding(end = 8.dp)
+                                .clip(CircleShape)
+                                .background(Color.Black.copy(alpha = 0.55f)),
+                        ) {
+                            Icon(Icons.Outlined.ChevronRight, "Next", tint = Color.White)
+                        }
+                    }
+
+                    BottomMetadataSection(
+                        modifier = Modifier
+                            .align(Alignment.BottomCenter)
+                            .systemBarsPadding()
+                            .background(Brush.verticalGradient(listOf(Color.Transparent, Color.Black.copy(alpha = 0.92f))))
+                            .padding(12.dp),
+                    )
+                }
+            }
+        } else {
+            val maxModalHeight = (config.screenHeightDp * 0.88f).dp
+            val maxPagerHeight = (config.screenHeightDp * 0.56f).coerceAtLeast(180f).dp
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color.Black.copy(alpha = 0.72f))
+                    .clickable(onClick = onDismiss)
+                    .padding(16.dp),
+                contentAlignment = Alignment.Center,
+            ) {
+                Surface(
+                    shape = RoundedCornerShape(20.dp),
+                    color = HordeColors.CardSurface,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .widthIn(max = 620.dp)
+                        .heightIn(max = maxModalHeight)
+                        .wrapContentHeight()
+                        .border(1.dp, HordeColors.BorderStrong, RoundedCornerShape(20.dp))
+                        .clickable(enabled = false) {},
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(12.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        TopActionBar(fullscreenMode = false)
+
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .weight(1f, fill = false)
+                                .heightIn(min = 160.dp, max = maxPagerHeight)
+                                .clip(RoundedCornerShape(12.dp))
+                                .background(Color.Black),
+                        ) {
+                            HorizontalPager(
+                                state = pagerState,
+                                modifier = Modifier.fillMaxSize(),
+                            ) { page ->
+                                val item = images[page]
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        .clickable(onClick = onEnterFullscreen),
+                                    contentAlignment = Alignment.Center,
+                                ) {
+                                    AsyncImage(
+                                        model = Uri.parse(item.fileUri),
+                                        contentDescription = item.prompt,
+                                        contentScale = ContentScale.Fit,
+                                        modifier = Modifier.fillMaxSize(),
+                                    )
+                                }
+                            }
+                            if (images.size > 1) {
+                                IconButton(
+                                    onClick = {
+                                        scope.launch {
+                                            val prev = if (pagerState.currentPage == 0) images.lastIndex else pagerState.currentPage - 1
+                                            pagerState.animateScrollToPage(prev)
+                                        }
+                                    },
+                                    modifier = Modifier
+                                        .align(Alignment.CenterStart)
+                                        .padding(start = 6.dp)
+                                        .size(34.dp)
+                                        .clip(CircleShape)
+                                        .background(Color.Black.copy(alpha = 0.55f)),
+                                ) {
+                                    Icon(Icons.Outlined.ChevronLeft, "Previous", tint = Color.White)
+                                }
+                                IconButton(
+                                    onClick = {
+                                        scope.launch {
+                                            val next = (pagerState.currentPage + 1) % images.size
+                                            pagerState.animateScrollToPage(next)
+                                        }
+                                    },
+                                    modifier = Modifier
+                                        .align(Alignment.CenterEnd)
+                                        .padding(end = 6.dp)
+                                        .size(34.dp)
+                                        .clip(CircleShape)
+                                        .background(Color.Black.copy(alpha = 0.55f)),
+                                ) {
+                                    Icon(Icons.Outlined.ChevronRight, "Next", tint = Color.White)
+                                }
+                            }
+                        }
+
+                        BottomMetadataSection()
                     }
                 }
             }
