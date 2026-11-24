@@ -7,6 +7,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
@@ -21,6 +22,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -70,12 +72,14 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -167,8 +171,8 @@ fun StudioScreen(
             modifier = Modifier
                 .weight(1f)
                 .verticalScroll(rememberScrollState())
-                .padding(12.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp),
+                .padding(10.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             studio.toastMessage?.let { msg ->
                 LaunchedEffect(msg) {
@@ -1222,8 +1226,8 @@ fun StudioCard(content: @Composable androidx.compose.foundation.layout.ColumnSco
             .border(1.dp, HordeColors.BorderSubtle, RoundedCornerShape(16.dp)),
     ) {
         Column(
-            modifier = Modifier.padding(12.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp),
+            modifier = Modifier.padding(10.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
             content = content,
         )
     }
@@ -1329,6 +1333,76 @@ private fun PickerRowButton(
 }
 
 @Composable
+private fun CompactSliderInputLayout(
+    label: String,
+    draft: String,
+    onDraftChange: (String) -> Unit,
+    keyboardType: KeyboardType,
+    inputWidthDp: androidx.compose.ui.unit.Dp,
+    accent: Color,
+    enabled: Boolean,
+    sliderContent: @Composable (Modifier) -> Unit,
+) {
+    val numberInput: @Composable () -> Unit = {
+        Box(
+            contentAlignment = Alignment.Center,
+            modifier = Modifier
+                .width(inputWidthDp)
+                .height(34.dp)
+                .clip(RoundedCornerShape(8.dp))
+                .background(HordeColors.SubCardSurface)
+                .border(1.dp, accent.copy(alpha = if (enabled) 0.65f else 0.3f), RoundedCornerShape(8.dp))
+                .padding(horizontal = 6.dp, vertical = 4.dp),
+        ) {
+            BasicTextField(
+                value = draft,
+                onValueChange = onDraftChange,
+                enabled = enabled,
+                singleLine = true,
+                cursorBrush = SolidColor(accent),
+                keyboardOptions = KeyboardOptions(keyboardType = keyboardType),
+                textStyle = androidx.compose.ui.text.TextStyle(
+                    fontSize = 12.sp,
+                    fontFamily = FontFamily.Monospace,
+                    color = if (enabled) accent else HordeColors.TextMuted,
+                    textAlign = TextAlign.Center,
+                ),
+                modifier = Modifier.fillMaxWidth(),
+            )
+        }
+    }
+
+    BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
+        val inlineWithSlider = maxWidth >= 195.dp
+        if (inlineWithSlider) {
+            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Text(label, fontSize = 12.sp, color = HordeColors.TextSecondary)
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    sliderContent(Modifier.weight(1f))
+                    numberInput()
+                }
+            }
+        } else {
+            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(label, fontSize = 12.sp, color = HordeColors.TextSecondary)
+                    numberInput()
+                }
+                sliderContent(Modifier.fillMaxWidth())
+            }
+        }
+    }
+}
+
+@Composable
 fun LogIntSliderRow(
     label: String,
     value: Int,
@@ -1342,34 +1416,18 @@ fun LogIntSliderRow(
 ) {
     val accent = sliderZoneColor(zone)
     var draft by remember(value) { mutableStateOf(value.toString()) }
-    Column {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Text(label, fontSize = 12.sp, color = HordeColors.TextSecondary)
-            OutlinedTextField(
-                value = draft,
-                onValueChange = { raw ->
-                    draft = raw
-                    raw.toIntOrNull()?.let { onManualChange(it.coerceIn(minVal, maxVal)) }
-                },
-                enabled = enabled,
-                singleLine = true,
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                colors = OutlinedTextFieldDefaults.colors(
-                    focusedBorderColor = accent,
-                    unfocusedBorderColor = accent.copy(alpha = 0.6f),
-                ),
-                textStyle = androidx.compose.ui.text.TextStyle(
-                    fontSize = 12.sp,
-                    fontFamily = FontFamily.Monospace,
-                    color = accent,
-                ),
-                modifier = Modifier.width(74.dp),
-            )
-        }
+    CompactSliderInputLayout(
+        label = label,
+        draft = draft,
+        onDraftChange = { raw ->
+            draft = raw
+            raw.toIntOrNull()?.let { onManualChange(it.coerceIn(minVal, maxVal)) }
+        },
+        keyboardType = KeyboardType.Number,
+        inputWidthDp = 56.dp,
+        accent = accent,
+        enabled = enabled,
+    ) { mod ->
         Slider(
             value = sliderPosition,
             onValueChange = onSliderChange,
@@ -1378,6 +1436,7 @@ fun LogIntSliderRow(
                 thumbColor = accent,
                 activeTrackColor = accent,
             ),
+            modifier = mod,
         )
     }
 }
@@ -1395,34 +1454,18 @@ fun LogFloatSliderRow(
 ) {
     val accent = sliderZoneColor(zone)
     var draft by remember(value) { mutableStateOf(String.format(Locale.US, "%.${decimals}f", value)) }
-    Column {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Text(label, fontSize = 12.sp, color = HordeColors.TextSecondary)
-            OutlinedTextField(
-                value = draft,
-                onValueChange = { raw ->
-                    draft = raw
-                    raw.toFloatOrNull()?.let(onManualChange)
-                },
-                enabled = enabled,
-                singleLine = true,
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                colors = OutlinedTextFieldDefaults.colors(
-                    focusedBorderColor = accent,
-                    unfocusedBorderColor = accent.copy(alpha = 0.6f),
-                ),
-                textStyle = androidx.compose.ui.text.TextStyle(
-                    fontSize = 12.sp,
-                    fontFamily = FontFamily.Monospace,
-                    color = accent,
-                ),
-                modifier = Modifier.width(78.dp),
-            )
-        }
+    CompactSliderInputLayout(
+        label = label,
+        draft = draft,
+        onDraftChange = { raw ->
+            draft = raw
+            raw.toFloatOrNull()?.let(onManualChange)
+        },
+        keyboardType = KeyboardType.Decimal,
+        inputWidthDp = 62.dp,
+        accent = accent,
+        enabled = enabled,
+    ) { mod ->
         Slider(
             value = sliderPosition,
             onValueChange = onSliderChange,
@@ -1431,6 +1474,7 @@ fun LogFloatSliderRow(
                 thumbColor = accent,
                 activeTrackColor = accent,
             ),
+            modifier = mod,
         )
     }
 }
@@ -1447,34 +1491,18 @@ fun LinearIntSliderRow(
 ) {
     val accent = sliderZoneColor(zone)
     var draft by remember(value) { mutableStateOf(value.toString()) }
-    Column {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Text(label, fontSize = 12.sp, color = HordeColors.TextSecondary)
-            OutlinedTextField(
-                value = draft,
-                onValueChange = { raw ->
-                    draft = raw
-                    raw.toIntOrNull()?.let { onValueChange(it.coerceIn(minVal, maxVal)) }
-                },
-                enabled = enabled,
-                singleLine = true,
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                colors = OutlinedTextFieldDefaults.colors(
-                    focusedBorderColor = accent,
-                    unfocusedBorderColor = accent.copy(alpha = 0.6f),
-                ),
-                textStyle = androidx.compose.ui.text.TextStyle(
-                    fontSize = 12.sp,
-                    fontFamily = FontFamily.Monospace,
-                    color = accent,
-                ),
-                modifier = Modifier.width(74.dp),
-            )
-        }
+    CompactSliderInputLayout(
+        label = label,
+        draft = draft,
+        onDraftChange = { raw ->
+            draft = raw
+            raw.toIntOrNull()?.let { onValueChange(it.coerceIn(minVal, maxVal)) }
+        },
+        keyboardType = KeyboardType.Number,
+        inputWidthDp = 56.dp,
+        accent = accent,
+        enabled = enabled,
+    ) { mod ->
         Slider(
             value = value.toFloat(),
             valueRange = minVal.toFloat()..maxVal.toFloat(),
@@ -1485,6 +1513,7 @@ fun LinearIntSliderRow(
                 thumbColor = accent,
                 activeTrackColor = accent,
             ),
+            modifier = mod,
         )
     }
 }
