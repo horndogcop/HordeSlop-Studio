@@ -262,26 +262,26 @@ fun StudioScreen(
                 }
             }
 
-            // 2. Models & Styles + Selected Size Readout
+            // 2. Styles & Models + Selected Size Readout
             StudioCard {
                 CollapsibleSectionHeader(
-                    title = "Models & Style",
+                    title = "Style & Models",
                     collapsed = modelsCollapsed,
                     onToggle = { modelsCollapsed = !modelsCollapsed },
                 )
                 if (!modelsCollapsed) {
+                    PickerRowButton(
+                        label = "Style",
+                        value = activeStyle?.name ?: "Raw Prompt",
+                        locked = false,
+                        onClick = { showStylesModal = true },
+                    )
                     PickerRowButton(
                         label = "Models",
                         value = if (studio.selectedModels.size == 1) studio.selectedModels.first()
                         else "${studio.selectedModels.first()} +${studio.selectedModels.size - 1}",
                         locked = studio.isFieldLocked(StyleFieldLock.MODEL),
                         onClick = { showModelModal = true },
-                    )
-                    PickerRowButton(
-                        label = "Style",
-                        value = activeStyle?.name ?: "Raw Prompt",
-                        locked = false,
-                        onClick = { showStylesModal = true },
                     )
                     PickerRowButton(
                         label = "Size",
