@@ -54,7 +54,7 @@ data class StudioUiState(
     val clipSkip: Int = 1,
     val width: Int = 1024,
     val height: Int = 1024,
-    val sampler: String = "dpmpp_2m_sde",
+    val sampler: String = "k_euler",
     val scheduler: String = "karras",
     val showAllSamplers: Boolean = false,
     val recommendedSamplers: List<String> = HordeConstants.RECOMMENDED_SAMPLERS,
