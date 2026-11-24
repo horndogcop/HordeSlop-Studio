@@ -55,7 +55,7 @@ data class StudioUiState(
     val width: Int = 1024,
     val height: Int = 1024,
     val sampler: String = "k_euler",
-    val scheduler: String = "karras",
+    val scheduler: String = "normal",
     val showAllSamplers: Boolean = false,
     val recommendedSamplers: List<String> = HordeConstants.RECOMMENDED_SAMPLERS,
     val allSamplers: List<String> = (HordeConstants.RECOMMENDED_SAMPLERS + HordeConstants.ADVANCED_SAMPLERS).distinct(),

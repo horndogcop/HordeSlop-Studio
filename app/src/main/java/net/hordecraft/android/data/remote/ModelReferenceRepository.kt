@@ -30,7 +30,7 @@ data class ModelRefEntry(
     val showcases: List<String> = emptyList(),
     val defaultSteps: Int = 28,
     val defaultSampler: String = "k_euler",
-    val defaultScheduler: String = "karras",
+    val defaultScheduler: String = "normal",
     val defaultClipSkip: Int = 1,
     val suggestedMinSteps: Int = 15,
     val suggestedMaxSteps: Int = 45,
@@ -87,7 +87,8 @@ class ModelReferenceRepository(
                         defaultSteps = defSteps,
                         defaultSampler = configObj?.get("sampler")?.jsonPrimitive?.contentOrNull
                             ?: "k_euler",
-                        defaultScheduler = if (isSchnell) "simple" else "karras",
+                        defaultScheduler = configObj?.get("scheduler")?.jsonPrimitive?.contentOrNull
+                            ?: "normal",
                         defaultClipSkip = 1,
                         suggestedMinSteps = if (isSchnell) 4 else 18,
                         suggestedMaxSteps = if (isSchnell) 10 else 45,
@@ -131,7 +132,7 @@ class ModelReferenceRepository(
                     etaSeconds = dto.eta,
                     defaultSteps = ref?.defaultSteps ?: if (isXl) 30 else 26,
                     defaultSampler = ref?.defaultSampler ?: "k_euler",
-                    defaultScheduler = ref?.defaultScheduler ?: "karras",
+                    defaultScheduler = ref?.defaultScheduler ?: "normal",
                     defaultClipSkip = ref?.defaultClipSkip ?: 1,
                     suggestedMinSteps = ref?.suggestedMinSteps ?: 18,
                     suggestedMaxSteps = ref?.suggestedMaxSteps ?: 45,
