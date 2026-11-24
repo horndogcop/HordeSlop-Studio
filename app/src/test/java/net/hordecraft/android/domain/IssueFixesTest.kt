@@ -177,4 +177,90 @@ class IssueFixesTest {
     fun destinationUserLabelIsHorde() {
         assertEquals("Horde", ActivityDestination.USER.label)
     }
+
+    @Test
+    fun defaultSamplerAndSchedulerAreKEulerAndNormal() {
+        val state = net.hordecraft.android.ui.StudioUiState()
+        assertEquals("k_euler", state.sampler)
+        assertEquals("normal", state.scheduler)
+        assertTrue(HordeConstants.FALLBACK_SEED_MODELS.all { it.defaultSampler == "k_euler" })
+        assertTrue(HordeConstants.FALLBACK_SEED_MODELS.all { it.defaultScheduler == "normal" })
+    }
+
+    @Test
+    fun databaseBackupCodecRoundTripsAllTables() {
+        val bundle = net.hordecraft.android.data.local.DatabaseBackupCodec.buildBundle(
+            promptHistory = listOf(
+                net.hordecraft.android.data.local.PromptHistoryEntity(
+                    id = "ph1",
+                    title = "Castle",
+                    prompt = "stone castle",
+                    negativePrompt = "blurry",
+                    model = "Deliberate",
+                    steps = 28,
+                    cfg = 7.0f,
+                    clipSkip = 1,
+                    sampler = "k_euler",
+                    scheduler = "normal",
+                    timestampMillis = 123456L,
+                    isFavorite = true,
+                ),
+            ),
+            modelDefaults = listOf(
+                net.hordecraft.android.data.local.ModelDefaultsEntity(
+                    modelName = "Juggernaut XL",
+                    steps = 30,
+                    sampler = "k_euler",
+                    scheduler = "normal",
+                    clipSkip = 1,
+                ),
+            ),
+            savedImages = listOf(
+                net.hordecraft.android.data.local.SavedImageEntity(
+                    id = "img1",
+                    requestId = "req1",
+                    generationId = "gen1",
+                    fileUri = "content://example/img1.webp",
+                    prompt = "stone castle",
+                    negativePrompt = "",
+                    model = "Deliberate",
+                    seed = "42",
+                    steps = 28,
+                    cfg = 7.0f,
+                    clipSkip = 1,
+                    sampler = "k_euler",
+                    scheduler = "normal",
+                    width = 512,
+                    height = 768,
+                    destinationLabel = "Downloads/Hordecraft",
+                    isFavorite = false,
+                    partialFromCancel = false,
+                    requestJson = "{}",
+                    statusMetadataJson = "{}",
+                    createdAtMillis = 999L,
+                ),
+            ),
+            activeJobs = emptyList(),
+            exportedAtMillis = 5555L,
+        )
+        val encoded = net.hordecraft.android.data.local.DatabaseBackupCodec.encodeJson(bundle)
+        val decoded = net.hordecraft.android.data.local.DatabaseBackupCodec.decodeJson(encoded)
+        assertEquals(1, decoded.promptHistory.size)
+        assertEquals("ph1", decoded.promptHistory.first().id)
+        assertEquals(1, decoded.modelDefaults.size)
+        assertEquals("Juggernaut XL", decoded.modelDefaults.first().modelName)
+        assertEquals(1, decoded.savedImages.size)
+        assertEquals("req1", decoded.savedImages.first().requestId)
+        assertEquals(5555L, decoded.exportedAtMillis)
+        assertTrue(
+            net.hordecraft.android.data.local.DatabaseBackupCodec.isSqliteDatabaseBytes(
+                "SQLite format 3\u0000rest".toByteArray(Charsets.US_ASCII),
+            ),
+        )
+        assertFalse(
+            net.hordecraft.android.data.local.DatabaseBackupCodec.isSqliteDatabaseBytes(
+                encoded.toByteArray(Charsets.UTF_8),
+            ),
+        )
+    }
 }

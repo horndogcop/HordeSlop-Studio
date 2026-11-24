@@ -1,7 +1,9 @@
 package net.hordecraft.android.data.repository
 
 import android.content.Context
+import android.net.Uri
 import android.util.Base64
+import androidx.room.withTransaction
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
@@ -22,6 +24,10 @@ import kotlinx.serialization.json.put
 import net.hordecraft.android.data.local.ActiveJobDao
 import net.hordecraft.android.data.local.ActiveJobEntity
 import net.hordecraft.android.data.local.AppSettings
+import net.hordecraft.android.data.local.DatabaseBackupCodec
+import net.hordecraft.android.data.local.DatabaseBackupCodec.toEntity
+import net.hordecraft.android.data.local.DatabaseSyncCounts
+import net.hordecraft.android.data.local.HordecraftDatabase
 import net.hordecraft.android.data.local.ModelDefaultsDao
 import net.hordecraft.android.data.local.ModelDefaultsEntity
 import net.hordecraft.android.data.local.PromptHistoryDao
@@ -58,10 +64,12 @@ import net.hordecraft.android.domain.UserStatsSummary
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import retrofit2.HttpException
+import java.io.File
 import java.util.UUID
 
 class HordecraftRepository(
     private val context: Context,
+    private val database: HordecraftDatabase,
     val settingsStore: SettingsDataStore,
     private val promptHistoryDao: PromptHistoryDao,
     private val modelDefaultsDao: ModelDefaultsDao,
@@ -812,6 +820,73 @@ class HordecraftRepository(
     suspend fun getTrackedJobsForPolling(): List<ActiveJobEntity> = activeJobDao.getTrackedForPolling()
 
     suspend fun updateJobRecord(job: ActiveJobEntity) = activeJobDao.upsert(job)
+
+    suspend fun exportDatabaseToUri(uri: Uri): DatabaseSyncCounts = withContext(Dispatchers.IO) {
+        val history = promptHistoryDao.getAll()
+        val defaults = modelDefaultsDao.getAll()
+        val images = savedImageDao.getAll()
+        val jobs = activeJobDao.getAll()
+        val bundle = DatabaseBackupCodec.buildBundle(
+            promptHistory = history,
+            modelDefaults = defaults,
+            savedImages = images,
+            activeJobs = jobs,
+        )
+        val encoded = DatabaseBackupCodec.encodeJson(bundle)
+        val outStream = context.contentResolver.openOutputStream(uri)
+            ?: error("Unable to open destination file")
+        outStream.use { out ->
+            out.write(encoded.toByteArray(Charsets.UTF_8))
+        }
+        DatabaseSyncCounts(
+            promptHistoryCount = history.size,
+            modelDefaultsCount = defaults.size,
+            savedImagesCount = images.size,
+            activeJobsCount = jobs.size,
+        )
+    }
+
+    suspend fun importDatabaseFromUri(uri: Uri, replaceExisting: Boolean): DatabaseSyncCounts =
+        withContext(Dispatchers.IO) {
+            val bytes = context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
+                ?: error("Unable to open backup file")
+            val bundle = if (DatabaseBackupCodec.isSqliteDatabaseBytes(bytes)) {
+                val tempDb = File.createTempFile("hordecraft_import_", ".db", context.cacheDir)
+                try {
+                    tempDb.writeBytes(bytes)
+                    DatabaseBackupCodec.readSqliteFile(tempDb)
+                } finally {
+                    tempDb.delete()
+                }
+            } else {
+                DatabaseBackupCodec.decodeJson(bytes.toString(Charsets.UTF_8))
+            }
+
+            val historyEntities = bundle.promptHistory.map { it.toEntity() }
+            val defaultEntities = bundle.modelDefaults.map { it.toEntity() }
+            val imageEntities = bundle.savedImages.map { it.toEntity() }
+            val jobEntities = bundle.activeJobs.map { it.toEntity() }
+
+            database.withTransaction {
+                if (replaceExisting) {
+                    promptHistoryDao.deleteAll()
+                    modelDefaultsDao.deleteAll()
+                    savedImageDao.deleteAll()
+                    activeJobDao.deleteAll()
+                }
+                if (historyEntities.isNotEmpty()) promptHistoryDao.upsertAll(historyEntities)
+                if (defaultEntities.isNotEmpty()) modelDefaultsDao.upsertAll(defaultEntities)
+                if (imageEntities.isNotEmpty()) savedImageDao.upsertAll(imageEntities)
+                if (jobEntities.isNotEmpty()) activeJobDao.upsertAll(jobEntities)
+            }
+
+            DatabaseSyncCounts(
+                promptHistoryCount = historyEntities.size,
+                modelDefaultsCount = defaultEntities.size,
+                savedImagesCount = imageEntities.size,
+                activeJobsCount = jobEntities.size,
+            )
+        }
 
     private fun isHttp404(t: Throwable): Boolean =
         t is HttpException && t.code() == 404

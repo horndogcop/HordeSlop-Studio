@@ -62,6 +62,7 @@ abstract class BaseHordeActivity : ComponentActivity() {
                         ActivityDestination.SETTINGS -> SettingsScreen(
                             vm = vm,
                             settings = settings,
+                            toastMessage = studio.toastMessage,
                         )
                         ActivityDestination.MODELS_STUB -> FutureStubScreen(
                             title = "Models",

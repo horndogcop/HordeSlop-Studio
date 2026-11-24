@@ -90,6 +90,7 @@ class AppContainer(context: Application) {
 
     val repository = HordecraftRepository(
         context = context,
+        database = database,
         settingsStore = settingsStore,
         promptHistoryDao = database.promptHistoryDao(),
         modelDefaultsDao = database.modelDefaultsDao(),

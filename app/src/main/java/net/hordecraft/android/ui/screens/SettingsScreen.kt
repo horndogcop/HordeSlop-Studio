@@ -46,6 +46,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -79,6 +80,7 @@ import net.hordecraft.android.ui.theme.HordeColors
 fun SettingsScreen(
     vm: MainViewModel,
     settings: AppSettings,
+    toastMessage: String? = null,
 ) {
     val context = LocalContext.current
 
@@ -97,6 +99,8 @@ fun SettingsScreen(
 
     var editingRepoIndex by remember { mutableStateOf<Int?>(null) } // -1 for add, >=0 for edit
     var draftRepoUrl by remember { mutableStateOf("") }
+    var pendingImportUri by remember { mutableStateOf<Uri?>(null) }
+    var replaceExistingOnImport by remember { mutableStateOf(false) }
 
     val safFolderLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.OpenDocumentTree(),
@@ -110,6 +114,23 @@ fun SettingsScreen(
             }
             val display = DocumentFile.fromTreeUri(context, treeUri)?.name ?: "Selected Folder"
             vm.setStorageSafTree(treeUri.toString(), display)
+        }
+    }
+
+    val exportDbLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.CreateDocument("application/json"),
+    ) { uri ->
+        if (uri != null) {
+            vm.exportDatabase(uri)
+        }
+    }
+
+    val importDbLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenDocument(),
+    ) { uri ->
+        if (uri != null) {
+            replaceExistingOnImport = false
+            pendingImportUri = uri
         }
     }
 
@@ -128,6 +149,22 @@ fun SettingsScreen(
             .padding(12.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
+        toastMessage?.let { msg ->
+            LaunchedEffect(msg) {
+                kotlinx.coroutines.delay(2_800L)
+                vm.clearToast()
+            }
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(10.dp))
+                    .background(HordeColors.TealContainer)
+                    .padding(horizontal = 12.dp, vertical = 8.dp),
+            ) {
+                Text(msg, fontSize = 12.sp, color = HordeColors.TealSoft)
+            }
+        }
+
         // Top of Settings: AI Notice
         Surface(
             color = Color(0xFF18202B),
@@ -464,6 +501,30 @@ fun SettingsScreen(
                     }
                 }
             }
+
+            HorizontalDivider(color = HordeColors.BorderSubtle)
+
+            Text("Database", fontSize = 12.sp, color = HordeColors.TextSecondary)
+            Text(
+                "Back up or restore prompt history, favorites, model defaults, and gallery metadata.",
+                fontSize = 11.sp,
+                color = HordeColors.TextMuted,
+            )
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedButton(
+                    onClick = { exportDbLauncher.launch("hordecraft-database.json") },
+                    modifier = Modifier.weight(1f),
+                ) {
+                    Text("Export", fontSize = 12.sp)
+                }
+                Button(
+                    onClick = { importDbLauncher.launch(arrayOf("application/json", "*/*")) },
+                    colors = ButtonDefaults.buttonColors(containerColor = HordeColors.ElevatedButton),
+                    modifier = Modifier.weight(1f),
+                ) {
+                    Text("Import", fontSize = 12.sp, color = HordeColors.TextPrimary)
+                }
+            }
         }
 
         // Notifications
@@ -583,6 +644,55 @@ fun SettingsScreen(
                     },
                 ) {
                     Text("Save", color = Color(0xFF020617), fontWeight = FontWeight.SemiBold)
+                }
+            },
+        )
+    }
+
+    // Import Database Confirmation Modal
+    pendingImportUri?.let { uri ->
+        AlertDialog(
+            onDismissRequest = { pendingImportUri = null },
+            containerColor = HordeColors.CardSurface,
+            title = { Text("Import Database", color = HordeColors.TextPrimary) },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(
+                        "Restore history, favorites, model defaults, and gallery records from the selected backup.",
+                        fontSize = 12.sp,
+                        color = HordeColors.TextSecondary,
+                    )
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { replaceExistingOnImport = !replaceExistingOnImport },
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Checkbox(
+                            checked = replaceExistingOnImport,
+                            onCheckedChange = { replaceExistingOnImport = it },
+                        )
+                        Column(Modifier.weight(1f)) {
+                            Text("Replace existing data", fontSize = 12.sp, color = HordeColors.TextPrimary)
+                            Text(
+                                "Unchecked merges backup entries with existing records.",
+                                fontSize = 11.sp,
+                                color = HordeColors.TextMuted,
+                            )
+                        }
+                    }
+                }
+            },
+            dismissButton = { OutlinedButton(onClick = { pendingImportUri = null }) { Text("Cancel") } },
+            confirmButton = {
+                Button(
+                    colors = ButtonDefaults.buttonColors(containerColor = HordeColors.TealPrimary),
+                    onClick = {
+                        vm.importDatabase(uri, replaceExistingOnImport)
+                        pendingImportUri = null
+                    },
+                ) {
+                    Text("Import", color = Color(0xFF020617), fontWeight = FontWeight.SemiBold)
                 }
             },
         )

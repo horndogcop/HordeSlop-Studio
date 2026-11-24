@@ -2,6 +2,7 @@ package net.hordecraft.android.ui
 
 import android.app.Application
 import android.content.Intent
+import android.net.Uri
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.async
@@ -607,6 +608,36 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun setAdvancedCollapsed(collapsed: Boolean) {
         viewModelScope.launch { repo.settingsStore.setAdvancedCollapsed(collapsed) }
+    }
+
+    fun exportDatabase(uri: Uri) {
+        viewModelScope.launch {
+            runCatching { repo.exportDatabaseToUri(uri) }
+                .onSuccess { counts ->
+                    showToast(
+                        "Exported ${counts.promptHistoryCount} prompts, ${counts.savedImagesCount} images, ${counts.modelDefaultsCount} model defaults",
+                    )
+                }
+                .onFailure { err ->
+                    showToast("Export failed: ${err.message ?: "Unable to write file"}")
+                }
+        }
+    }
+
+    fun importDatabase(uri: Uri, replaceExisting: Boolean) {
+        viewModelScope.launch {
+            runCatching { repo.importDatabaseFromUri(uri, replaceExisting) }
+                .onSuccess { counts ->
+                    refreshCatalogs(force = true)
+                    refreshQueueTracking()
+                    showToast(
+                        "Imported ${counts.promptHistoryCount} prompts, ${counts.savedImagesCount} images, ${counts.modelDefaultsCount} model defaults",
+                    )
+                }
+                .onFailure { err ->
+                    showToast("Import failed: ${err.message ?: "Invalid backup file"}")
+                }
+        }
     }
 
     fun completeOnboarding(keyInput: String) {

@@ -97,14 +97,23 @@ interface PromptHistoryDao {
     @Query("SELECT * FROM prompt_history ORDER BY timestampMillis DESC")
     fun observeAll(): Flow<List<PromptHistoryEntity>>
 
+    @Query("SELECT * FROM prompt_history ORDER BY timestampMillis DESC")
+    suspend fun getAll(): List<PromptHistoryEntity>
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsert(entry: PromptHistoryEntity)
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsertAll(entries: List<PromptHistoryEntity>)
 
     @Query("UPDATE prompt_history SET isFavorite = :fav WHERE id = :id")
     suspend fun setFavorite(id: String, fav: Boolean)
 
     @Query("DELETE FROM prompt_history WHERE id = :id")
     suspend fun deleteById(id: String)
+
+    @Query("DELETE FROM prompt_history")
+    suspend fun deleteAll()
 }
 
 @Dao
@@ -112,11 +121,20 @@ interface ModelDefaultsDao {
     @Query("SELECT * FROM model_defaults")
     fun observeAll(): Flow<List<ModelDefaultsEntity>>
 
+    @Query("SELECT * FROM model_defaults")
+    suspend fun getAll(): List<ModelDefaultsEntity>
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsert(entity: ModelDefaultsEntity)
 
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsertAll(entities: List<ModelDefaultsEntity>)
+
     @Query("DELETE FROM model_defaults WHERE modelName = :modelName")
     suspend fun deleteByModelName(modelName: String)
+
+    @Query("DELETE FROM model_defaults")
+    suspend fun deleteAll()
 }
 
 @Dao
@@ -127,14 +145,23 @@ interface SavedImageDao {
     @Query("SELECT * FROM saved_images WHERE generationId = :generationId LIMIT 1")
     suspend fun findByGenerationId(generationId: String): SavedImageEntity?
 
+    @Query("SELECT * FROM saved_images ORDER BY createdAtMillis DESC")
+    suspend fun getAll(): List<SavedImageEntity>
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsert(image: SavedImageEntity)
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsertAll(images: List<SavedImageEntity>)
 
     @Query("UPDATE saved_images SET isFavorite = :fav WHERE id = :id")
     suspend fun setFavorite(id: String, fav: Boolean)
 
     @Query("DELETE FROM saved_images WHERE id = :id")
     suspend fun deleteById(id: String)
+
+    @Query("DELETE FROM saved_images")
+    suspend fun deleteAll()
 }
 
 @Dao
@@ -151,8 +178,14 @@ interface ActiveJobDao {
     @Query("SELECT * FROM active_jobs WHERE id = :id LIMIT 1")
     suspend fun findById(id: String): ActiveJobEntity?
 
+    @Query("SELECT * FROM active_jobs ORDER BY createdAtMillis DESC")
+    suspend fun getAll(): List<ActiveJobEntity>
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsert(job: ActiveJobEntity)
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsertAll(jobs: List<ActiveJobEntity>)
 
     @Query("UPDATE active_jobs SET status = :status WHERE id = :id")
     suspend fun updateStatus(id: String, status: String)
@@ -171,6 +204,9 @@ interface ActiveJobDao {
 
     @Query("DELETE FROM active_jobs WHERE id = :id")
     suspend fun deleteById(id: String)
+
+    @Query("DELETE FROM active_jobs")
+    suspend fun deleteAll()
 }
 
 @Database(

@@ -3,8 +3,12 @@
     @kotlinx.serialization.SerialName <fields>;
 }
 -keep,includedescriptorclasses class net.hordecraft.android.data.remote.**$$serializer { *; }
+-keep,includedescriptorclasses class net.hordecraft.android.data.local.**$$serializer { *; }
 -keep,includedescriptorclasses class net.hordecraft.android.domain.**$$serializer { *; }
 -keepclassmembers class net.hordecraft.android.data.remote.** {
+    *** Companion;
+}
+-keepclassmembers class net.hordecraft.android.data.local.** {
     *** Companion;
 }
 -keepclassmembers class net.hordecraft.android.domain.** {
