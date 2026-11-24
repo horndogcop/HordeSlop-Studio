@@ -2,5 +2,5 @@
 <paths>
     <cache-path name="shared_images" path="shared_images/" />
     <files-path name="internal_images" path="images/" />
-    <external-path name="downloads_hordecraft" path="Download/Hordecraft/" />
+    <external-path name="downloads_hordeslop_studio" path="Download/HordeSlop Studio/" />
 </paths>

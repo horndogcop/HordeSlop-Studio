@@ -1,4 +1,4 @@
-package net.hordecraft.android.data.local
+package net.hordeslop.studio.data.local
 
 import android.content.Context
 import androidx.datastore.core.DataStore
@@ -9,13 +9,13 @@ import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
-import net.hordecraft.android.domain.GenerateButtonPlacement
-import net.hordecraft.android.domain.HordeConstants
-import net.hordecraft.android.domain.LauncherIconChoice
-import net.hordecraft.android.domain.NavLayoutMode
-import net.hordecraft.android.domain.StorageMode
+import net.hordeslop.studio.domain.GenerateButtonPlacement
+import net.hordeslop.studio.domain.HordeConstants
+import net.hordeslop.studio.domain.LauncherIconChoice
+import net.hordeslop.studio.domain.NavLayoutMode
+import net.hordeslop.studio.domain.StorageMode
 
-private val Context.dataStore: DataStore<Preferences> by preferencesDataStore(name = "hordecraft_prefs")
+private val Context.dataStore: DataStore<Preferences> by preferencesDataStore(name = "hordeslop_studio_prefs")
 
 data class AppSettings(
     val hordeApiKey: String = HordeConstants.ANONYMOUS_KEY,
@@ -30,7 +30,7 @@ data class AppSettings(
     val launcherIcon: LauncherIconChoice = LauncherIconChoice.ROBOT_PLACEHOLDER,
     val storageMode: StorageMode = StorageMode.DOWNLOADS,
     val safTreeUri: String? = null,
-    val safFolderLabel: String = "Downloads/Hordecraft",
+    val safFolderLabel: String = "Downloads/HordeSlop Studio",
     val advancedCollapsed: Boolean = true,
     val onboardingCompleted: Boolean = false,
 )
@@ -80,7 +80,7 @@ class SettingsDataStore(private val context: Context) {
             launcherIcon = LauncherIconChoice.fromKey(prefs[Keys.LAUNCHER_ICON]),
             storageMode = StorageMode.fromKey(prefs[Keys.STORAGE_MODE]),
             safTreeUri = prefs[Keys.SAF_TREE_URI],
-            safFolderLabel = prefs[Keys.SAF_FOLDER_LABEL] ?: "Downloads/Hordecraft",
+            safFolderLabel = prefs[Keys.SAF_FOLDER_LABEL] ?: "Downloads/HordeSlop Studio",
             advancedCollapsed = prefs[Keys.ADVANCED_COLLAPSED] ?: true,
             onboardingCompleted = prefs[Keys.ONBOARDING_COMPLETED] ?: false,
         )
@@ -135,7 +135,7 @@ class SettingsDataStore(private val context: Context) {
     suspend fun setStorageDownloads() {
         context.dataStore.edit {
             it[Keys.STORAGE_MODE] = StorageMode.DOWNLOADS.storageKey
-            it[Keys.SAF_FOLDER_LABEL] = "Downloads/Hordecraft"
+            it[Keys.SAF_FOLDER_LABEL] = "Downloads/HordeSlop Studio"
         }
     }
 

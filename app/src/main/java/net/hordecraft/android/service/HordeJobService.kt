@@ -1,4 +1,4 @@
-package net.hordecraft.android.service
+package net.hordeslop.studio.service
 
 import android.app.Notification
 import android.app.NotificationManager
@@ -19,11 +19,11 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
-import net.hordecraft.android.HordecraftApp
-import net.hordecraft.android.R
-import net.hordecraft.android.domain.JobStatus
-import net.hordecraft.android.ui.activities.GalleryActivity
-import net.hordecraft.android.ui.activities.ImageGenActivity
+import net.hordeslop.studio.HordecraftApp
+import net.hordeslop.studio.R
+import net.hordeslop.studio.domain.JobStatus
+import net.hordeslop.studio.ui.activities.GalleryActivity
+import net.hordeslop.studio.ui.activities.ImageGenActivity
 
 class HordeJobService : Service() {
 
@@ -122,7 +122,7 @@ class HordeJobService : Service() {
         )
         return NotificationCompat.Builder(this, NotificationChannels.CHANNEL_ONGOING)
             .setSmallIcon(R.drawable.ic_launcher_robot)
-            .setContentTitle("Hordecraft")
+            .setContentTitle("HordeSlop Studio")
             .setContentText(text)
             .setContentIntent(pendingOpen)
             .setOngoing(true)
@@ -162,10 +162,10 @@ class HordeJobService : Service() {
 
     companion object {
         const val NOTIF_ID_ONGOING = 4001
-        const val ACTION_START_OR_POLL = "net.hordecraft.android.action.START_POLL"
-        const val ACTION_PAUSE = "net.hordecraft.android.action.PAUSE"
-        const val ACTION_RESUME = "net.hordecraft.android.action.RESUME"
-        const val ACTION_CANCEL_JOB = "net.hordecraft.android.action.CANCEL_JOB"
+        const val ACTION_START_OR_POLL = "net.hordeslop.studio.action.START_POLL"
+        const val ACTION_PAUSE = "net.hordeslop.studio.action.PAUSE"
+        const val ACTION_RESUME = "net.hordeslop.studio.action.RESUME"
+        const val ACTION_CANCEL_JOB = "net.hordeslop.studio.action.CANCEL_JOB"
         const val EXTRA_JOB_ID = "extra_job_id"
 
         fun startPolling(context: Context) {

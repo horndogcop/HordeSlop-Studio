@@ -1,4 +1,4 @@
-package net.hordecraft.android.domain
+package net.hordeslop.studio.domain
 
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonObject
@@ -337,8 +337,8 @@ object HordeConstants {
         "https://raw.githubusercontent.com/amiantos/AI-Horde-Styles-Previews/main/previews.json"
     const val ANONYMOUS_KEY = "0000000000"
     const val HAIDRA_LOGO_URL = "https://haidra.net/content/images/2024/11/haidra-transparent.png"
-    const val HORDECRAFT_REPO_URL = "https://github.com/horndogcop/hordecraft-android"
-    const val CLIENT_AGENT = "Hordecraft-Android:0.1.0:horndogcop/hordecraft-android"
+    const val APP_REPO_URL = "https://github.com/horndogcop/hordeslop-studio"
+    const val CLIENT_AGENT = "HordeSlopStudio:0.1.0:horndogcop/hordeslop-studio"
     const val MAX_IMAGES_PER_REQUEST = 20
     const val MAX_ATTACHED_LORAS = 5
     const val MAX_ATTACHED_TIS = 5
@@ -458,10 +458,10 @@ object HordeConstants {
     )
 
     val NOTIFICATION_CHANNELS = listOf(
-        NotificationChannelSpec("hordecraft_ongoing", "Generation Progress", "Low (Silent)", true),
-        NotificationChannelSpec("hordecraft_results", "Finished & Failed Images", "Default", true),
-        NotificationChannelSpec("hordecraft_outside", "Other App Checks", "Low (Later)", false),
-        NotificationChannelSpec("hordecraft_queue", "Queue & Rate Alerts", "Default", true),
+        NotificationChannelSpec("hordeslop_ongoing", "Generation Progress", "Low (Silent)", true),
+        NotificationChannelSpec("hordeslop_results", "Finished & Failed Images", "Default", true),
+        NotificationChannelSpec("hordeslop_outside", "Other App Checks", "Low (Later)", false),
+        NotificationChannelSpec("hordeslop_queue", "Queue & Rate Alerts", "Default", true),
     )
 
     fun normalizeBaseUrl(rawUrl: String): String {

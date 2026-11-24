@@ -14,5 +14,5 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "Hordecraft"
+rootProject.name = "HordeSlop Studio"
 include(":app")

@@ -1,7 +1,7 @@
-package net.hordecraft.android.data.remote
+package net.hordeslop.studio.data.remote
 
 import android.os.SystemClock
-import net.hordecraft.android.domain.HordeConstants
+import net.hordeslop.studio.domain.HordeConstants
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.Interceptor
 import okhttp3.Response

@@ -1,4 +1,4 @@
-package net.hordecraft.android.ui.screens
+package net.hordeslop.studio.ui.screens
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -69,16 +69,16 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import coil.compose.AsyncImage
-import net.hordecraft.android.domain.AttachedLora
-import net.hordecraft.android.domain.AttachedTi
-import net.hordecraft.android.domain.HordeConstants
-import net.hordecraft.android.domain.HordeModel
-import net.hordecraft.android.domain.HordeStyle
-import net.hordecraft.android.domain.MultiModelDispatchMode
-import net.hordecraft.android.domain.PromptRecord
-import net.hordecraft.android.domain.SizeMathEngine
-import net.hordecraft.android.domain.SliderMath
-import net.hordecraft.android.ui.theme.HordeColors
+import net.hordeslop.studio.domain.AttachedLora
+import net.hordeslop.studio.domain.AttachedTi
+import net.hordeslop.studio.domain.HordeConstants
+import net.hordeslop.studio.domain.HordeModel
+import net.hordeslop.studio.domain.HordeStyle
+import net.hordeslop.studio.domain.MultiModelDispatchMode
+import net.hordeslop.studio.domain.PromptRecord
+import net.hordeslop.studio.domain.SizeMathEngine
+import net.hordeslop.studio.domain.SliderMath
+import net.hordeslop.studio.ui.theme.HordeColors
 
 /**
  * Dynamic-height modal wrapper: shrinks tightly to content height and only scrolls

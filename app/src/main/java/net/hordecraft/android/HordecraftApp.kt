@@ -1,4 +1,4 @@
-package net.hordecraft.android
+package net.hordeslop.studio
 
 import android.app.Application
 import kotlinx.coroutines.CoroutineScope
@@ -7,17 +7,17 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.Json
-import net.hordecraft.android.data.local.HordecraftDatabase
-import net.hordecraft.android.data.local.SettingsDataStore
-import net.hordecraft.android.data.local.WebpStorageManager
-import net.hordecraft.android.data.remote.CivitaiApiService
-import net.hordecraft.android.data.remote.HordeApiService
-import net.hordecraft.android.data.remote.HordeRateLimiterInterceptor
-import net.hordecraft.android.data.remote.ModelReferenceRepository
-import net.hordecraft.android.data.repository.HordecraftRepository
-import net.hordecraft.android.domain.HordeConstants
-import net.hordecraft.android.service.NotificationChannels
-import net.hordecraft.android.ui.StudioUiState
+import net.hordeslop.studio.data.local.HordecraftDatabase
+import net.hordeslop.studio.data.local.SettingsDataStore
+import net.hordeslop.studio.data.local.WebpStorageManager
+import net.hordeslop.studio.data.remote.CivitaiApiService
+import net.hordeslop.studio.data.remote.HordeApiService
+import net.hordeslop.studio.data.remote.HordeRateLimiterInterceptor
+import net.hordeslop.studio.data.remote.ModelReferenceRepository
+import net.hordeslop.studio.data.repository.HordecraftRepository
+import net.hordeslop.studio.domain.HordeConstants
+import net.hordeslop.studio.service.NotificationChannels
+import net.hordeslop.studio.ui.StudioUiState
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import retrofit2.Retrofit

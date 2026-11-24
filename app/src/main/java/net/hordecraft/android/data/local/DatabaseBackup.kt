@@ -1,4 +1,4 @@
-package net.hordecraft.android.data.local
+package net.hordeslop.studio.data.local
 
 import android.database.Cursor
 import android.database.sqlite.SQLiteDatabase
@@ -87,7 +87,7 @@ data class ActiveJobBackupDto(
 
 @Serializable
 data class DatabaseBackupBundle(
-    val app: String = "hordecraft-android",
+    val app: String = "hordeslop-studio",
     val formatVersion: Int = 1,
     val exportedAtMillis: Long = System.currentTimeMillis(),
     val promptHistory: List<PromptHistoryBackupDto> = emptyList(),
@@ -228,7 +228,7 @@ object DatabaseBackupCodec {
                 }
             }
             val expectedAny = listOf("prompt_history", "model_defaults", "saved_images", "active_jobs")
-            require(expectedAny.any { it in tables }) { "SQLite file is not a Hordecraft database" }
+            require(expectedAny.any { it in tables }) { "SQLite file is not a HordeSlop Studio database" }
 
             val promptHistory = if ("prompt_history" in tables) {
                 buildList {

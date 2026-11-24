@@ -1,4 +1,4 @@
-package net.hordecraft.android.ui.screens
+package net.hordeslop.studio.ui.screens
 
 import android.content.ClipboardManager
 import android.content.Context
@@ -80,27 +80,27 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import java.util.Locale
-import net.hordecraft.android.data.local.AppSettings
-import net.hordecraft.android.domain.ActivityDestination
-import net.hordecraft.android.domain.AttachedLora
-import net.hordecraft.android.domain.GenerateButtonPlacement
-import net.hordecraft.android.domain.HordeConstants
-import net.hordecraft.android.domain.HordeJob
-import net.hordecraft.android.domain.JobStatus
-import net.hordecraft.android.domain.LoraTriggerMode
-import net.hordecraft.android.domain.PromptRecord
-import net.hordecraft.android.domain.PromptTarget
-import net.hordecraft.android.domain.SizeMathEngine
-import net.hordecraft.android.domain.SliderMath
-import net.hordecraft.android.domain.SliderZone
-import net.hordecraft.android.domain.StyleFieldLock
-import net.hordecraft.android.domain.TemplatePrompts
-import net.hordecraft.android.domain.TiInjectMode
-import net.hordecraft.android.ui.MainViewModel
-import net.hordecraft.android.ui.StudioUiState
-import net.hordecraft.android.ui.components.launchActivityForDestination
-import net.hordecraft.android.ui.theme.HordeColors
-import net.hordecraft.android.ui.theme.sliderZoneColor
+import net.hordeslop.studio.data.local.AppSettings
+import net.hordeslop.studio.domain.ActivityDestination
+import net.hordeslop.studio.domain.AttachedLora
+import net.hordeslop.studio.domain.GenerateButtonPlacement
+import net.hordeslop.studio.domain.HordeConstants
+import net.hordeslop.studio.domain.HordeJob
+import net.hordeslop.studio.domain.JobStatus
+import net.hordeslop.studio.domain.LoraTriggerMode
+import net.hordeslop.studio.domain.PromptRecord
+import net.hordeslop.studio.domain.PromptTarget
+import net.hordeslop.studio.domain.SizeMathEngine
+import net.hordeslop.studio.domain.SliderMath
+import net.hordeslop.studio.domain.SliderZone
+import net.hordeslop.studio.domain.StyleFieldLock
+import net.hordeslop.studio.domain.TemplatePrompts
+import net.hordeslop.studio.domain.TiInjectMode
+import net.hordeslop.studio.ui.MainViewModel
+import net.hordeslop.studio.ui.StudioUiState
+import net.hordeslop.studio.ui.components.launchActivityForDestination
+import net.hordeslop.studio.ui.theme.HordeColors
+import net.hordeslop.studio.ui.theme.sliderZoneColor
 import kotlin.math.roundToInt
 
 @OptIn(ExperimentalLayoutApi::class)

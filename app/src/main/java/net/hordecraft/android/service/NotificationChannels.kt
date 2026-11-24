@@ -1,4 +1,4 @@
-package net.hordecraft.android.service
+package net.hordeslop.studio.service
 
 import android.app.NotificationChannel
 import android.app.NotificationManager
@@ -6,10 +6,10 @@ import android.content.Context
 import android.os.Build
 
 object NotificationChannels {
-    const val CHANNEL_ONGOING = "hordecraft_ongoing"
-    const val CHANNEL_RESULTS = "hordecraft_results"
-    const val CHANNEL_OUTSIDE = "hordecraft_outside"
-    const val CHANNEL_QUEUE = "hordecraft_queue"
+    const val CHANNEL_ONGOING = "hordeslop_ongoing"
+    const val CHANNEL_RESULTS = "hordeslop_results"
+    const val CHANNEL_OUTSIDE = "hordeslop_outside"
+    const val CHANNEL_QUEUE = "hordeslop_queue"
 
     fun createAll(context: Context) {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return

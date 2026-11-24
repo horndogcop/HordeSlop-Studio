@@ -1,8 +1,8 @@
-# Hordecraft
+# HordeSlop Studio
 
 > **AI Notice ("Vibeslopped")**: All code and writing in this app are 100% **vibeslopped** by AI (`models/gemini-4-hydrogen`).
 
-Hordecraft is an Android app for generating AI images on [AI Horde](https://aihorde.net), a free crowd-sourced network of Stable Diffusion and Flux workers. You do not need an account to start, or you can sign in with an AI Horde API key for faster queue priority and worker stats.
+HordeSlop Studio is an Android app for generating AI images on [AI Horde](https://aihorde.net), a free crowd-sourced network of Stable Diffusion and Flux workers. You do not need an account to start, or you can sign in with an AI Horde API key for faster queue priority and worker stats.
 
 ## What You Can Do
 

@@ -1,4 +1,4 @@
-# Hordecraft — Native Android Client for AI Horde
+# HordeSlop Studio — Native Android Client for AI Horde
 
 > **AI Attribution Notice ("Vibeslopped")**: All coding, architecture, and documentation in this project are 100% **vibeslopped** by AI (`models/gemini-4-hydrogen`).
 
@@ -20,12 +20,12 @@ Native Kotlin & Jetpack Compose Android client (`minSdk 23`) for [aihorde.net](h
 - **Network, Background Service & WebP Storage**:
   - `HordeRateLimiterInterceptor` spacing Horde API calls at `1.1s` with switchable `aihorde.net` vs `Other` URL.
   - `HordeJobService` foreground service with `/v2/generate/check/{id}` -> `/v2/generate/status/{id}` polling, pausable queue, post-cancel partial recovery, 4 Android notification channels (`NotificationChannels.kt`), and automatic shutdown when queue empties.
-  - `WebpStorageManager` saving genuine **WebP** images with EXIF metadata (`ExifInterface`) to SAF folders or `Downloads/Hordecraft`.
+  - `WebpStorageManager` saving genuine **WebP** images with EXIF metadata (`ExifInterface`) to SAF folders or `Downloads/HordeSlop Studio`.
 - **Gallery (`GalleryScreen.kt`)**: Clean grid, Request ID & Favorites filters, `HorizontalPager` swipeable viewer, tap-to-toggle fullscreen HUD, immediate Reroll (seed cleared), Use settings, WebP/JSON export & share, and optional file deletion prompt.
 
 ## Build & Run
 
-Open the repository root (`hordecraft-android/`) in **Android Studio Ladybug+** (AGPL-3.0-or-later, AGP `8.7.3`, Kotlin `2.0.21`, JDK `17`, Gradle `8.9`, `minSdk 23`, `targetSdk 35`).
+Open the repository root (`hordeslop-studio/`) in **Android Studio Ladybug+** (AGPL-3.0-or-later, AGP `8.7.3`, Kotlin `2.0.21`, JDK `17`, Gradle `8.9`, `minSdk 23`, `targetSdk 35`).
 
 Run unit tests locally with Gradle once Android SDK / JDK 17 is configured:
 
@@ -35,7 +35,7 @@ Run unit tests locally with Gradle once Android SDK / JDK 17 is configured:
 
 ## Roadmap & Project Board
 
-All MVP milestones and difficulty-ordered Future Plans (Tiers 1–5) are tracked on the [Hordecraft Android Roadmap Project](https://github.com/users/horndogcop/projects/1).
+All MVP milestones and difficulty-ordered Future Plans (Tiers 1–5) are tracked on the [HordeSlop Studio Roadmap Project](https://github.com/users/horndogcop/projects/1).
 
 ## License
 

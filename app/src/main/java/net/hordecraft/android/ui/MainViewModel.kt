@@ -1,4 +1,4 @@
-package net.hordecraft.android.ui
+package net.hordeslop.studio.ui
 
 import android.app.Application
 import android.content.Intent
@@ -14,31 +14,31 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-import net.hordecraft.android.HordecraftApp
-import net.hordecraft.android.data.local.AppSettings
-import net.hordecraft.android.domain.AttachedLora
-import net.hordecraft.android.domain.AttachedTi
-import net.hordecraft.android.domain.GenerateButtonPlacement
-import net.hordecraft.android.domain.HordeConstants
-import net.hordecraft.android.domain.HordeJob
-import net.hordecraft.android.domain.HordeModel
-import net.hordecraft.android.domain.HordePerformanceSummary
-import net.hordecraft.android.domain.HordeStyle
-import net.hordecraft.android.domain.LauncherIconChoice
-import net.hordecraft.android.domain.LauncherIconManager
-import net.hordecraft.android.domain.LoraTriggerMode
-import net.hordecraft.android.domain.MultiModelDispatchMode
-import net.hordecraft.android.domain.NavLayoutMode
-import net.hordecraft.android.domain.PromptRecord
-import net.hordecraft.android.domain.PromptTarget
-import net.hordecraft.android.domain.SavedImage
-import net.hordecraft.android.domain.SizeMathEngine
-import net.hordecraft.android.domain.StudioSubmissionSpec
-import net.hordecraft.android.domain.StyleFieldLock
-import net.hordecraft.android.domain.TemplatePrompts
-import net.hordecraft.android.domain.TiInjectMode
-import net.hordecraft.android.domain.UserStatsSummary
-import net.hordecraft.android.service.HordeJobService
+import net.hordeslop.studio.HordecraftApp
+import net.hordeslop.studio.data.local.AppSettings
+import net.hordeslop.studio.domain.AttachedLora
+import net.hordeslop.studio.domain.AttachedTi
+import net.hordeslop.studio.domain.GenerateButtonPlacement
+import net.hordeslop.studio.domain.HordeConstants
+import net.hordeslop.studio.domain.HordeJob
+import net.hordeslop.studio.domain.HordeModel
+import net.hordeslop.studio.domain.HordePerformanceSummary
+import net.hordeslop.studio.domain.HordeStyle
+import net.hordeslop.studio.domain.LauncherIconChoice
+import net.hordeslop.studio.domain.LauncherIconManager
+import net.hordeslop.studio.domain.LoraTriggerMode
+import net.hordeslop.studio.domain.MultiModelDispatchMode
+import net.hordeslop.studio.domain.NavLayoutMode
+import net.hordeslop.studio.domain.PromptRecord
+import net.hordeslop.studio.domain.PromptTarget
+import net.hordeslop.studio.domain.SavedImage
+import net.hordeslop.studio.domain.SizeMathEngine
+import net.hordeslop.studio.domain.StudioSubmissionSpec
+import net.hordeslop.studio.domain.StyleFieldLock
+import net.hordeslop.studio.domain.TemplatePrompts
+import net.hordeslop.studio.domain.TiInjectMode
+import net.hordeslop.studio.domain.UserStatsSummary
+import net.hordeslop.studio.service.HordeJobService
 
 data class StudioUiState(
     val prompt: String = TemplatePrompts.pickRandomTemplatePrompt(),
@@ -69,7 +69,7 @@ data class StudioUiState(
     val civitaiResultsLoras: List<AttachedLora> = emptyList(),
     val civitaiResultsTis: List<AttachedTi> = emptyList(),
     val civitaiLoading: Boolean = false,
-    val userStats: UserStatsSummary = UserStatsSummary(authMode = net.hordecraft.android.domain.AuthMode.ANONYMOUS),
+    val userStats: UserStatsSummary = UserStatsSummary(authMode = net.hordeslop.studio.domain.AuthMode.ANONYMOUS),
     val hordePerformance: HordePerformanceSummary? = null,
     val loadingModels: Boolean = false,
     val toastMessage: String? = null,
@@ -489,8 +489,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             runCatching { repo.syncDismissedJobs() }
             val hasVisiblePending = repo.getTrackedJobsForPolling().any {
                 !it.dismissed && (
-                    it.status == net.hordecraft.android.domain.JobStatus.QUEUED.name ||
-                        it.status == net.hordecraft.android.domain.JobStatus.PROCESSING.name
+                    it.status == net.hordeslop.studio.domain.JobStatus.QUEUED.name ||
+                        it.status == net.hordeslop.studio.domain.JobStatus.PROCESSING.name
                     )
             }
             if (hasVisiblePending) {

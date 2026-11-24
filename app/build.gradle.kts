@@ -7,7 +7,7 @@ plugins {
 }
 
 android {
-    namespace = "net.hordecraft.android"
+    namespace = "net.hordeslop.studio"
     compileSdk = 35
 
     val releaseKeystorePath = System.getenv("ANDROID_KEYSTORE_FILE")?.takeIf { it.isNotBlank() }
@@ -16,7 +16,7 @@ android {
     val overrideVersionName = findProperty("versionName")?.toString()?.trim()?.takeIf { it.isNotEmpty() }
 
     defaultConfig {
-        applicationId = "net.hordecraft.android"
+        applicationId = "net.hordeslop.studio"
         minSdk = 23
         targetSdk = 35
         versionCode = overrideVersionCode ?: 1
@@ -24,7 +24,7 @@ android {
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         buildConfigField("String", "AI_ATTRIBUTION_MODEL", "\"models/gemini-4-hydrogen\"")
-        buildConfigField("String", "REPO_URL", "\"https://github.com/horndogcop/hordecraft-android\"")
+        buildConfigField("String", "REPO_URL", "\"https://github.com/horndogcop/hordeslop-studio\"")
     }
 
     signingConfigs {

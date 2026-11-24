@@ -1,4 +1,4 @@
-package net.hordecraft.android.ui.activities
+package net.hordeslop.studio.ui.activities
 
 import android.os.Bundle
 import androidx.activity.ComponentActivity
@@ -6,15 +6,15 @@ import androidx.activity.compose.setContent
 import androidx.activity.viewModels
 import androidx.compose.runtime.getValue
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import net.hordecraft.android.domain.ActivityDestination
-import net.hordecraft.android.ui.MainViewModel
-import net.hordecraft.android.ui.components.HordeModeScaffold
-import net.hordecraft.android.ui.screens.FutureStubScreen
-import net.hordecraft.android.ui.screens.GalleryScreen
-import net.hordecraft.android.ui.screens.SettingsScreen
-import net.hordecraft.android.ui.screens.StudioScreen
-import net.hordecraft.android.ui.screens.UserScreen
-import net.hordecraft.android.ui.theme.HordecraftTheme
+import net.hordeslop.studio.domain.ActivityDestination
+import net.hordeslop.studio.ui.MainViewModel
+import net.hordeslop.studio.ui.components.HordeModeScaffold
+import net.hordeslop.studio.ui.screens.FutureStubScreen
+import net.hordeslop.studio.ui.screens.GalleryScreen
+import net.hordeslop.studio.ui.screens.SettingsScreen
+import net.hordeslop.studio.ui.screens.StudioScreen
+import net.hordeslop.studio.ui.screens.UserScreen
+import net.hordeslop.studio.ui.theme.HordecraftTheme
 
 abstract class BaseHordeActivity : ComponentActivity() {
     protected abstract val destination: ActivityDestination

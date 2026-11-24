@@ -1,4 +1,4 @@
-package net.hordecraft.android.ui.screens
+package net.hordeslop.studio.ui.screens
 
 import android.content.Intent
 import android.net.Uri
@@ -66,15 +66,15 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.documentfile.provider.DocumentFile
 import coil.compose.AsyncImage
-import net.hordecraft.android.BuildConfig
-import net.hordecraft.android.data.local.AppSettings
-import net.hordecraft.android.domain.AuthMode
-import net.hordecraft.android.domain.GenerateButtonPlacement
-import net.hordecraft.android.domain.HordeConstants
-import net.hordecraft.android.domain.LauncherIconChoice
-import net.hordecraft.android.domain.NavLayoutMode
-import net.hordecraft.android.ui.MainViewModel
-import net.hordecraft.android.ui.theme.HordeColors
+import net.hordeslop.studio.BuildConfig
+import net.hordeslop.studio.data.local.AppSettings
+import net.hordeslop.studio.domain.AuthMode
+import net.hordeslop.studio.domain.GenerateButtonPlacement
+import net.hordeslop.studio.domain.HordeConstants
+import net.hordeslop.studio.domain.LauncherIconChoice
+import net.hordeslop.studio.domain.NavLayoutMode
+import net.hordeslop.studio.ui.MainViewModel
+import net.hordeslop.studio.ui.theme.HordeColors
 
 @Composable
 fun SettingsScreen(
@@ -179,7 +179,7 @@ fun SettingsScreen(
                     Text("Built with AI", fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = HordeColors.AmberText)
                 }
                 Text(
-                    "All code in Hordecraft is 100% vibeslopped by AI (${BuildConfig.AI_ATTRIBUTION_MODEL}).",
+                    "All code in HordeSlop Studio is 100% vibeslopped by AI (${BuildConfig.AI_ATTRIBUTION_MODEL}).",
                     fontSize = 12.sp,
                     color = HordeColors.TextSecondary,
                 )
@@ -414,7 +414,7 @@ fun SettingsScreen(
                     onClick = { vm.setStorageDownloads() },
                     modifier = Modifier.weight(1f),
                 ) {
-                    Text("Downloads/Hordecraft", fontSize = 11.sp)
+                    Text("Downloads/HordeSlop Studio", fontSize = 11.sp)
                 }
                 Button(
                     onClick = { safFolderLauncher.launch(null) },
@@ -512,7 +512,7 @@ fun SettingsScreen(
             )
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 OutlinedButton(
-                    onClick = { exportDbLauncher.launch("hordecraft-database.json") },
+                    onClick = { exportDbLauncher.launch("hordeslop-studio-database.json") },
                     modifier = Modifier.weight(1f),
                 ) {
                     Text("Export", fontSize = 12.sp)
@@ -714,7 +714,7 @@ fun SettingsScreen(
                             .border(1.dp, HordeColors.AmberZone.copy(alpha = 0.35f), RoundedCornerShape(10.dp)),
                     ) {
                         Text(
-                            "Hordecraft is not affiliated with AI Horde or Haidra.",
+                            "HordeSlop Studio is not affiliated with AI Horde or Haidra.",
                             fontSize = 12.sp,
                             color = HordeColors.AmberText,
                             modifier = Modifier.padding(10.dp),

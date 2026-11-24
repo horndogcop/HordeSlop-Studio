@@ -2,16 +2,16 @@
 -keepclassmembers class * {
     @kotlinx.serialization.SerialName <fields>;
 }
--keep,includedescriptorclasses class net.hordecraft.android.data.remote.**$$serializer { *; }
--keep,includedescriptorclasses class net.hordecraft.android.data.local.**$$serializer { *; }
--keep,includedescriptorclasses class net.hordecraft.android.domain.**$$serializer { *; }
--keepclassmembers class net.hordecraft.android.data.remote.** {
+-keep,includedescriptorclasses class net.hordeslop.studio.data.remote.**$$serializer { *; }
+-keep,includedescriptorclasses class net.hordeslop.studio.data.local.**$$serializer { *; }
+-keep,includedescriptorclasses class net.hordeslop.studio.domain.**$$serializer { *; }
+-keepclassmembers class net.hordeslop.studio.data.remote.** {
     *** Companion;
 }
--keepclassmembers class net.hordecraft.android.data.local.** {
+-keepclassmembers class net.hordeslop.studio.data.local.** {
     *** Companion;
 }
--keepclassmembers class net.hordecraft.android.domain.** {
+-keepclassmembers class net.hordeslop.studio.domain.** {
     *** Companion;
 }
 -dontwarn okhttp3.**

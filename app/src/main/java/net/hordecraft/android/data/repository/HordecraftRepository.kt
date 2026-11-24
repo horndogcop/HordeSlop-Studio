@@ -1,4 +1,4 @@
-package net.hordecraft.android.data.repository
+package net.hordeslop.studio.data.repository
 
 import android.content.Context
 import android.net.Uri
@@ -21,46 +21,46 @@ import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
-import net.hordecraft.android.data.local.ActiveJobDao
-import net.hordecraft.android.data.local.ActiveJobEntity
-import net.hordecraft.android.data.local.AppSettings
-import net.hordecraft.android.data.local.DatabaseBackupCodec
-import net.hordecraft.android.data.local.DatabaseBackupCodec.toEntity
-import net.hordecraft.android.data.local.DatabaseSyncCounts
-import net.hordecraft.android.data.local.HordecraftDatabase
-import net.hordecraft.android.data.local.ModelDefaultsDao
-import net.hordecraft.android.data.local.ModelDefaultsEntity
-import net.hordecraft.android.data.local.PromptHistoryDao
-import net.hordecraft.android.data.local.PromptHistoryEntity
-import net.hordecraft.android.data.local.SavedImageDao
-import net.hordecraft.android.data.local.SavedImageEntity
-import net.hordecraft.android.data.local.SettingsDataStore
-import net.hordecraft.android.data.local.WebpStorageManager
-import net.hordecraft.android.data.remote.CivitaiApiService
-import net.hordecraft.android.data.remote.CivitaiModelDto
-import net.hordecraft.android.data.remote.GeneratedImageDto
-import net.hordecraft.android.data.remote.GenerationCheckDto
-import net.hordecraft.android.data.remote.GenerationStatusDto
-import net.hordecraft.android.data.remote.HordeApiService
-import net.hordecraft.android.data.remote.ModelReferenceRepository
-import net.hordecraft.android.domain.AttachedLora
-import net.hordecraft.android.domain.AttachedTi
-import net.hordecraft.android.domain.AuthMode
-import net.hordecraft.android.domain.CivitaiPreview
-import net.hordecraft.android.domain.CivitaiVersion
-import net.hordecraft.android.domain.GenerationChunk
-import net.hordecraft.android.domain.HordeConstants
-import net.hordecraft.android.domain.HordeJob
-import net.hordecraft.android.domain.HordeModel
-import net.hordecraft.android.domain.HordePerformanceSummary
-import net.hordecraft.android.domain.HordeStyle
-import net.hordecraft.android.domain.JobStatus
-import net.hordecraft.android.domain.PromptRecord
-import net.hordecraft.android.domain.SavedImage
-import net.hordecraft.android.domain.StudioSubmissionSpec
-import net.hordecraft.android.domain.StyleContractEngine
-import net.hordecraft.android.domain.TiInjectMode
-import net.hordecraft.android.domain.UserStatsSummary
+import net.hordeslop.studio.data.local.ActiveJobDao
+import net.hordeslop.studio.data.local.ActiveJobEntity
+import net.hordeslop.studio.data.local.AppSettings
+import net.hordeslop.studio.data.local.DatabaseBackupCodec
+import net.hordeslop.studio.data.local.DatabaseBackupCodec.toEntity
+import net.hordeslop.studio.data.local.DatabaseSyncCounts
+import net.hordeslop.studio.data.local.HordecraftDatabase
+import net.hordeslop.studio.data.local.ModelDefaultsDao
+import net.hordeslop.studio.data.local.ModelDefaultsEntity
+import net.hordeslop.studio.data.local.PromptHistoryDao
+import net.hordeslop.studio.data.local.PromptHistoryEntity
+import net.hordeslop.studio.data.local.SavedImageDao
+import net.hordeslop.studio.data.local.SavedImageEntity
+import net.hordeslop.studio.data.local.SettingsDataStore
+import net.hordeslop.studio.data.local.WebpStorageManager
+import net.hordeslop.studio.data.remote.CivitaiApiService
+import net.hordeslop.studio.data.remote.CivitaiModelDto
+import net.hordeslop.studio.data.remote.GeneratedImageDto
+import net.hordeslop.studio.data.remote.GenerationCheckDto
+import net.hordeslop.studio.data.remote.GenerationStatusDto
+import net.hordeslop.studio.data.remote.HordeApiService
+import net.hordeslop.studio.data.remote.ModelReferenceRepository
+import net.hordeslop.studio.domain.AttachedLora
+import net.hordeslop.studio.domain.AttachedTi
+import net.hordeslop.studio.domain.AuthMode
+import net.hordeslop.studio.domain.CivitaiPreview
+import net.hordeslop.studio.domain.CivitaiVersion
+import net.hordeslop.studio.domain.GenerationChunk
+import net.hordeslop.studio.domain.HordeConstants
+import net.hordeslop.studio.domain.HordeJob
+import net.hordeslop.studio.domain.HordeModel
+import net.hordeslop.studio.domain.HordePerformanceSummary
+import net.hordeslop.studio.domain.HordeStyle
+import net.hordeslop.studio.domain.JobStatus
+import net.hordeslop.studio.domain.PromptRecord
+import net.hordeslop.studio.domain.SavedImage
+import net.hordeslop.studio.domain.StudioSubmissionSpec
+import net.hordeslop.studio.domain.StyleContractEngine
+import net.hordeslop.studio.domain.TiInjectMode
+import net.hordeslop.studio.domain.UserStatsSummary
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import retrofit2.HttpException
@@ -179,7 +179,7 @@ class HordecraftRepository(
             }
         }
         val apiDeferred = async {
-            val collected = mutableListOf<net.hordecraft.android.data.remote.HordeStyleDto>()
+            val collected = mutableListOf<net.hordeslop.studio.data.remote.HordeStyleDto>()
             for (page in 1..15) {
                 val batch = runCatching { hordeApi.getImageStyles(page = page) }.getOrNull() ?: break
                 if (batch.isEmpty()) break
@@ -857,7 +857,7 @@ class HordecraftRepository(
             val bytes = context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
                 ?: error("Unable to open backup file")
             val bundle = if (DatabaseBackupCodec.isSqliteDatabaseBytes(bytes)) {
-                val tempDb = File.createTempFile("hordecraft_import_", ".db", context.cacheDir)
+                val tempDb = File.createTempFile("hordeslop_import_", ".db", context.cacheDir)
                 try {
                     tempDb.writeBytes(bytes)
                     DatabaseBackupCodec.readSqliteFile(tempDb)

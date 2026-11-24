@@ -116,11 +116,11 @@ jobs:
         run: |
           tag="${{ steps.version.outputs.release_tag }}"
           mkdir -p release-assets
-          cp app/build/outputs/apk/release/app-release.apk "release-assets/hordecraft-${tag}.apk"
-          cp app/build/outputs/bundle/release/app-release.aab "release-assets/hordecraft-${tag}.aab"
+          cp app/build/outputs/apk/release/app-release.apk "release-assets/hordeslop-studio-${tag}.apk"
+          cp app/build/outputs/bundle/release/app-release.aab "release-assets/hordeslop-studio-${tag}.aab"
           (
             cd release-assets
-            sha256sum "hordecraft-${tag}.apk" "hordecraft-${tag}.aab" > SHA256SUMS.txt
+            sha256sum "hordeslop-studio-${tag}.apk" "hordeslop-studio-${tag}.aab" > SHA256SUMS.txt
           )
 
       - name: Clean up temporary keystore
@@ -136,14 +136,14 @@ jobs:
         run: |
           tag="${{ steps.version.outputs.release_tag }}"
           is_prerelease="${{ steps.version.outputs.is_prerelease }}"
-          title="Hordecraft ${tag}"
+          title="HordeSlop Studio ${tag}"
           if [ "$is_prerelease" = "true" ]; then
             title="${title} (Pre-release)"
           fi
           args=(
             "$tag"
-            "release-assets/hordecraft-${tag}.apk"
-            "release-assets/hordecraft-${tag}.aab"
+            "release-assets/hordeslop-studio-${tag}.apk"
+            "release-assets/hordeslop-studio-${tag}.aab"
             "release-assets/SHA256SUMS.txt"
             --target "$GITHUB_SHA"
             --title "$title"

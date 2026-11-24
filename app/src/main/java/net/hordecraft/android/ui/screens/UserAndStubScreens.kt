@@ -1,4 +1,4 @@
-package net.hordecraft.android.ui.screens
+package net.hordeslop.studio.ui.screens
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -37,12 +37,12 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import java.util.Locale
-import net.hordecraft.android.domain.ActivityDestination
-import net.hordecraft.android.domain.AuthMode
-import net.hordecraft.android.domain.HordePerformanceSummary
-import net.hordecraft.android.domain.UserStatsSummary
-import net.hordecraft.android.ui.components.launchActivityForDestination
-import net.hordecraft.android.ui.theme.HordeColors
+import net.hordeslop.studio.domain.ActivityDestination
+import net.hordeslop.studio.domain.AuthMode
+import net.hordeslop.studio.domain.HordePerformanceSummary
+import net.hordeslop.studio.domain.UserStatsSummary
+import net.hordeslop.studio.ui.components.launchActivityForDestination
+import net.hordeslop.studio.ui.theme.HordeColors
 
 @Composable
 fun UserScreen(

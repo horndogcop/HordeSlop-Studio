@@ -1,4 +1,4 @@
-package net.hordecraft.android.domain
+package net.hordeslop.studio.domain
 
 import kotlin.math.ln
 import kotlin.math.pow

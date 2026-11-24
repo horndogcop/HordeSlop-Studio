@@ -1,4 +1,4 @@
-package net.hordecraft.android.data.local
+package net.hordeslop.studio.data.local
 
 import android.content.Context
 import androidx.room.Dao
@@ -237,7 +237,7 @@ abstract class HordecraftDatabase : RoomDatabase() {
             Room.databaseBuilder(
                 context.applicationContext,
                 HordecraftDatabase::class.java,
-                "hordecraft.db",
+                "hordeslop_studio.db",
             ).addMigrations(MIGRATION_1_2)
                 .fallbackToDestructiveMigration()
                 .build()

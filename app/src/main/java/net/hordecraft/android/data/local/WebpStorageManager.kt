@@ -1,4 +1,4 @@
-package net.hordecraft.android.data.local
+package net.hordeslop.studio.data.local
 
 import android.content.ClipData
 import android.content.ClipboardManager
@@ -47,7 +47,7 @@ class WebpStorageManager(private val context: Context) {
         height: Int,
         settings: AppSettings,
     ): StoredWebpResult = withContext(Dispatchers.IO) {
-        val tempWebp = File.createTempFile("hordecraft_$generationId", ".webp", context.cacheDir)
+        val tempWebp = File.createTempFile("hordeslop_$generationId", ".webp", context.cacheDir)
         try {
             val webpBytes = ensureWebpBytes(rawBytes)
             tempWebp.writeBytes(webpBytes)
@@ -68,7 +68,7 @@ class WebpStorageManager(private val context: Context) {
                 height = height,
             )
 
-            val fileName = "hordecraft_${generationId.take(12)}_${System.currentTimeMillis()}.webp"
+            val fileName = "hordeslop_${generationId.take(12)}_${System.currentTimeMillis()}.webp"
             val treeUri = settings.safTreeUri?.let(Uri::parse)
 
             if (settings.storageMode.name == "SAF" && treeUri != null) {
@@ -89,7 +89,7 @@ class WebpStorageManager(private val context: Context) {
                 val values = ContentValues().apply {
                     put(MediaStore.Downloads.DISPLAY_NAME, fileName)
                     put(MediaStore.Downloads.MIME_TYPE, "image/webp")
-                    put(MediaStore.Downloads.RELATIVE_PATH, "${Environment.DIRECTORY_DOWNLOADS}/Hordecraft")
+                    put(MediaStore.Downloads.RELATIVE_PATH, "${Environment.DIRECTORY_DOWNLOADS}/HordeSlop Studio")
                 }
                 val itemUri = context.contentResolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, values)
                 if (itemUri != null) {
@@ -98,14 +98,14 @@ class WebpStorageManager(private val context: Context) {
                     }
                     return@withContext StoredWebpResult(
                         uriString = itemUri.toString(),
-                        destinationLabel = "Downloads/Hordecraft",
+                        destinationLabel = "Downloads/HordeSlop Studio",
                     )
                 }
             } else {
                 @Suppress("DEPRECATION")
                 val downloadsDir = File(
                     Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS),
-                    "Hordecraft",
+                    "HordeSlop Studio",
                 )
                 downloadsDir.mkdirs()
                 if (downloadsDir.canWrite()) {
@@ -113,7 +113,7 @@ class WebpStorageManager(private val context: Context) {
                     tempWebp.copyTo(outFile, overwrite = true)
                     return@withContext StoredWebpResult(
                         uriString = Uri.fromFile(outFile).toString(),
-                        destinationLabel = "Downloads/Hordecraft",
+                        destinationLabel = "Downloads/HordeSlop Studio",
                     )
                 }
             }
@@ -193,7 +193,7 @@ class WebpStorageManager(private val context: Context) {
                 put("height", height)
             }
             val exif = ExifInterface(file.absolutePath)
-            exif.setAttribute(ExifInterface.TAG_SOFTWARE, "Hordecraft")
+            exif.setAttribute(ExifInterface.TAG_SOFTWARE, "HordeSlop Studio")
             exif.setAttribute(ExifInterface.TAG_IMAGE_DESCRIPTION, prompt)
             exif.setAttribute(ExifInterface.TAG_USER_COMMENT, commentJson.toString())
             exif.saveAttributes()
@@ -220,7 +220,7 @@ class WebpStorageManager(private val context: Context) {
         val contentUri = toShareableContentUri(uriString) ?: return@withContext
         withContext(Dispatchers.Main) {
             val cm = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-            cm.setPrimaryClip(ClipData.newUri(context.contentResolver, "Hordecraft Image", contentUri))
+            cm.setPrimaryClip(ClipData.newUri(context.contentResolver, "HordeSlop Studio Image", contentUri))
         }
     }
 

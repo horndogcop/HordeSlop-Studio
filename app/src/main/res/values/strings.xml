@@ -1,10 +1,10 @@
 <resources>
-    <string name="app_name">Hordecraft</string>
-    <string name="title_activity_image">Hordecraft · Image</string>
-    <string name="title_activity_gallery">Hordecraft · Gallery</string>
-    <string name="title_activity_user">Hordecraft · Horde</string>
-    <string name="title_activity_settings">Hordecraft · Settings</string>
-    <string name="title_activity_models">Hordecraft · Models</string>
-    <string name="title_activity_text">Hordecraft · Text</string>
-    <string name="title_activity_alchemist">Hordecraft · Alchemist</string>
+    <string name="app_name">HordeSlop Studio</string>
+    <string name="title_activity_image">HordeSlop Studio · Image</string>
+    <string name="title_activity_gallery">HordeSlop Studio · Gallery</string>
+    <string name="title_activity_user">HordeSlop Studio · Horde</string>
+    <string name="title_activity_settings">HordeSlop Studio · Settings</string>
+    <string name="title_activity_models">HordeSlop Studio · Models</string>
+    <string name="title_activity_text">HordeSlop Studio · Text</string>
+    <string name="title_activity_alchemist">HordeSlop Studio · Alchemist</string>
 </resources>

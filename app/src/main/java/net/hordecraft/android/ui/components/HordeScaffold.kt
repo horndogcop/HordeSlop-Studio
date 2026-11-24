@@ -1,4 +1,4 @@
-package net.hordecraft.android.ui.components
+package net.hordeslop.studio.ui.components
 
 import android.content.Context
 import android.content.Intent
@@ -65,23 +65,23 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.launch
-import net.hordecraft.android.BuildConfig
-import net.hordecraft.android.data.local.AppSettings
-import net.hordecraft.android.domain.ActivityDestination
-import net.hordecraft.android.domain.AuthMode
-import net.hordecraft.android.domain.HordeConstants
-import net.hordecraft.android.domain.HordeJob
-import net.hordecraft.android.domain.JobStatus
-import net.hordecraft.android.domain.NavLayoutMode
-import net.hordecraft.android.domain.UserStatsSummary
-import net.hordecraft.android.ui.activities.AlchemistActivity
-import net.hordecraft.android.ui.activities.GalleryActivity
-import net.hordecraft.android.ui.activities.ImageGenActivity
-import net.hordecraft.android.ui.activities.ModelsActivity
-import net.hordecraft.android.ui.activities.SettingsActivity
-import net.hordecraft.android.ui.activities.TextGenActivity
-import net.hordecraft.android.ui.activities.UserActivity
-import net.hordecraft.android.ui.theme.HordeColors
+import net.hordeslop.studio.BuildConfig
+import net.hordeslop.studio.data.local.AppSettings
+import net.hordeslop.studio.domain.ActivityDestination
+import net.hordeslop.studio.domain.AuthMode
+import net.hordeslop.studio.domain.HordeConstants
+import net.hordeslop.studio.domain.HordeJob
+import net.hordeslop.studio.domain.JobStatus
+import net.hordeslop.studio.domain.NavLayoutMode
+import net.hordeslop.studio.domain.UserStatsSummary
+import net.hordeslop.studio.ui.activities.AlchemistActivity
+import net.hordeslop.studio.ui.activities.GalleryActivity
+import net.hordeslop.studio.ui.activities.ImageGenActivity
+import net.hordeslop.studio.ui.activities.ModelsActivity
+import net.hordeslop.studio.ui.activities.SettingsActivity
+import net.hordeslop.studio.ui.activities.TextGenActivity
+import net.hordeslop.studio.ui.activities.UserActivity
+import net.hordeslop.studio.ui.theme.HordeColors
 
 private data class NavEntry(
     val dest: ActivityDestination,
@@ -261,7 +261,7 @@ fun HordeModeScaffold(
             drawerContent = {
                 ModalDrawerSheet(drawerContainerColor = HordeColors.BarSurface) {
                     Text(
-                        text = "Hordecraft",
+                        text = "HordeSlop Studio",
                         fontSize = 16.sp,
                         fontWeight = FontWeight.SemiBold,
                         color = HordeColors.TextPrimary,
@@ -314,7 +314,7 @@ private fun FirstRunOnboardingDialog(onComplete: (String) -> Unit) {
     AlertDialog(
         onDismissRequest = { onComplete(HordeConstants.ANONYMOUS_KEY) },
         containerColor = HordeColors.CardSurface,
-        title = { Text("Welcome to Hordecraft", color = HordeColors.TextPrimary, fontSize = 16.sp) },
+        title = { Text("Welcome to HordeSlop Studio", color = HordeColors.TextPrimary, fontSize = 16.sp) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Box(
@@ -326,7 +326,7 @@ private fun FirstRunOnboardingDialog(onComplete: (String) -> Unit) {
                         .padding(10.dp),
                 ) {
                     Text(
-                        text = "All code in Hordecraft is 100% vibeslopped by AI (${BuildConfig.AI_ATTRIBUTION_MODEL}).",
+                        text = "All code in HordeSlop Studio is 100% vibeslopped by AI (${BuildConfig.AI_ATTRIBUTION_MODEL}).",
                         fontSize = 12.sp,
                         color = HordeColors.TextSecondary,
                     )

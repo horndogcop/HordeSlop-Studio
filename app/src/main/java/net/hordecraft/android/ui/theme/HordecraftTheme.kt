@@ -1,10 +1,10 @@
-package net.hordecraft.android.ui.theme
+package net.hordeslop.studio.ui.theme
 
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
-import net.hordecraft.android.domain.SliderZone
+import net.hordeslop.studio.domain.SliderZone
 
 object HordeColors {
     val BgCanvas = Color(0xFF0F131A)

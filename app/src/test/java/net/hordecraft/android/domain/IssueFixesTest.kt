@@ -1,9 +1,9 @@
-package net.hordecraft.android.domain
+package net.hordeslop.studio.domain
 
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonObject
-import net.hordecraft.android.data.remote.ModelReferenceRepository
-import net.hordecraft.android.data.repository.HordecraftRepository
+import net.hordeslop.studio.data.remote.ModelReferenceRepository
+import net.hordeslop.studio.data.repository.HordecraftRepository
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -15,11 +15,11 @@ class IssueFixesTest {
     @Test
     fun launcherIconComponentNamesResolveAgainstManifestNamespace() {
         assertEquals(
-            "net.hordecraft.android.LauncherRobot",
+            "net.hordeslop.studio.LauncherRobot",
             LauncherIconManager.componentClassName(LauncherIconChoice.ROBOT_PLACEHOLDER),
         )
         assertEquals(
-            "net.hordecraft.android.LauncherHaidra",
+            "net.hordeslop.studio.LauncherHaidra",
             LauncherIconManager.componentClassName(LauncherIconChoice.HORDE_HAIDRA),
         )
     }
@@ -94,7 +94,7 @@ class IssueFixesTest {
     @Test
     fun apiStyleUsesOnlyOwnExamplesAndNeverPreviewRepo() {
         val repo = ModelReferenceRepository(okhttp3.OkHttpClient(), json)
-        val noExamplesDto = net.hordecraft.android.data.remote.HordeStyleDto(
+        val noExamplesDto = net.hordeslop.studio.data.remote.HordeStyleDto(
             id = "api-1",
             name = "Watercolor",
             examples = emptyList(),
@@ -103,12 +103,12 @@ class IssueFixesTest {
         assertTrue(mappedNoExamples.previewImageUrls.isEmpty())
         assertEquals(null, mappedNoExamples.previewImageUrl)
 
-        val withExamplesDto = net.hordecraft.android.data.remote.HordeStyleDto(
+        val withExamplesDto = net.hordeslop.studio.data.remote.HordeStyleDto(
             id = "api-2",
             name = "Painterly",
             examples = listOf(
-                net.hordecraft.android.data.remote.StyleExampleDto(id = "1", url = "https://example.com/secondary.webp", primary = false),
-                net.hordecraft.android.data.remote.StyleExampleDto(id = "2", url = "https://example.com/primary.webp", primary = true),
+                net.hordeslop.studio.data.remote.StyleExampleDto(id = "1", url = "https://example.com/secondary.webp", primary = false),
+                net.hordeslop.studio.data.remote.StyleExampleDto(id = "2", url = "https://example.com/primary.webp", primary = true),
             ),
         )
         val mappedWithExamples = repo.mapApiStyle(withExamplesDto)
@@ -219,7 +219,7 @@ class IssueFixesTest {
 
     @Test
     fun defaultSamplerAndSchedulerAreKEulerAndNormal() {
-        val state = net.hordecraft.android.ui.StudioUiState()
+        val state = net.hordeslop.studio.ui.StudioUiState()
         assertEquals("k_euler", state.sampler)
         assertEquals("normal", state.scheduler)
         assertTrue(HordeConstants.FALLBACK_SEED_MODELS.all { it.defaultSampler == "k_euler" })
@@ -228,9 +228,9 @@ class IssueFixesTest {
 
     @Test
     fun databaseBackupCodecRoundTripsAllTables() {
-        val bundle = net.hordecraft.android.data.local.DatabaseBackupCodec.buildBundle(
+        val bundle = net.hordeslop.studio.data.local.DatabaseBackupCodec.buildBundle(
             promptHistory = listOf(
-                net.hordecraft.android.data.local.PromptHistoryEntity(
+                net.hordeslop.studio.data.local.PromptHistoryEntity(
                     id = "ph1",
                     title = "Castle",
                     prompt = "stone castle",
@@ -246,7 +246,7 @@ class IssueFixesTest {
                 ),
             ),
             modelDefaults = listOf(
-                net.hordecraft.android.data.local.ModelDefaultsEntity(
+                net.hordeslop.studio.data.local.ModelDefaultsEntity(
                     modelName = "Juggernaut XL",
                     steps = 30,
                     sampler = "k_euler",
@@ -255,7 +255,7 @@ class IssueFixesTest {
                 ),
             ),
             savedImages = listOf(
-                net.hordecraft.android.data.local.SavedImageEntity(
+                net.hordeslop.studio.data.local.SavedImageEntity(
                     id = "img1",
                     requestId = "req1",
                     generationId = "gen1",
@@ -271,7 +271,7 @@ class IssueFixesTest {
                     scheduler = "normal",
                     width = 512,
                     height = 768,
-                    destinationLabel = "Downloads/Hordecraft",
+                    destinationLabel = "Downloads/HordeSlop Studio",
                     isFavorite = false,
                     partialFromCancel = false,
                     requestJson = "{}",
@@ -282,8 +282,8 @@ class IssueFixesTest {
             activeJobs = emptyList(),
             exportedAtMillis = 5555L,
         )
-        val encoded = net.hordecraft.android.data.local.DatabaseBackupCodec.encodeJson(bundle)
-        val decoded = net.hordecraft.android.data.local.DatabaseBackupCodec.decodeJson(encoded)
+        val encoded = net.hordeslop.studio.data.local.DatabaseBackupCodec.encodeJson(bundle)
+        val decoded = net.hordeslop.studio.data.local.DatabaseBackupCodec.decodeJson(encoded)
         assertEquals(1, decoded.promptHistory.size)
         assertEquals("ph1", decoded.promptHistory.first().id)
         assertEquals(1, decoded.modelDefaults.size)
@@ -292,12 +292,12 @@ class IssueFixesTest {
         assertEquals("req1", decoded.savedImages.first().requestId)
         assertEquals(5555L, decoded.exportedAtMillis)
         assertTrue(
-            net.hordecraft.android.data.local.DatabaseBackupCodec.isSqliteDatabaseBytes(
+            net.hordeslop.studio.data.local.DatabaseBackupCodec.isSqliteDatabaseBytes(
                 "SQLite format 3\u0000rest".toByteArray(Charsets.US_ASCII),
             ),
         )
         assertFalse(
-            net.hordecraft.android.data.local.DatabaseBackupCodec.isSqliteDatabaseBytes(
+            net.hordeslop.studio.data.local.DatabaseBackupCodec.isSqliteDatabaseBytes(
                 encoded.toByteArray(Charsets.UTF_8),
             ),
         )

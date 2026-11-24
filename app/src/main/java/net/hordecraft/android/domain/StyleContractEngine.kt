@@ -1,4 +1,4 @@
-package net.hordecraft.android.domain
+package net.hordeslop.studio.domain
 
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json

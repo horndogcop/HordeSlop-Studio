@@ -1,4 +1,4 @@
-package net.hordecraft.android.data.remote
+package net.hordeslop.studio.data.remote
 
 import kotlinx.serialization.Serializable
 import retrofit2.http.GET

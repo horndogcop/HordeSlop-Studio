@@ -1,4 +1,4 @@
-package net.hordecraft.android.ui.screens
+package net.hordeslop.studio.ui.screens
 
 import android.content.Intent
 import android.net.Uri
@@ -87,12 +87,12 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import coil.compose.AsyncImage
 import kotlinx.coroutines.launch
-import net.hordecraft.android.data.local.AppSettings
-import net.hordecraft.android.domain.ActivityDestination
-import net.hordecraft.android.domain.SavedImage
-import net.hordecraft.android.ui.MainViewModel
-import net.hordecraft.android.ui.components.launchActivityForDestination
-import net.hordecraft.android.ui.theme.HordeColors
+import net.hordeslop.studio.data.local.AppSettings
+import net.hordeslop.studio.domain.ActivityDestination
+import net.hordeslop.studio.domain.SavedImage
+import net.hordeslop.studio.ui.MainViewModel
+import net.hordeslop.studio.ui.components.launchActivityForDestination
+import net.hordeslop.studio.ui.theme.HordeColors
 
 @Composable
 fun GalleryScreen(
@@ -763,7 +763,7 @@ private fun GalleryViewerModal(
                     OutlinedButton(
                         onClick = {
                             jsonToSave = jsonContent
-                            saveJsonLauncher.launch("hordecraft_${activeImage.generationId.take(8)}_$mode.json")
+                            saveJsonLauncher.launch("hordeslop_${activeImage.generationId.take(8)}_$mode.json")
                         },
                     ) {
                         Text("Save")
