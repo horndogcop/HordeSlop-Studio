@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: "Release version (e.g. 0.1.0 or v0.1.0)"
+        description: "Release version (e.g. 0.1.0, 0.1.0-alpha.1, or v0.1.0-rc.1)"
         required: true
         default: "0.1.0"
         type: string
@@ -14,7 +14,7 @@ on:
         default: ""
         type: string
       prerelease:
-        description: "Mark GitHub Release as pre-release"
+        description: "Mark GitHub Release as pre-release (auto-enabled for -alpha/-beta/-rc versions)"
         required: false
         default: false
         type: boolean
@@ -28,6 +28,11 @@ on:
         required: false
         default: true
         type: boolean
+      release_notes:
+        description: "Optional custom release notes (used instead of auto-generated notes when set)"
+        required: false
+        default: ""
+        type: string
 
 permissions:
   contents: write
@@ -36,7 +41,6 @@ jobs:
   release:
     name: Build Signed Release & Publish
     runs-on: ubuntu-latest
-
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -60,8 +64,8 @@ jobs:
         run: |
           raw="${{ inputs.version }}"
           version_name="${raw#v}"
-          if [ -z "$version_name" ]; then
-            echo "Version cannot be empty" >&2
+          if [ -z "$version_name" ] || [[ "$version_name" =~ [[:space:]] ]]; then
+            echo "Version must be non-empty and contain no whitespace" >&2
             exit 1
           fi
           release_tag="v${version_name}"
@@ -70,9 +74,14 @@ jobs:
           else
             version_code="$(git rev-list --count HEAD)"
           fi
+          is_prerelease="false"
+          if [ "${{ inputs.prerelease }}" = "true" ] || [[ "$version_name" == *-* ]]; then
+            is_prerelease="true"
+          fi
           echo "version_name=${version_name}" >> "$GITHUB_OUTPUT"
           echo "release_tag=${release_tag}" >> "$GITHUB_OUTPUT"
           echo "version_code=${version_code}" >> "$GITHUB_OUTPUT"
+          echo "is_prerelease=${is_prerelease}" >> "$GITHUB_OUTPUT"
 
       - name: Decode Android release keystore
         shell: bash
@@ -123,25 +132,42 @@ jobs:
         shell: bash
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CUSTOM_NOTES: ${{ inputs.release_notes }}
         run: |
           tag="${{ steps.version.outputs.release_tag }}"
+          is_prerelease="${{ steps.version.outputs.is_prerelease }}"
+          title="Hordecraft ${tag}"
+          if [ "$is_prerelease" = "true" ]; then
+            title="${title} (Pre-release)"
+          fi
           args=(
             "$tag"
             "release-assets/hordecraft-${tag}.apk"
             "release-assets/hordecraft-${tag}.aab"
             "release-assets/SHA256SUMS.txt"
             --target "$GITHUB_SHA"
-            --title "Hordecraft ${tag}"
+            --title "$title"
           )
-          if [ "${{ inputs.prerelease }}" = "true" ]; then
-            args+=(--prerelease)
+          if [ "$is_prerelease" = "true" ]; then
+            args+=(--prerelease --latest=false)
+          elif [ "${{ inputs.draft }}" != "true" ]; then
+            args+=(--latest)
           fi
           if [ "${{ inputs.draft }}" = "true" ]; then
             args+=(--draft)
           fi
-          if [ "${{ inputs.generate_notes }}" = "true" ]; then
+          if [ -n "$CUSTOM_NOTES" ]; then
+            args+=(--notes "$CUSTOM_NOTES")
+          elif [ "${{ inputs.generate_notes }}" = "true" ]; then
             args+=(--generate-notes)
           else
-            args+=(--notes "Hordecraft ${tag}")
+            args+=(--notes "$title")
           fi
-          gh release create "${args[@]}"
+          release_url="$(gh release create "${args[@]}")"
+          {
+            echo "### Release Published"
+            echo "- Tag: \`${tag}\`"
+            echo "- Prerelease: \`${is_prerelease}\`"
+            echo "- Draft: \`${{ inputs.draft }}\`"
+            echo "- URL: ${release_url}"
+          } >> "$GITHUB_STEP_SUMMARY"
