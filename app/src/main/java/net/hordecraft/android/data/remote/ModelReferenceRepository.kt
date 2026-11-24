@@ -231,6 +231,7 @@ class ModelReferenceRepository(
         for (rawUrl in repoUrls) {
             val stylesUrl = normalizeStylesRepoUrl(rawUrl)
             if (stylesUrl.isBlank()) continue
+            val isOfficialRepo = isOfficialStylesRepoUrl(stylesUrl)
 
             val categoriesUrl = siblingJsonUrl(stylesUrl, "categories.json")
             val repoCategories = fetchCategoriesMapFromUrl(categoriesUrl)
@@ -238,9 +239,6 @@ class ModelReferenceRepository(
                 val target = categoriesByStyleKey.getOrPut(styleKey) { mutableListOf() }
                 cats.forEach { c -> if (c !in target) target += c }
             }
-
-            val siblingPreviewsUrl = siblingJsonUrl(stylesUrl, "previews.json")
-            val repoPreviews = fetchPreviewsMapFromUrl(siblingPreviewsUrl)
 
             runCatching {
                 val req = Request.Builder().url(stylesUrl).build()
@@ -266,7 +264,8 @@ class ModelReferenceRepository(
                         val w = obj["width"]?.jsonPrimitiveOrNull()?.intOrNull
                         val h = obj["height"]?.jsonPrimitiveOrNull()?.intOrNull
 
-                        val combinedPreviews = (repoPreviews[key].orEmpty() + previewsMap[key].orEmpty()).distinct()
+                        // Styles preview repo applies only to the official AI Horde styles repo.
+                        val stylePreviews = if (isOfficialRepo) previewsMap[key].orEmpty().distinct() else emptyList()
                         val cats = categoriesByStyleKey[key]?.toList().orEmpty()
 
                         val mapped = HordeStyle(
@@ -284,8 +283,8 @@ class ModelReferenceRepository(
                             width = w,
                             height = h,
                             lockedFields = emptySet(),
-                            previewImageUrl = combinedPreviews.firstOrNull(),
-                            previewImageUrls = combinedPreviews,
+                            previewImageUrl = stylePreviews.firstOrNull(),
+                            previewImageUrls = stylePreviews,
                             rawPromptTemplate = rawPrompt,
                             categories = cats,
                             inApi = false,
@@ -297,8 +296,16 @@ class ModelReferenceRepository(
                         } else {
                             mapped.copy(
                                 categories = (existing.categories + mapped.categories).distinct(),
-                                previewImageUrls = (existing.previewImageUrls + mapped.previewImageUrls).distinct(),
-                                previewImageUrl = existing.previewImageUrl ?: mapped.previewImageUrl,
+                                previewImageUrls = if (isOfficialRepo) {
+                                    (mapped.previewImageUrls + existing.previewImageUrls).distinct()
+                                } else {
+                                    emptyList()
+                                },
+                                previewImageUrl = if (isOfficialRepo) {
+                                    mapped.previewImageUrl ?: existing.previewImageUrl
+                                } else {
+                                    null
+                                },
                             )
                         }
                     }
@@ -310,7 +317,6 @@ class ModelReferenceRepository(
 
     fun mapApiStyle(
         dto: HordeStyleDto,
-        previewsMap: Map<String, List<String>> = emptyMap(),
         repoCategories: Map<String, List<String>> = emptyMap(),
         currentUsername: String? = null,
     ): HordeStyle {
@@ -330,9 +336,11 @@ class ModelReferenceRepository(
         val h = params?.get("height")?.jsonPrimitiveOrNull()?.intOrNull
 
         val key = dto.name.trim().lowercase()
-        val exampleUrls = dto.examples.mapNotNull { it.url?.takeIf { u -> u.isNotBlank() } }
-        val repoPreviewUrls = previewsMap[key].orEmpty()
-        val combinedPreviews = (exampleUrls + repoPreviewUrls).distinct()
+        // Styles API uses only its own built-in examples (never the styles preview repo).
+        val exampleUrls = dto.examples
+            .sortedByDescending { it.primary }
+            .mapNotNull { it.url?.trim()?.takeIf { u -> u.isNotBlank() } }
+            .distinct()
         val combinedCategories = (dto.tags.map { it.trim() }.filter { it.isNotEmpty() } +
             repoCategories[key].orEmpty()).distinct()
 
@@ -351,8 +359,8 @@ class ModelReferenceRepository(
             width = w,
             height = h,
             lockedFields = locks,
-            previewImageUrl = combinedPreviews.firstOrNull(),
-            previewImageUrls = combinedPreviews,
+            previewImageUrl = exampleUrls.firstOrNull(),
+            previewImageUrls = exampleUrls,
             rawPromptTemplate = dto.prompt,
             categories = combinedCategories,
             creator = dto.creator?.trim()?.takeIf { it.isNotEmpty() },
@@ -438,6 +446,16 @@ class ModelReferenceRepository(
             } else {
                 "$withScheme/styles.json"
             }
+        }
+
+        fun isOfficialStylesRepoUrl(rawOrNormalizedUrl: String): Boolean {
+            val normalized = normalizeStylesRepoUrl(rawOrNormalizedUrl)
+            if (normalized.isBlank()) return false
+            return normalized.equals(HordeConstants.DEFAULT_STYLES_REPO_URL, ignoreCase = true) ||
+                normalized.equals(
+                    "https://raw.githubusercontent.com/Haidra-Org/AI-Horde-Styles/refs/heads/main/styles.json",
+                    ignoreCase = true,
+                )
         }
 
         fun siblingJsonUrl(stylesJsonUrl: String, fileName: String): String {

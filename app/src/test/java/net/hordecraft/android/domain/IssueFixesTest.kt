@@ -84,7 +84,43 @@ class IssueFixesTest {
     }
 
     @Test
-    fun mergeAndSortStylesPinsUserStylesAfterRawPromptAndPreservesDualSource() {
+    fun officialStylesRepoDetectionExcludesThirdPartyRepos() {
+        assertTrue(ModelReferenceRepository.isOfficialStylesRepoUrl(HordeConstants.DEFAULT_STYLES_REPO_URL))
+        assertTrue(ModelReferenceRepository.isOfficialStylesRepoUrl("https://github.com/Haidra-Org/AI-Horde-Styles"))
+        assertFalse(ModelReferenceRepository.isOfficialStylesRepoUrl("https://github.com/someone/custom-styles"))
+        assertFalse(ModelReferenceRepository.isOfficialStylesRepoUrl("https://example.com/styles.json"))
+    }
+
+    @Test
+    fun apiStyleUsesOnlyOwnExamplesAndNeverPreviewRepo() {
+        val repo = ModelReferenceRepository(okhttp3.OkHttpClient(), json)
+        val noExamplesDto = net.hordecraft.android.data.remote.HordeStyleDto(
+            id = "api-1",
+            name = "Watercolor",
+            examples = emptyList(),
+        )
+        val mappedNoExamples = repo.mapApiStyle(noExamplesDto)
+        assertTrue(mappedNoExamples.previewImageUrls.isEmpty())
+        assertEquals(null, mappedNoExamples.previewImageUrl)
+
+        val withExamplesDto = net.hordecraft.android.data.remote.HordeStyleDto(
+            id = "api-2",
+            name = "Painterly",
+            examples = listOf(
+                net.hordecraft.android.data.remote.StyleExampleDto(id = "1", url = "https://example.com/secondary.webp", primary = false),
+                net.hordecraft.android.data.remote.StyleExampleDto(id = "2", url = "https://example.com/primary.webp", primary = true),
+            ),
+        )
+        val mappedWithExamples = repo.mapApiStyle(withExamplesDto)
+        assertEquals(
+            listOf("https://example.com/primary.webp", "https://example.com/secondary.webp"),
+            mappedWithExamples.previewImageUrls,
+        )
+        assertEquals("https://example.com/primary.webp", mappedWithExamples.previewImageUrl)
+    }
+
+    @Test
+    fun mergeAndSortStylesPinsUserStylesAfterRawPromptWithoutLeakingRepoPreviewsToApi() {
         val raw = HordeStyle(id = "none", name = "Raw Prompt", source = "None")
         val repoStyles = listOf(
             HordeStyle(
@@ -122,14 +158,17 @@ class IssueFixesTest {
         )
 
         val merged = HordecraftRepository.mergeAndSortStyles(raw, repoStyles, apiStyles)
-        assertEquals(listOf("Raw Prompt", "Zebra Custom", "Anime", "Watercolor"), merged.map { it.name })
+        assertEquals(listOf("Raw Prompt", "Zebra Custom", "Anime", "Watercolor", "Watercolor"), merged.map { it.name })
 
-        val watercolor = merged.first { it.name == "Watercolor" }
-        assertTrue(watercolor.inApi)
-        assertTrue(watercolor.inRepo)
-        assertEquals("api-wc", watercolor.id)
-        assertEquals(listOf("Paint", "Artistic"), watercolor.categories)
-        assertEquals(listOf("https://example.com/wc.webp"), watercolor.previewImageUrls)
+        val apiWatercolor = merged.first { it.inApi && it.name == "Watercolor" }
+        assertTrue(apiWatercolor.inApi)
+        assertFalse(apiWatercolor.inRepo)
+        assertTrue(apiWatercolor.previewImageUrls.isEmpty())
+
+        val repoWatercolor = merged.first { it.inRepo && it.name == "Watercolor" }
+        assertTrue(repoWatercolor.inRepo)
+        assertFalse(repoWatercolor.inApi)
+        assertEquals(listOf("https://example.com/wc.webp"), repoWatercolor.previewImageUrls)
     }
 
     @Test

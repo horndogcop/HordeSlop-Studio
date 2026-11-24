@@ -80,6 +80,7 @@ data class ActiveModelDto(
 data class StyleExampleDto(
     val id: String = "",
     val url: String? = null,
+    val primary: Boolean = false,
 )
 
 @Serializable

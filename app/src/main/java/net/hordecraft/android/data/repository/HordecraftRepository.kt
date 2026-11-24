@@ -170,7 +170,14 @@ class HordecraftRepository(
             null
         }
 
-        val previewsDeferred = async { runCatching { modelRefRepo.loadStylePreviews() }.getOrDefault(emptyMap()) }
+        val hasOfficialRepo = settings.stylesRepoUrls.any { ModelReferenceRepository.isOfficialStylesRepoUrl(it) }
+        val previewsDeferred = async {
+            if (hasOfficialRepo) {
+                runCatching { modelRefRepo.loadStylePreviews() }.getOrDefault(emptyMap())
+            } else {
+                emptyMap()
+            }
+        }
         val apiDeferred = async {
             val collected = mutableListOf<net.hordecraft.android.data.remote.HordeStyleDto>()
             for (page in 1..15) {
@@ -189,7 +196,6 @@ class HordecraftRepository(
         val apiStyles = apiDeferred.await().map {
             modelRefRepo.mapApiStyle(
                 dto = it,
-                previewsMap = previewsMap,
                 repoCategories = repoCategoriesMap,
                 currentUsername = resolvedUsername,
             )
@@ -902,29 +908,14 @@ class HordecraftRepository(
             repoStyles: List<HordeStyle>,
             apiStyles: List<HordeStyle>,
         ): List<HordeStyle> {
-            val byKey = LinkedHashMap<String, HordeStyle>()
-            repoStyles.forEach { st ->
-                val key = st.name.trim().lowercase()
-                byKey[key] = st.copy(inRepo = true)
+            val combined = buildList {
+                addAll(repoStyles.map { it.copy(inRepo = true, inApi = false) })
+                addAll(apiStyles.map { it.copy(inApi = true, inRepo = false) })
             }
-            apiStyles.forEach { api ->
-                val key = api.name.trim().lowercase()
-                val existing = byKey[key]
-                byKey[key] = if (existing != null) {
-                    api.copy(
-                        inApi = true,
-                        inRepo = true,
-                        categories = (api.categories + existing.categories).distinct(),
-                        previewImageUrl = api.previewImageUrl ?: existing.previewImageUrl,
-                        previewImageUrls = (api.previewImageUrls + existing.previewImageUrls).distinct(),
-                    )
-                } else {
-                    api.copy(inApi = true)
-                }
-            }
-            val sorted = byKey.values.sortedWith(
+            val sorted = combined.sortedWith(
                 compareByDescending<HordeStyle> { it.isUserCreated }
-                    .thenBy { it.name.lowercase() },
+                    .thenBy { it.name.lowercase() }
+                    .thenByDescending { it.inApi },
             )
             return listOf(rawStyle) + sorted
         }
