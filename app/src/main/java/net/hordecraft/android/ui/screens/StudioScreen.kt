@@ -834,7 +834,7 @@ fun StudioScreen(
                                                     .background(HordeColors.TealContainer)
                                                     .clickable {
                                                         vm.openRequestInGallery(job.requestId)
-                                                        launchActivityForDestination(context, ActivityDestination.GALLERY)
+                                                        launchActivityForDestination(context, ActivityDestination.GALLERY, settings.activityAnimation)
                                                     }
                                                     .padding(horizontal = 8.dp, vertical = 4.dp),
                                                 verticalAlignment = Alignment.CenterVertically,

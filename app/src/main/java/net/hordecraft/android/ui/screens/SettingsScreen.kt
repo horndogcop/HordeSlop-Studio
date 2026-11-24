@@ -12,6 +12,8 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -68,6 +70,7 @@ import androidx.documentfile.provider.DocumentFile
 import coil.compose.AsyncImage
 import net.hordeslop.studio.BuildConfig
 import net.hordeslop.studio.data.local.AppSettings
+import net.hordeslop.studio.domain.ActivityAnimationMode
 import net.hordeslop.studio.domain.AuthMode
 import net.hordeslop.studio.domain.GenerateButtonPlacement
 import net.hordeslop.studio.domain.HordeConstants
@@ -76,6 +79,7 @@ import net.hordeslop.studio.domain.NavLayoutMode
 import net.hordeslop.studio.ui.MainViewModel
 import net.hordeslop.studio.ui.theme.HordeColors
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun SettingsScreen(
     vm: MainViewModel,
@@ -313,6 +317,21 @@ fun SettingsScreen(
                             onClick = { vm.setNavLayout(mode) },
                         )
                     }
+                }
+            }
+
+            // Screen transition animation
+            Text("Screen Transition", fontSize = 12.sp, color = HordeColors.TextSecondary)
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                ActivityAnimationMode.entries.forEach { animMode ->
+                    ToggleChipButton(
+                        text = animMode.label,
+                        selected = settings.activityAnimation == animMode,
+                        onClick = { vm.setActivityAnimation(animMode) },
+                    )
                 }
             }
 

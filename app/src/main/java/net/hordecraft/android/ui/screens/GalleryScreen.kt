@@ -306,7 +306,7 @@ fun GalleryScreen(
                     vm.applySavedImageParameters(img)
                     viewerStartIndex = null
                     isFullscreen = false
-                    launchActivityForDestination(context, ActivityDestination.IMAGE_GEN)
+                    launchActivityForDestination(context, ActivityDestination.IMAGE_GEN, settings.activityAnimation)
                 },
                 onSameRequest = { reqId ->
                     viewerStartIndex = null

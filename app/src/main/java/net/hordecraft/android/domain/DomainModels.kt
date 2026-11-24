@@ -14,6 +14,21 @@ enum class ActivityDestination(val label: String, val routeKey: String) {
     ALCHEMIST_STUB("Alchemist", "alchemist_stub"),
 }
 
+enum class ActivityAnimationMode(val storageKey: String, val label: String) {
+    SYSTEM_DEFAULT("default", "Default"),
+    FADE("fade", "Fade"),
+    SLIDE("slide", "Slide"),
+    CLIP_REVEAL("clip_reveal", "Clip Reveal"),
+    SCALE_UP("scale_up", "Scale Up"),
+    NONE("none", "None"),
+    ;
+
+    companion object {
+        fun fromKey(key: String?): ActivityAnimationMode =
+            entries.firstOrNull { it.storageKey == key } ?: SYSTEM_DEFAULT
+    }
+}
+
 enum class NavLayoutMode(val storageKey: String, val label: String) {
     BOTTOM("bottom", "Bottom Bar"),
     MENU("menu", "Menu Drawer"),

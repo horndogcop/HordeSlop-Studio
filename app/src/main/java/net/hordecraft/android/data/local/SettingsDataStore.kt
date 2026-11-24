@@ -9,6 +9,7 @@ import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
+import net.hordeslop.studio.domain.ActivityAnimationMode
 import net.hordeslop.studio.domain.GenerateButtonPlacement
 import net.hordeslop.studio.domain.HordeConstants
 import net.hordeslop.studio.domain.LauncherIconChoice
@@ -22,6 +23,7 @@ data class AppSettings(
     val civitaiApiKey: String = "",
     val apiBaseUrl: String = HordeConstants.DEFAULT_API_BASE_URL,
     val navLayout: NavLayoutMode = NavLayoutMode.BOTTOM,
+    val activityAnimation: ActivityAnimationMode = ActivityAnimationMode.SYSTEM_DEFAULT,
     val generateButtonPlacement: GenerateButtonPlacement = GenerateButtonPlacement.SCROLLING,
     val showModelPreviews: Boolean = true,
     val skipGalleryModalToFullscreen: Boolean = false,
@@ -41,6 +43,7 @@ class SettingsDataStore(private val context: Context) {
         val CIVITAI_API_KEY = stringPreferencesKey("civitai_api_key")
         val API_BASE_URL = stringPreferencesKey("api_base_url")
         val NAV_LAYOUT = stringPreferencesKey("nav_layout")
+        val ACTIVITY_ANIMATION = stringPreferencesKey("activity_animation")
         val GENERATE_BUTTON_PLACEMENT = stringPreferencesKey("generate_button_placement")
         val SHOW_MODEL_PREVIEWS = booleanPreferencesKey("show_model_previews")
         val SKIP_GALLERY_TO_FULLSCREEN = booleanPreferencesKey("skip_gallery_to_fullscreen")
@@ -72,6 +75,7 @@ class SettingsDataStore(private val context: Context) {
                 prefs[Keys.API_BASE_URL] ?: HordeConstants.DEFAULT_API_BASE_URL,
             ),
             navLayout = NavLayoutMode.fromKey(prefs[Keys.NAV_LAYOUT]),
+            activityAnimation = ActivityAnimationMode.fromKey(prefs[Keys.ACTIVITY_ANIMATION]),
             generateButtonPlacement = GenerateButtonPlacement.fromKey(prefs[Keys.GENERATE_BUTTON_PLACEMENT]),
             showModelPreviews = prefs[Keys.SHOW_MODEL_PREVIEWS] ?: true,
             skipGalleryModalToFullscreen = prefs[Keys.SKIP_GALLERY_TO_FULLSCREEN] ?: false,
@@ -101,6 +105,10 @@ class SettingsDataStore(private val context: Context) {
 
     suspend fun setNavLayout(mode: NavLayoutMode) {
         context.dataStore.edit { it[Keys.NAV_LAYOUT] = mode.storageKey }
+    }
+
+    suspend fun setActivityAnimation(mode: ActivityAnimationMode) {
+        context.dataStore.edit { it[Keys.ACTIVITY_ANIMATION] = mode.storageKey }
     }
 
     suspend fun setGenerateButtonPlacement(placement: GenerateButtonPlacement) {
