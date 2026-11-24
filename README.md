@@ -1,5 +1,7 @@
 # Hordecraft
 
+> **AI Notice ("Vibeslopped")**: All code and writing in this app are 100% **vibeslopped** by AI (`models/gemini-4-hydrogen`).
+
 Hordecraft is an Android app for generating AI images on [AI Horde](https://aihorde.net), a free crowd-sourced network of Stable Diffusion and Flux workers. You do not need an account to start, or you can sign in with an AI Horde API key for faster queue priority and worker stats.
 
 ## What You Can Do
@@ -14,6 +16,5 @@ Hordecraft is an Android app for generating AI images on [AI Horde](https://aiho
 
 ## Notes
 
-- Built with AI (`models/gemini-4-hydrogen`).
-- Developer architecture, build instructions, and roadmap: see [DEVELOPMENT.md](DEVELOPMENT.md) and the [project roadmap](https://github.com/users/horndogcop/projects/1).
+- Developer setup, technical details, and roadmap: see [DEVELOPMENT.md](DEVELOPMENT.md) and the [project roadmap](https://github.com/users/horndogcop/projects/1).
 - Licensed under [GNU AGPLv3 or later](LICENSE).
