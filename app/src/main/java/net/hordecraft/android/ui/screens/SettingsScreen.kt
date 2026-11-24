@@ -424,26 +424,7 @@ fun SettingsScreen(
                 }
             }
 
-            HorizontalDivider(color = HordeColors.BorderSubtle)
 
-            // Storage location inside Preferences (#90)
-            Text("Storage Location", fontSize = 12.sp, color = HordeColors.TextSecondary)
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedButton(
-                    onClick = { vm.setStorageDownloads() },
-                    modifier = Modifier.weight(1f),
-                ) {
-                    Text("Downloads/HordeSlop Studio", fontSize = 11.sp)
-                }
-                Button(
-                    onClick = { safFolderLauncher.launch(null) },
-                    colors = ButtonDefaults.buttonColors(containerColor = HordeColors.ElevatedButton),
-                    modifier = Modifier.weight(1f),
-                ) {
-                    Text("Choose Folder", fontSize = 11.sp, color = HordeColors.TextPrimary)
-                }
-            }
-            Text("Saving to: ${settings.safFolderLabel}", fontSize = 11.sp, color = HordeColors.TextMuted)
 
             HorizontalDivider(color = HordeColors.BorderSubtle)
 
@@ -520,6 +501,27 @@ fun SettingsScreen(
                     }
                 }
             }
+
+            HorizontalDivider(color = HordeColors.BorderSubtle)
+
+            // Storage location inside Preferences (#90)
+            Text("Storage Location", fontSize = 12.sp, color = HordeColors.TextSecondary)
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedButton(
+                    onClick = { vm.setStorageDownloads() },
+                    modifier = Modifier.weight(1f),
+                ) {
+                    Text("Downloads/HordeSlop Studio", fontSize = 11.sp)
+                }
+                Button(
+                    onClick = { safFolderLauncher.launch(null) },
+                    colors = ButtonDefaults.buttonColors(containerColor = HordeColors.ElevatedButton),
+                    modifier = Modifier.weight(1f),
+                ) {
+                    Text("Choose Folder", fontSize = 11.sp, color = HordeColors.TextPrimary)
+                }
+            }
+            Text("Saving to: ${settings.safFolderLabel}", fontSize = 11.sp, color = HordeColors.TextMuted)
 
             HorizontalDivider(color = HordeColors.BorderSubtle)
 
