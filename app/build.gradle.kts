@@ -10,22 +10,41 @@ android {
     namespace = "net.hordecraft.android"
     compileSdk = 35
 
+    val releaseKeystorePath = System.getenv("ANDROID_KEYSTORE_FILE")?.takeIf { it.isNotBlank() }
+    val releaseKeystoreFile = releaseKeystorePath?.let(::file)?.takeIf { it.exists() }
+    val overrideVersionCode = findProperty("versionCode")?.toString()?.toIntOrNull()
+    val overrideVersionName = findProperty("versionName")?.toString()?.trim()?.takeIf { it.isNotEmpty() }
+
     defaultConfig {
         applicationId = "net.hordecraft.android"
         minSdk = 23
         targetSdk = 35
-        versionCode = 1
-        versionName = "0.1.0"
+        versionCode = overrideVersionCode ?: 1
+        versionName = overrideVersionName ?: "0.1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         buildConfigField("String", "AI_ATTRIBUTION_MODEL", "\"models/gemini-4-hydrogen\"")
         buildConfigField("String", "REPO_URL", "\"https://github.com/horndogcop/hordecraft-android\"")
     }
 
+    signingConfigs {
+        if (releaseKeystoreFile != null) {
+            create("release") {
+                storeFile = releaseKeystoreFile
+                storePassword = System.getenv("ANDROID_KEYSTORE_PASSWORD")
+                keyAlias = System.getenv("ANDROID_KEY_ALIAS")
+                keyPassword = System.getenv("ANDROID_KEY_PASSWORD")
+            }
+        }
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = true
             isShrinkResources = true
+            if (releaseKeystoreFile != null) {
+                signingConfig = signingConfigs.getByName("release")
+            }
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro",
