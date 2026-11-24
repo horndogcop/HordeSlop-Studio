@@ -302,30 +302,45 @@ fun StudioScreen(
                 if (!samplingCollapsed) {
                     // Steps (Logarithmic 1..50, mid half 10..25, manual up to 100)
                     val stepsZone = SliderMath.stepsZone(studio.steps, primaryModel.suggestedMinSteps, primaryModel.suggestedMaxSteps)
-                    LogIntSliderRow(
-                        label = "Steps",
-                        value = studio.steps,
-                        sliderPosition = SliderMath.stepsToSlider(studio.steps),
-                        onSliderChange = { pos -> vm.updateSteps(SliderMath.sliderToSteps(pos)) },
-                        onManualChange = vm::updateSteps,
-                        minVal = 1,
-                        maxVal = SliderMath.STEPS_MANUAL_MAX,
-                        zone = stepsZone,
-                        enabled = !studio.isFieldLocked(StyleFieldLock.STEPS),
-                    )
-
                     // CFG (Logarithmic 1..20, first 2/3 1..6)
                     val cfgZone = SliderMath.cfgZone(studio.cfg, primaryModel.suggestedMinCfg, primaryModel.suggestedMaxCfg)
-                    LogFloatSliderRow(
-                        label = "CFG Scale",
-                        value = studio.cfg,
-                        sliderPosition = SliderMath.cfgToSlider(studio.cfg),
-                        onSliderChange = { pos -> vm.updateCfg(SliderMath.sliderToCfg(pos)) },
-                        onManualChange = vm::updateCfg,
-                        decimals = 1,
-                        zone = cfgZone,
-                        enabled = !studio.isFieldLocked(StyleFieldLock.CFG),
-                    )
+                    val renderStepsSlider: @Composable () -> Unit = {
+                        LogIntSliderRow(
+                            label = "Steps",
+                            value = studio.steps,
+                            sliderPosition = SliderMath.stepsToSlider(studio.steps),
+                            onSliderChange = { pos -> vm.updateSteps(SliderMath.sliderToSteps(pos)) },
+                            onManualChange = vm::updateSteps,
+                            minVal = 1,
+                            maxVal = SliderMath.STEPS_MANUAL_MAX,
+                            zone = stepsZone,
+                            enabled = !studio.isFieldLocked(StyleFieldLock.STEPS),
+                        )
+                    }
+                    val renderCfgSlider: @Composable () -> Unit = {
+                        LogFloatSliderRow(
+                            label = "CFG Scale",
+                            value = studio.cfg,
+                            sliderPosition = SliderMath.cfgToSlider(studio.cfg),
+                            onSliderChange = { pos -> vm.updateCfg(SliderMath.sliderToCfg(pos)) },
+                            onManualChange = vm::updateCfg,
+                            decimals = 1,
+                            zone = cfgZone,
+                            enabled = !studio.isFieldLocked(StyleFieldLock.CFG),
+                        )
+                    }
+                    if (isWideLayout) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        ) {
+                            Box(modifier = Modifier.weight(1f)) { renderStepsSlider() }
+                            Box(modifier = Modifier.weight(1f)) { renderCfgSlider() }
+                        }
+                    } else {
+                        renderStepsSlider()
+                        renderCfgSlider()
+                    }
 
                     // Clip Skip (1..12 slider + numeric input)
                     val clipZone = SliderMath.clipSkipZone(studio.clipSkip)
