@@ -16,7 +16,6 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import net.hordeslop.studio.HordecraftApp
 import net.hordeslop.studio.data.local.AppSettings
-import net.hordeslop.studio.domain.ActivityAnimationMode
 import net.hordeslop.studio.domain.AttachedLora
 import net.hordeslop.studio.domain.AttachedTi
 import net.hordeslop.studio.domain.GenerateButtonPlacement
@@ -560,10 +559,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun setNavLayout(mode: NavLayoutMode) {
         viewModelScope.launch { repo.settingsStore.setNavLayout(mode) }
-    }
-
-    fun setActivityAnimation(mode: ActivityAnimationMode) {
-        viewModelScope.launch { repo.settingsStore.setActivityAnimation(mode) }
     }
 
     fun setGenerateButtonPlacement(placement: GenerateButtonPlacement) {

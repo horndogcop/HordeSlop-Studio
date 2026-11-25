@@ -1,10 +1,7 @@
 package net.hordeslop.studio.ui.components
 
-import android.app.ActivityOptions
 import android.content.Context
 import android.content.Intent
-import android.os.Bundle
-import android.view.View
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -64,7 +61,6 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -72,7 +68,6 @@ import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.launch
 import net.hordeslop.studio.BuildConfig
 import net.hordeslop.studio.data.local.AppSettings
-import net.hordeslop.studio.domain.ActivityAnimationMode
 import net.hordeslop.studio.domain.ActivityDestination
 import net.hordeslop.studio.domain.AuthMode
 import net.hordeslop.studio.domain.HordeConstants
@@ -107,38 +102,7 @@ private val NAV_ENTRIES = listOf(
     NavEntry(ActivityDestination.ALCHEMIST_STUB, Icons.Outlined.AutoAwesome, false),
 )
 
-fun buildActivityAnimationOptions(
-    context: Context,
-    animationMode: ActivityAnimationMode,
-    sourceView: View?,
-): Bundle? = when (animationMode) {
-    ActivityAnimationMode.SYSTEM_DEFAULT -> null
-    ActivityAnimationMode.FADE ->
-        ActivityOptions.makeCustomAnimation(context, android.R.anim.fade_in, android.R.anim.fade_out).toBundle()
-    ActivityAnimationMode.SLIDE ->
-        ActivityOptions.makeCustomAnimation(context, android.R.anim.slide_in_left, android.R.anim.slide_out_right).toBundle()
-    ActivityAnimationMode.CLIP_REVEAL ->
-        if (sourceView != null && sourceView.width > 0 && sourceView.height > 0) {
-            ActivityOptions.makeClipRevealAnimation(sourceView, 0, 0, sourceView.width, sourceView.height).toBundle()
-        } else {
-            ActivityOptions.makeCustomAnimation(context, android.R.anim.fade_in, android.R.anim.fade_out).toBundle()
-        }
-    ActivityAnimationMode.SCALE_UP ->
-        if (sourceView != null && sourceView.width > 0 && sourceView.height > 0) {
-            ActivityOptions.makeScaleUpAnimation(sourceView, 0, 0, sourceView.width, sourceView.height).toBundle()
-        } else {
-            ActivityOptions.makeCustomAnimation(context, android.R.anim.fade_in, android.R.anim.fade_out).toBundle()
-        }
-    ActivityAnimationMode.NONE ->
-        ActivityOptions.makeCustomAnimation(context, 0, 0).toBundle()
-}
-
-fun launchActivityForDestination(
-    context: Context,
-    destination: ActivityDestination,
-    animationMode: ActivityAnimationMode = ActivityAnimationMode.SYSTEM_DEFAULT,
-    sourceView: View? = null,
-) {
+fun launchActivityForDestination(context: Context, destination: ActivityDestination) {
     val cls = when (destination) {
         ActivityDestination.MAIN -> MainActivity::class.java
         ActivityDestination.IMAGE_GEN -> ImageGenActivity::class.java
@@ -150,12 +114,7 @@ fun launchActivityForDestination(
         ActivityDestination.ALCHEMIST_STUB -> AlchemistActivity::class.java
     }
     val intent = Intent(context, cls).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-    val options = buildActivityAnimationOptions(context, animationMode, sourceView)
-    if (options != null) {
-        context.startActivity(intent, options)
-    } else {
-        context.startActivity(intent)
-    }
+    context.startActivity(intent)
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -170,7 +129,6 @@ fun HordeModeScaffold(
     content: @Composable () -> Unit,
 ) {
     val context = LocalContext.current
-    val rootView = LocalView.current
     val config = LocalConfiguration.current
     val scope = rememberCoroutineScope()
     val drawerState = rememberDrawerState(DrawerValue.Closed)
@@ -238,7 +196,7 @@ fun HordeModeScaffold(
                         }
                         if (settings.navLayout != NavLayoutMode.BOTTOM) {
                             IconButton(
-                                onClick = { launchActivityForDestination(context, ActivityDestination.SETTINGS, settings.activityAnimation, rootView) },
+                                onClick = { launchActivityForDestination(context, ActivityDestination.SETTINGS) },
                             ) {
                                 Icon(
                                     Icons.Outlined.Settings,
@@ -258,7 +216,7 @@ fun HordeModeScaffold(
                             NavigationBarItem(
                                 selected = selected,
                                 onClick = {
-                                    if (!selected) launchActivityForDestination(context, entry.dest, settings.activityAnimation, rootView)
+                                    if (!selected) launchActivityForDestination(context, entry.dest)
                                 },
                                 icon = {
                                     Icon(entry.icon, contentDescription = entry.dest.label)
@@ -286,7 +244,7 @@ fun HordeModeScaffold(
                             NavigationRailItem(
                                 selected = selected,
                                 onClick = {
-                                    if (!selected) launchActivityForDestination(context, entry.dest, settings.activityAnimation, rootView)
+                                    if (!selected) launchActivityForDestination(context, entry.dest)
                                 },
                                 icon = { Icon(entry.icon, contentDescription = entry.dest.label) },
                                 label = { Text(entry.dest.label, fontSize = 10.sp) },
@@ -320,7 +278,7 @@ fun HordeModeScaffold(
                             onClick = {
                                 scope.launch { drawerState.close() }
                                 if (entry.dest != currentDestination) {
-                                    launchActivityForDestination(context, entry.dest, settings.activityAnimation, rootView)
+                                    launchActivityForDestination(context, entry.dest)
                                 }
                             },
                             icon = { Icon(entry.icon, contentDescription = entry.dest.label) },

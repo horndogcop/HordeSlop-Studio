@@ -302,15 +302,4 @@ class IssueFixesTest {
             ),
         )
     }
-
-    @Test
-    fun mainDestinationAndActivityAnimationModesAreDefined() {
-        assertEquals("Home", ActivityDestination.MAIN.label)
-        assertEquals(ActivityAnimationMode.SYSTEM_DEFAULT, ActivityAnimationMode.fromKey(null))
-        assertEquals(ActivityAnimationMode.FADE, ActivityAnimationMode.fromKey("fade"))
-        assertEquals(ActivityAnimationMode.SLIDE, ActivityAnimationMode.fromKey("slide"))
-        assertEquals(ActivityAnimationMode.CLIP_REVEAL, ActivityAnimationMode.fromKey("clip_reveal"))
-        assertEquals(ActivityAnimationMode.SCALE_UP, ActivityAnimationMode.fromKey("scale_up"))
-        assertEquals(ActivityAnimationMode.NONE, ActivityAnimationMode.fromKey("none"))
-    }
 }

@@ -47,7 +47,7 @@ abstract class BaseHordeActivity : ComponentActivity() {
                             savedImageCount = savedImages.size,
                             apiBaseUrl = settings.apiBaseUrl,
                             onOpenDestination = { dest ->
-                                net.hordeslop.studio.ui.components.launchActivityForDestination(this@BaseHordeActivity, dest, settings.activityAnimation, window.decorView)
+                                net.hordeslop.studio.ui.components.launchActivityForDestination(this@BaseHordeActivity, dest)
                             },
                         )
 
