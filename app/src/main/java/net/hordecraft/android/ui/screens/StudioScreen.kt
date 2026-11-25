@@ -287,13 +287,15 @@ fun StudioScreen(
                         locked = false,
                         onClick = { showStylesModal = true },
                     )
-                    PickerRowButton(
-                        label = "Models",
-                        value = if (studio.selectedModels.size == 1) studio.selectedModels.first()
-                        else "${studio.selectedModels.first()} +${studio.selectedModels.size - 1}",
-                        locked = studio.isFieldLocked(StyleFieldLock.MODEL),
-                        onClick = { showModelModal = true },
-                    )
+                    Box(modifier = Modifier.alpha(if (!studio.isFieldLocked(StyleFieldLock.MODEL)) enabledParamAlpha else 1f)) {
+                        PickerRowButton(
+                            label = "Models",
+                            value = if (studio.selectedModels.size == 1) studio.selectedModels.first()
+                            else "${studio.selectedModels.first()} +${studio.selectedModels.size - 1}",
+                            locked = studio.isFieldLocked(StyleFieldLock.MODEL),
+                            onClick = { showModelModal = true },
+                        )
+                    }
                     Box(modifier = Modifier.alpha(if (!studio.isFieldLocked(StyleFieldLock.SIZE)) enabledParamAlpha else 1f)) {
                         PickerRowButton(
                             label = "Size",
