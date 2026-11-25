@@ -1,5 +1,6 @@
 package net.hordeslop.studio.data.local
 
+import android.app.WallpaperManager
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.ContentValues
@@ -238,6 +239,29 @@ class WebpStorageManager(private val context: Context) {
         Intent(Intent.ACTION_VIEW).apply {
             setDataAndType(contentUri, "image/webp")
             addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        }
+    }
+
+    suspend fun setAsWallpaper(uriString: String, whichFlags: Int): Boolean = withContext(Dispatchers.IO) {
+        val uri = runCatching { Uri.parse(uriString) }.getOrNull() ?: return@withContext false
+        val bitmap = runCatching {
+            when (uri.scheme) {
+                "file" -> uri.path?.let(BitmapFactory::decodeFile)
+                else -> context.contentResolver.openInputStream(uri)?.use(BitmapFactory::decodeStream)
+            }
+        }.getOrNull() ?: return@withContext false
+        try {
+            val wm = WallpaperManager.getInstance(context)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+                wm.setBitmap(bitmap, null, true, whichFlags)
+            } else {
+                wm.setBitmap(bitmap)
+            }
+            true
+        } catch (_: Throwable) {
+            false
+        } finally {
+            bitmap.recycle()
         }
     }
 

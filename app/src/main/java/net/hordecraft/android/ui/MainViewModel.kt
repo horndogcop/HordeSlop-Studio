@@ -599,6 +599,13 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     suspend fun buildShareIntent(uriString: String): Intent? = repo.storageManager.createShareIntent(uriString)
     suspend fun buildOpenInIntent(uriString: String): Intent? = repo.storageManager.createOpenInIntent(uriString)
 
+    fun setImageAsWallpaper(uriString: String, whichFlags: Int) {
+        viewModelScope.launch {
+            val ok = repo.storageManager.setAsWallpaper(uriString, whichFlags)
+            showToast(if (ok) "Wallpaper updated" else "Failed to set wallpaper")
+        }
+    }
+
     // Settings mutations
     fun saveHordeApiKey(key: String) {
         viewModelScope.launch {

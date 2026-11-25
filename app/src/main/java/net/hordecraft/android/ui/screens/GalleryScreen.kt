@@ -1,7 +1,9 @@
 package net.hordeslop.studio.ui.screens
 
+import android.app.WallpaperManager
 import android.content.Intent
 import android.net.Uri
+import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
@@ -50,6 +52,7 @@ import androidx.compose.material.icons.outlined.OpenInNew
 import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material.icons.outlined.Send
 import androidx.compose.material.icons.outlined.Share
+import androidx.compose.material.icons.outlined.Wallpaper
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -329,6 +332,9 @@ fun GalleryScreen(
                         }
                     }
                 },
+                onSetWallpaper = { img, flags ->
+                    vm.setImageAsWallpaper(img.fileUri, flags)
+                },
                 onDelete = { img, deleteFile ->
                     vm.deleteImage(img, deleteFile)
                     if (filtered.size <= 1) {
@@ -363,6 +369,7 @@ private fun GalleryViewerModal(
     onCopyText: (String, String) -> Unit,
     onShare: (SavedImage) -> Unit,
     onOpenIn: (SavedImage) -> Unit,
+    onSetWallpaper: (SavedImage, Int) -> Unit,
     onDelete: (SavedImage, Boolean) -> Unit,
     onDismiss: () -> Unit,
 ) {
@@ -373,6 +380,7 @@ private fun GalleryViewerModal(
     val activeImage = images.getOrNull(pagerState.currentPage) ?: return
 
     var showMoreMenu by remember { mutableStateOf(false) }
+    var wallpaperTargetImage by remember { mutableStateOf<SavedImage?>(null) }
     var metadataSubMode by remember { mutableStateOf<String?>(null) } // "details" | "request" | "response"
     var deleteConfirmTarget by remember { mutableStateOf<SavedImage?>(null) }
     var deleteFileChecked by remember { mutableStateOf(true) }
@@ -470,6 +478,18 @@ private fun GalleryViewerModal(
                             onClick = {
                                 showMoreMenu = false
                                 onOpenIn(activeImage)
+                            },
+                        )
+                        DropdownMenuItem(
+                            text = { Text("Set as wallpaper") },
+                            leadingIcon = { Icon(Icons.Outlined.Wallpaper, null) },
+                            onClick = {
+                                showMoreMenu = false
+                                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+                                    wallpaperTargetImage = activeImage
+                                } else {
+                                    onSetWallpaper(activeImage, WallpaperManager.FLAG_SYSTEM)
+                                }
                             },
                         )
                     }
@@ -800,6 +820,50 @@ private fun GalleryViewerModal(
                     Text("Delete", color = Color.White)
                 }
             },
+        )
+    }
+
+    wallpaperTargetImage?.let { target ->
+        AlertDialog(
+            onDismissRequest = { wallpaperTargetImage = null },
+            containerColor = HordeColors.CardSurface,
+            title = { Text("Set as wallpaper", color = HordeColors.TextPrimary) },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedButton(
+                        onClick = {
+                            wallpaperTargetImage = null
+                            onSetWallpaper(target, WallpaperManager.FLAG_SYSTEM)
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Text("Home screen")
+                    }
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+                        OutlinedButton(
+                            onClick = {
+                                wallpaperTargetImage = null
+                                onSetWallpaper(target, WallpaperManager.FLAG_LOCK)
+                            },
+                            modifier = Modifier.fillMaxWidth(),
+                        ) {
+                            Text("Lock screen")
+                        }
+                        Button(
+                            colors = ButtonDefaults.buttonColors(containerColor = HordeColors.TealPrimary),
+                            onClick = {
+                                wallpaperTargetImage = null
+                                onSetWallpaper(target, WallpaperManager.FLAG_SYSTEM or WallpaperManager.FLAG_LOCK)
+                            },
+                            modifier = Modifier.fillMaxWidth(),
+                        ) {
+                            Text("Home & lock screens", color = Color(0xFF020617), fontWeight = FontWeight.SemiBold)
+                        }
+                    }
+                }
+            },
+            confirmButton = {},
+            dismissButton = { TextButton(onClick = { wallpaperTargetImage = null }) { Text("Cancel") } },
         )
     }
 }
