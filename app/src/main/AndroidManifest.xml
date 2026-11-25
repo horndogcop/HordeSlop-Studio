@@ -31,7 +31,8 @@
             android:exported="true"
             android:label="@string/app_name"
             android:launchMode="singleTask"
-            android:taskAffinity="net.hordeslop.studio.task.main" />
+            android:taskAffinity="net.hordeslop.studio.task.main"
+            android:windowSoftInputMode="adjustResize" />
 
         <!-- Exported Activities with distinct taskAffinity so users can switch via Recents or shortcuts -->
         <activity

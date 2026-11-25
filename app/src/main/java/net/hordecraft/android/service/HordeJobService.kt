@@ -21,9 +21,9 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import net.hordeslop.studio.HordecraftApp
 import net.hordeslop.studio.R
+import net.hordeslop.studio.domain.ActivityDestination
 import net.hordeslop.studio.domain.JobStatus
-import net.hordeslop.studio.ui.activities.GalleryActivity
-import net.hordeslop.studio.ui.activities.ImageGenActivity
+import net.hordeslop.studio.ui.components.buildIntentForDestination
 
 class HordeJobService : Service() {
 
@@ -113,7 +113,7 @@ class HordeJobService : Service() {
     private fun appContainer() = (application as HordecraftApp).container
 
     private fun buildProgressNotification(text: String): Notification {
-        val openIntent = Intent(this, ImageGenActivity::class.java)
+        val openIntent = buildIntentForDestination(this, ActivityDestination.IMAGE_GEN)
         val pendingOpen = PendingIntent.getActivity(
             this,
             100,
@@ -136,7 +136,7 @@ class HordeJobService : Service() {
     }
 
     private fun postResultNotification(title: String, body: String) {
-        val galleryIntent = Intent(this, GalleryActivity::class.java)
+        val galleryIntent = buildIntentForDestination(this, ActivityDestination.GALLERY)
         val pendingGallery = PendingIntent.getActivity(
             this,
             101,

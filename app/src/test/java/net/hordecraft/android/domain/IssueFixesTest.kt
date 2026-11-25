@@ -327,4 +327,10 @@ class IssueFixesTest {
         assertTrue(net.hordeslop.studio.ui.StudioUiState.shouldMoveClipSkipToAdvanced(sdxlModel, 2))
         assertFalse(net.hordeslop.studio.ui.StudioUiState.shouldMoveClipSkipToAdvanced(ponyModel, 2))
     }
+
+    @Test
+    fun useSeparateActivitiesDefaultsToTrue() {
+        val defaults = net.hordeslop.studio.data.local.AppSettings()
+        assertTrue(defaults.useSeparateActivities)
+    }
 }

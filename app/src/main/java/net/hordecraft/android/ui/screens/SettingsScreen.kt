@@ -376,6 +376,23 @@ fun SettingsScreen(
                 )
             }
 
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { vm.setUseSeparateActivities(!settings.useSeparateActivities) },
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Column(Modifier.weight(1f)) {
+                    Text("Separate windows", fontSize = 13.sp, color = HordeColors.TextPrimary)
+                    Text("Open screens separately in Recents", fontSize = 11.sp, color = HordeColors.TextMuted)
+                }
+                Checkbox(
+                    checked = settings.useSeparateActivities,
+                    onCheckedChange = vm::setUseSeparateActivities,
+                )
+            }
+
             HorizontalDivider(color = HordeColors.BorderSubtle)
 
             // Civitai API key inside Preferences (#90)

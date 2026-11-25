@@ -16,6 +16,7 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import net.hordeslop.studio.HordecraftApp
 import net.hordeslop.studio.data.local.AppSettings
+import net.hordeslop.studio.domain.ActivityDestination
 import net.hordeslop.studio.domain.AttachedLora
 import net.hordeslop.studio.domain.AttachedTi
 import net.hordeslop.studio.domain.GenerateButtonPlacement
@@ -135,6 +136,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     val studio: StateFlow<StudioUiState> = _studio.asStateFlow()
 
     val pendingGallerySearchQuery: StateFlow<String?> = app.container.pendingGallerySearchQuery.asStateFlow()
+    val singleActivityDestination: StateFlow<ActivityDestination> = app.container.singleActivityDestination.asStateFlow()
 
     init {
         refreshCatalogs(force = false)
@@ -656,6 +658,22 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun setAutoClearCompletedQueue(enabled: Boolean) {
         viewModelScope.launch { repo.settingsStore.setAutoClearCompletedQueue(enabled) }
+    }
+
+    fun setSingleActivityDestination(destination: ActivityDestination) {
+        app.container.singleActivityDestination.value = destination
+    }
+
+    fun setUseSeparateActivities(enabled: Boolean) {
+        viewModelScope.launch {
+            repo.settingsStore.setUseSeparateActivities(enabled)
+            app.container.currentSettings.set(
+                app.container.currentSettings.get().copy(useSeparateActivities = enabled),
+            )
+            if (!enabled) {
+                app.container.singleActivityDestination.value = ActivityDestination.SETTINGS
+            }
+        }
     }
 
     fun saveStylesRepoUrls(urls: List<String>) {

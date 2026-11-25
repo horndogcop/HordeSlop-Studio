@@ -1,7 +1,9 @@
 package net.hordeslop.studio.ui.components
 
+import android.app.Activity
 import android.content.Context
 import android.content.Intent
+import net.hordeslop.studio.HordecraftApp
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -102,7 +104,17 @@ private val NAV_ENTRIES = listOf(
     NavEntry(ActivityDestination.ALCHEMIST_STUB, Icons.Outlined.AutoAwesome, false),
 )
 
-fun launchActivityForDestination(context: Context, destination: ActivityDestination) {
+const val EXTRA_SINGLE_ACTIVITY_DEST = "single_activity_dest"
+
+fun buildIntentForDestination(context: Context, destination: ActivityDestination): Intent {
+    val container = (context.applicationContext as? HordecraftApp)?.container
+    val useSeparate = container?.currentSettings?.get()?.useSeparateActivities ?: true
+    if (!useSeparate) {
+        return Intent(context, MainActivity::class.java).apply {
+            putExtra(EXTRA_SINGLE_ACTIVITY_DEST, destination.routeKey)
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+        }
+    }
     val cls = when (destination) {
         ActivityDestination.MAIN -> MainActivity::class.java
         ActivityDestination.IMAGE_GEN -> ImageGenActivity::class.java
@@ -113,8 +125,22 @@ fun launchActivityForDestination(context: Context, destination: ActivityDestinat
         ActivityDestination.TEXT_GEN_STUB -> TextGenActivity::class.java
         ActivityDestination.ALCHEMIST_STUB -> AlchemistActivity::class.java
     }
-    val intent = Intent(context, cls).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-    context.startActivity(intent)
+    return Intent(context, cls).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+}
+
+fun launchActivityForDestination(context: Context, destination: ActivityDestination) {
+    val container = (context.applicationContext as? HordecraftApp)?.container
+    val useSeparate = container?.currentSettings?.get()?.useSeparateActivities ?: true
+    if (!useSeparate) {
+        container?.singleActivityDestination?.value = destination
+        if (context is MainActivity) {
+            return
+        }
+        context.startActivity(buildIntentForDestination(context, destination))
+        (context as? Activity)?.finishAndRemoveTask()
+        return
+    }
+    context.startActivity(buildIntentForDestination(context, destination))
 }
 
 @OptIn(ExperimentalMaterial3Api::class)

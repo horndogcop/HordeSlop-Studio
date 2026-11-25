@@ -7,6 +7,7 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.Json
+import net.hordeslop.studio.data.local.AppSettings
 import net.hordeslop.studio.data.local.HordecraftDatabase
 import net.hordeslop.studio.data.local.SettingsDataStore
 import net.hordeslop.studio.data.local.WebpStorageManager
@@ -15,6 +16,7 @@ import net.hordeslop.studio.data.remote.HordeApiService
 import net.hordeslop.studio.data.remote.HordeRateLimiterInterceptor
 import net.hordeslop.studio.data.remote.ModelReferenceRepository
 import net.hordeslop.studio.data.repository.HordecraftRepository
+import net.hordeslop.studio.domain.ActivityDestination
 import net.hordeslop.studio.domain.HordeConstants
 import net.hordeslop.studio.service.NotificationChannels
 import net.hordeslop.studio.ui.StudioUiState
@@ -40,10 +42,12 @@ class AppContainer(context: Application) {
 
     private val currentBaseUrl = AtomicReference(HordeConstants.DEFAULT_API_BASE_URL)
     private val currentApiKey = AtomicReference(HordeConstants.ANONYMOUS_KEY)
+    val currentSettings = AtomicReference(AppSettings())
 
     init {
         appScope.launch {
             settingsStore.settings.collect { s ->
+                currentSettings.set(s)
                 currentBaseUrl.set(s.apiBaseUrl)
                 currentApiKey.set(s.hordeApiKey)
             }
@@ -85,6 +89,7 @@ class AppContainer(context: Application) {
     val modelReferenceRepo = ModelReferenceRepository(rawOkHttp, json)
     val sharedStudioState = MutableStateFlow(StudioUiState())
     val pendingGallerySearchQuery = MutableStateFlow<String?>(null)
+    val singleActivityDestination = MutableStateFlow(ActivityDestination.MAIN)
     @Volatile
     var catalogsLoadedOnce: Boolean = false
 
