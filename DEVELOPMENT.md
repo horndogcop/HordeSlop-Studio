@@ -37,6 +37,8 @@ Run unit tests locally with Gradle once Android SDK / JDK 17 is configured:
 
 All MVP milestones and difficulty-ordered Future Plans (Tiers 1–5) are tracked on the [HordeSlop Studio Roadmap Project](https://github.com/users/horndogcop/projects/1).
 
+Upcoming Tier 2 wallpaper plans include **Muzei Live Wallpaper integration** and an **Android wallpaper provider**.
+
 ## License
 
 Licensed under **GNU AGPLv3 or later** (`AGPL-3.0-or-later`) — chosen as the broadest copyleft license compatible with all Apache-2.0 Android/Kotlin dependencies.
