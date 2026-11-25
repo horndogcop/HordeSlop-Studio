@@ -361,16 +361,21 @@ fun StudioScreen(
 
                     // Clip Skip (1..12 slider + numeric input)
                     val clipZone = SliderMath.clipSkipZone(studio.clipSkip)
-                    Box(modifier = Modifier.alpha(if (!studio.isFieldLocked(StyleFieldLock.CLIP_SKIP)) enabledParamAlpha else 1f)) {
-                        LinearIntSliderRow(
-                            label = "Clip Skip",
-                            value = studio.clipSkip,
-                            minVal = SliderMath.CLIP_SKIP_MIN,
-                            maxVal = SliderMath.CLIP_SKIP_MAX,
-                            onValueChange = vm::updateClipSkip,
-                            zone = clipZone,
-                            enabled = !studio.isFieldLocked(StyleFieldLock.CLIP_SKIP),
-                        )
+                    val renderClipSkipSlider: @Composable () -> Unit = {
+                        Box(modifier = Modifier.alpha(if (!studio.isFieldLocked(StyleFieldLock.CLIP_SKIP)) enabledParamAlpha else 1f)) {
+                            LinearIntSliderRow(
+                                label = "Clip Skip",
+                                value = studio.clipSkip,
+                                minVal = SliderMath.CLIP_SKIP_MIN,
+                                maxVal = SliderMath.CLIP_SKIP_MAX,
+                                onValueChange = vm::updateClipSkip,
+                                zone = clipZone,
+                                enabled = !studio.isFieldLocked(StyleFieldLock.CLIP_SKIP),
+                            )
+                        }
+                    }
+                    if (!studio.clipSkipInAdvanced) {
+                        renderClipSkipSlider()
                     }
 
                     // Sampler Dropdown
@@ -457,6 +462,10 @@ fun StudioScreen(
                                     onSelect = vm::updateScheduler,
                                 )
                             }
+                        }
+
+                        if (studio.clipSkipInAdvanced) {
+                            renderClipSkipSlider()
                         }
 
                         Row(

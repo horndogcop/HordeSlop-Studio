@@ -75,6 +75,7 @@ data class StudioUiState(
     val hordePerformance: HordePerformanceSummary? = null,
     val loadingModels: Boolean = false,
     val toastMessage: String? = null,
+    val clipSkipInAdvanced: Boolean = false,
 ) {
     val activeStyles: List<HordeStyle>
         get() = selectedStyleIds
@@ -89,6 +90,17 @@ data class StudioUiState(
 
     fun isFieldLocked(lock: StyleFieldLock): Boolean =
         activeStyles.any { it.id != "none" && lock in it.lockedFields }
+
+    fun withRecomputedClipSkipLocation(): StudioUiState =
+        copy(clipSkipInAdvanced = shouldMoveClipSkipToAdvanced(primaryModel, clipSkip))
+
+    companion object {
+        fun shouldMoveClipSkipToAdvanced(model: HordeModel, clipSkip: Int): Boolean {
+            val isPony = model.name.contains("pony", ignoreCase = true) ||
+                model.baseline.contains("pony", ignoreCase = true)
+            return !isPony && clipSkip != model.defaultClipSkip
+        }
+    }
 }
 
 class MainViewModel(application: Application) : AndroidViewModel(application) {
@@ -162,7 +174,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     recommendedSamplers = fetchedSamplers?.first ?: state.recommendedSamplers,
                     allSamplers = fetchedSamplers?.second ?: state.allSamplers,
                     loadingModels = false,
-                )
+                ).withRecomputedClipSkipLocation()
             }
         }
     }
@@ -221,7 +233,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun toggleModelSelection(modelName: String) {
         _studio.update { state ->
             if (!state.multiModelEnabled) {
-                return@update state.copy(selectedModels = listOf(modelName))
+                return@update state.copy(selectedModels = listOf(modelName)).withRecomputedClipSkipLocation()
             }
             val exists = modelName in state.selectedModels
             val next = if (exists) {
@@ -229,7 +241,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             } else {
                 state.selectedModels + modelName
             }
-            state.copy(selectedModels = next)
+            state.copy(selectedModels = next).withRecomputedClipSkipLocation()
         }
     }
 
@@ -242,7 +254,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 clipSkip = if (!state.isFieldLocked(StyleFieldLock.CLIP_SKIP)) model.defaultClipSkip else state.clipSkip,
                 width = if (!state.isFieldLocked(StyleFieldLock.SIZE)) model.suggestedWidth else state.width,
                 height = if (!state.isFieldLocked(StyleFieldLock.SIZE)) model.suggestedHeight else state.height,
-            )
+            ).withRecomputedClipSkipLocation()
         }
     }
 
@@ -287,7 +299,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 return@update state.copy(
                     selectedStyleId = "none",
                     selectedStyleIds = listOf("none"),
-                )
+                ).withRecomputedClipSkipLocation()
             }
             val currentIds = state.selectedStyleIds.filter { it != "none" }
             val adding = style.id !in currentIds
@@ -306,7 +318,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 clipSkip = if (adding) style.clipSkip ?: state.clipSkip else state.clipSkip,
                 width = if (adding) style.width ?: state.width else state.width,
                 height = if (adding) style.height ?: state.height else state.height,
-            )
+            ).withRecomputedClipSkipLocation()
         }
     }
 
@@ -315,7 +327,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             return state.copy(
                 selectedStyleId = "none",
                 selectedStyleIds = listOf("none"),
-            )
+            ).withRecomputedClipSkipLocation()
         }
         val nextModels = style.model?.let { m ->
             state.models.firstOrNull { it.name.equals(m, ignoreCase = true) }?.name?.let(::listOf)
@@ -332,7 +344,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             clipSkip = style.clipSkip ?: state.clipSkip,
             width = style.width ?: state.width,
             height = style.height ?: state.height,
-        )
+        ).withRecomputedClipSkipLocation()
     }
 
     fun selectStyle(style: HordeStyle) {
@@ -361,7 +373,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 loras = emptyList(),
                 tis = emptyList(),
                 toastMessage = "Reset all fields",
-            )
+            ).withRecomputedClipSkipLocation()
         }
     }
 
@@ -376,7 +388,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 clipSkip = record.clipSkip,
                 sampler = record.sampler,
                 scheduler = record.scheduler,
-            )
+            ).withRecomputedClipSkipLocation()
         }
     }
 
@@ -396,7 +408,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 height = image.height,
                 selectedStyleId = "none",
                 selectedStyleIds = listOf("none"),
-            )
+            ).withRecomputedClipSkipLocation()
         }
     }
 

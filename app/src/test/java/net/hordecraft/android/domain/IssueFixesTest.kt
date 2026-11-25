@@ -302,4 +302,29 @@ class IssueFixesTest {
             ),
         )
     }
+
+    @Test
+    fun clipSkipMovesToAdvancedForNonPonyWithNonDefaultValue() {
+        val sdxlModel = HordeModel(
+            name = "Juggernaut XL",
+            baseline = "SDXL",
+            workers = 5,
+            queued = 0,
+            etaSeconds = 5,
+            defaultSteps = 30,
+            defaultSampler = "k_euler",
+            defaultScheduler = "normal",
+            defaultClipSkip = 1,
+            suggestedMinSteps = 18,
+            suggestedMaxSteps = 45,
+            suggestedMinCfg = 3.5f,
+            suggestedMaxCfg = 9.5f,
+            suggestedWidth = 1024,
+            suggestedHeight = 1024,
+        )
+        val ponyModel = sdxlModel.copy(name = "Pony Diffusion V6 XL", baseline = "Pony")
+        assertFalse(net.hordeslop.studio.ui.StudioUiState.shouldMoveClipSkipToAdvanced(sdxlModel, 1))
+        assertTrue(net.hordeslop.studio.ui.StudioUiState.shouldMoveClipSkipToAdvanced(sdxlModel, 2))
+        assertFalse(net.hordeslop.studio.ui.StudioUiState.shouldMoveClipSkipToAdvanced(ponyModel, 2))
+    }
 }
