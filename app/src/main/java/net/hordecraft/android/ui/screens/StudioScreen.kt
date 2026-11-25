@@ -493,6 +493,14 @@ fun StudioScreen(
                                 Text("Censor NSFW", fontSize = 12.sp, color = HordeColors.TextSecondary)
                             }
                         }
+                        OutlinedButton(
+                            onClick = vm::copyCurrentRequestAsCurl,
+                            modifier = Modifier.fillMaxWidth(),
+                        ) {
+                            Icon(Icons.Outlined.ContentCopy, null, modifier = Modifier.size(16.dp))
+                            Spacer(Modifier.width(6.dp))
+                            Text("Copy API request as curl", fontSize = 12.sp)
+                        }
                     }
                 }
             }

@@ -313,6 +313,7 @@ fun GalleryScreen(
                 },
                 onCopyImage = { img -> vm.copyImage(img.fileUri) },
                 onCopyText = vm::copyText,
+                onCopyCurl = vm::copyJsonRequestAsCurl,
                 onShare = { img ->
                     scope.launch {
                         vm.buildShareIntent(img.fileUri)?.let { intent ->
@@ -365,6 +366,7 @@ private fun GalleryViewerModal(
     onSameRequest: (String) -> Unit,
     onCopyImage: (SavedImage) -> Unit,
     onCopyText: (String, String) -> Unit,
+    onCopyCurl: (String) -> Unit,
     onShare: (SavedImage) -> Unit,
     onOpenIn: (SavedImage) -> Unit,
     onSetWallpaper: (SavedImage, Int) -> Unit,
@@ -788,7 +790,12 @@ private fun GalleryViewerModal(
                 }
             },
             dismissButton = {
-                OutlinedButton(onClick = { onCopyText(mode, jsonContent) }) { Text("Copy") }
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    OutlinedButton(onClick = { onCopyText(mode, jsonContent) }) { Text("Copy") }
+                    if (mode == "request") {
+                        OutlinedButton(onClick = { onCopyCurl(jsonContent) }) { Text("curl") }
+                    }
+                }
             },
             confirmButton = {
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {

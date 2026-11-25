@@ -8,6 +8,7 @@ import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
+import net.hordeslop.studio.domain.HordeConstants
 
 data class StudioSubmissionSpec(
     val prompt: String,
@@ -235,5 +236,34 @@ object StyleContractEngine {
         }
         val withoutNp = raw.replace("{np}", "").replace("{p}", cleanPos).trim().trimEnd(',').trim()
         return if (cleanNeg.isBlank()) withoutNp else "$withoutNp ### $cleanNeg"
+    }
+
+    private val I2I_KEYS = setOf("source_image", "source_mask", "extra_source_images", "source_processing")
+
+    fun sanitizePayloadForCurl(payload: JsonObject): JsonObject =
+        JsonObject(payload.filterKeys { it !in I2I_KEYS })
+
+    fun buildCurlCommand(
+        apiBaseUrl: String,
+        apiKey: String,
+        payload: JsonObject,
+        maskApiKey: Boolean = true,
+    ): String {
+        val cleanPayload = sanitizePayloadForCurl(payload)
+        val endpoint = "${HordeConstants.normalizeBaseUrl(apiBaseUrl)}generate/async"
+        val resolvedKey = when {
+            apiKey.isBlank() -> HordeConstants.ANONYMOUS_KEY
+            maskApiKey && apiKey != HordeConstants.ANONYMOUS_KEY -> "YOUR_HORDE_API_KEY"
+            else -> apiKey.trim()
+        }
+        val bodyJson = prettyJson.encodeToString(JsonObject.serializer(), cleanPayload)
+        fun escapeSingleQuotes(s: String): String = s.replace("'", "'\"'\"'")
+        return buildString {
+            appendLine("curl -X POST '${escapeSingleQuotes(endpoint)}' \\")
+            appendLine("  -H 'Content-Type: application/json' \\")
+            appendLine("  -H 'apikey: ${escapeSingleQuotes(resolvedKey)}' \\")
+            appendLine("  -H 'Client-Agent: ${escapeSingleQuotes(HordeConstants.CLIENT_AGENT)}' \\")
+            append("  -d '${escapeSingleQuotes(bodyJson)}'")
+        }
     }
 }

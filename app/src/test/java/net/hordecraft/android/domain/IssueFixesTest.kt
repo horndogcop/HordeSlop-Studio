@@ -366,4 +366,27 @@ class IssueFixesTest {
         assertFalse(GallerySearchFilter.matches(img, "castle ### nonexistent"))
         assertFalse(GallerySearchFilter.matches(img, "forest ### blurry"))
     }
+
+    @Test
+    fun curlExportStripsI2iAttachmentsAndMasksApiKey() {
+        val raw = kotlinx.serialization.json.buildJsonObject {
+            put("prompt", kotlinx.serialization.json.JsonPrimitive("sunset mountain"))
+            put("source_image", kotlinx.serialization.json.JsonPrimitive("BASE64_DATA"))
+            put("source_mask", kotlinx.serialization.json.JsonPrimitive("MASK_DATA"))
+            put("source_processing", kotlinx.serialization.json.JsonPrimitive("img2img"))
+            put("nsfw", kotlinx.serialization.json.JsonPrimitive(false))
+        }
+        val curl = StyleContractEngine.buildCurlCommand(
+            apiBaseUrl = "https://aihorde.net/api/v2",
+            apiKey = "secret-user-key-123",
+            payload = raw,
+        )
+        assertTrue(curl.startsWith("curl -X POST 'https://aihorde.net/api/v2/generate/async'"))
+        assertTrue(curl.contains("YOUR_HORDE_API_KEY"))
+        assertFalse(curl.contains("secret-user-key-123"))
+        assertFalse(curl.contains("source_image"))
+        assertFalse(curl.contains("BASE64_DATA"))
+        assertFalse(curl.contains("source_mask"))
+        assertTrue(curl.contains("sunset mountain"))
+    }
 }

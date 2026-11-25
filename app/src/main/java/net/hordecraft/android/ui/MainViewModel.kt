@@ -40,6 +40,9 @@ import net.hordeslop.studio.domain.TemplatePrompts
 import net.hordeslop.studio.domain.TiInjectMode
 import net.hordeslop.studio.domain.UserStatsSummary
 import net.hordeslop.studio.service.HordeJobService
+import net.hordeslop.studio.domain.StyleContractEngine
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.jsonObject
 
 data class StudioUiState(
     val prompt: String = TemplatePrompts.pickRandomTemplatePrompt(),
@@ -486,6 +489,51 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    fun buildCurrentStudioSpec(st: StudioUiState = _studio.value): StudioSubmissionSpec =
+        StudioSubmissionSpec(
+            prompt = st.prompt,
+            negativePrompt = st.negativePrompt,
+            selectedModels = st.selectedModels,
+            dispatchMode = st.dispatchMode,
+            activeStyle = st.activeStyle,
+            activeStyles = st.activeStyles,
+            seed = st.seed,
+            steps = st.steps,
+            cfg = st.cfg,
+            clipSkip = st.clipSkip,
+            width = st.width,
+            height = st.height,
+            sampler = st.sampler,
+            scheduler = st.scheduler,
+            nsfw = st.nsfw,
+            censorNsfw = st.censorNsfw,
+            imageCount = st.imageCount,
+            loras = st.loras,
+            tis = st.tis,
+        )
+
+    fun copyCurrentRequestAsCurl() {
+        val st = _studio.value
+        val chunks = StyleContractEngine.buildSubmissionChunks(buildCurrentStudioSpec(st))
+        val firstPayload = chunks.firstOrNull()?.payload ?: return
+        val s = settings.value
+        val curl = StyleContractEngine.buildCurlCommand(s.apiBaseUrl, s.hordeApiKey, firstPayload)
+        repo.storageManager.copyText("curl command", curl)
+        showToast("Copied curl command")
+    }
+
+    fun copyJsonRequestAsCurl(requestJsonString: String) {
+        val parsed = runCatching { Json.parseToJsonElement(requestJsonString).jsonObject }.getOrNull()
+        if (parsed == null) {
+            showToast("Request JSON unavailable")
+            return
+        }
+        val s = settings.value
+        val curl = StyleContractEngine.buildCurlCommand(s.apiBaseUrl, s.hordeApiKey, parsed)
+        repo.storageManager.copyText("curl command", curl)
+        showToast("Copied curl command")
+    }
+
     fun submitGenerate() {
         val st = _studio.value
         if (st.prompt.isBlank()) {
@@ -494,29 +542,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
         viewModelScope.launch {
             runCatching {
-                repo.submitGeneration(
-                    StudioSubmissionSpec(
-                        prompt = st.prompt,
-                        negativePrompt = st.negativePrompt,
-                        selectedModels = st.selectedModels,
-                        dispatchMode = st.dispatchMode,
-                        activeStyle = st.activeStyle,
-                        activeStyles = st.activeStyles,
-                        seed = st.seed,
-                        steps = st.steps,
-                        cfg = st.cfg,
-                        clipSkip = st.clipSkip,
-                        width = st.width,
-                        height = st.height,
-                        sampler = st.sampler,
-                        scheduler = st.scheduler,
-                        nsfw = st.nsfw,
-                        censorNsfw = st.censorNsfw,
-                        imageCount = st.imageCount,
-                        loras = st.loras,
-                        tis = st.tis,
-                    ),
-                )
+                repo.submitGeneration(buildCurrentStudioSpec(st))
             }.onSuccess { jobs ->
                 HordeJobService.startPolling(app)
                 showToast("Queued ${jobs.size} request(s)")
