@@ -106,7 +106,11 @@ jobs:
           ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
           ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: |
-          gradle testDebugUnitTest assembleRelease bundleRelease \
+          gradle testDebugUnitTest \
+            --no-daemon --stacktrace \
+            -PversionName="${{ steps.version.outputs.version_name }}" \
+            -PversionCode="${{ steps.version.outputs.version_code }}"
+          gradle assembleRelease bundleRelease \
             --no-daemon --stacktrace \
             -PversionName="${{ steps.version.outputs.version_name }}" \
             -PversionCode="${{ steps.version.outputs.version_code }}"
