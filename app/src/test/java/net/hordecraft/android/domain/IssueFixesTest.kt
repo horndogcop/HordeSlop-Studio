@@ -389,4 +389,10 @@ class IssueFixesTest {
         assertFalse(curl.contains("source_mask"))
         assertTrue(curl.contains("sunset mountain"))
     }
+
+    @Test
+    fun showRawRequestReviewDefaultsToFalse() {
+        val defaults = net.hordeslop.studio.data.local.AppSettings()
+        assertFalse(defaults.showRawRequestReview)
+    }
 }

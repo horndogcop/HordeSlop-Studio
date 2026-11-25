@@ -534,6 +534,24 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         showToast("Copied curl command")
     }
 
+    fun prepareRawSubmissionPayloads(): List<String> =
+        StyleContractEngine.buildSubmissionChunks(buildCurrentStudioSpec())
+            .map { it.payloadJsonString }
+
+    fun submitRawGenerationPayloads(rawJsons: List<String>) {
+        val st = _studio.value
+        viewModelScope.launch {
+            runCatching {
+                repo.submitRawGenerationPayloads(buildCurrentStudioSpec(st), rawJsons)
+            }.onSuccess { jobs ->
+                HordeJobService.startPolling(app)
+                showToast("Queued ${jobs.size} request(s)")
+            }.onFailure { err ->
+                showToast("Request failed: ${err.message ?: "Invalid JSON or network error"}")
+            }
+        }
+    }
+
     fun submitGenerate() {
         val st = _studio.value
         if (st.prompt.isBlank()) {
@@ -700,6 +718,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 app.container.singleActivityDestination.value = ActivityDestination.SETTINGS
             }
         }
+    }
+
+    fun setShowRawRequestReview(enabled: Boolean) {
+        viewModelScope.launch { repo.settingsStore.setShowRawRequestReview(enabled) }
     }
 
     fun saveStylesRepoUrls(urls: List<String>) {

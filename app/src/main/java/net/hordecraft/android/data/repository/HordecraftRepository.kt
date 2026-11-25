@@ -536,6 +536,68 @@ class HordecraftRepository(
         return created
     }
 
+    suspend fun submitRawGenerationPayloads(
+        spec: StudioSubmissionSpec,
+        rawPayloadJsons: List<String>,
+    ): List<ActiveJobEntity> {
+        val parsedPayloads = rawPayloadJsons.map { raw ->
+            json.parseToJsonElement(raw).jsonObject
+        }
+        promptHistoryDao.upsert(
+            PromptHistoryEntity(
+                id = "h_${System.currentTimeMillis()}_${UUID.randomUUID().toString().take(6)}",
+                title = null,
+                prompt = spec.prompt,
+                negativePrompt = spec.negativePrompt,
+                model = spec.selectedModels.firstOrNull().orEmpty(),
+                steps = spec.steps,
+                cfg = spec.cfg,
+                clipSkip = spec.clipSkip,
+                sampler = spec.sampler,
+                scheduler = spec.scheduler,
+                timestampMillis = System.currentTimeMillis(),
+                isFavorite = false,
+            ),
+        )
+        val created = mutableListOf<ActiveJobEntity>()
+        for (payload in parsedPayloads) {
+            val resp = hordeApi.submitAsync(payload)
+            val modelsFromPayload = payload["models"]?.let { elem ->
+                runCatching { elem.jsonArray.mapNotNull { it.jsonPrimitive.contentOrNull } }.getOrNull()
+            }?.takeIf { it.isNotEmpty() } ?: spec.selectedModels
+            val paramsObj = payload["params"]?.let { runCatching { it.jsonObject }.getOrNull() }
+            val countFromPayload = paramsObj?.get("n")?.jsonPrimitive?.intOrNull ?: 1
+            val promptFromPayload = payload["prompt"]?.jsonPrimitive?.contentOrNull ?: spec.prompt
+            val entity = ActiveJobEntity(
+                id = resp.id,
+                requestId = resp.id,
+                prompt = promptFromPayload,
+                negativePrompt = spec.negativePrompt,
+                modelsJoined = modelsFromPayload.joinToString("||"),
+                status = JobStatus.QUEUED.name,
+                waitTimeSeconds = 15,
+                queuePosition = 0,
+                finished = 0,
+                processing = 0,
+                total = countFromPayload,
+                seed = spec.seed,
+                steps = paramsObj?.get("steps")?.jsonPrimitive?.intOrNull ?: spec.steps,
+                cfg = paramsObj?.get("cfg_scale")?.jsonPrimitive?.floatOrNull ?: spec.cfg,
+                clipSkip = paramsObj?.get("clip_skip")?.jsonPrimitive?.intOrNull ?: spec.clipSkip,
+                sampler = paramsObj?.get("sampler_name")?.jsonPrimitive?.contentOrNull ?: spec.sampler,
+                scheduler = paramsObj?.get("scheduler")?.jsonPrimitive?.contentOrNull ?: spec.scheduler,
+                width = paramsObj?.get("width")?.jsonPrimitive?.intOrNull ?: spec.width,
+                height = paramsObj?.get("height")?.jsonPrimitive?.intOrNull ?: spec.height,
+                submittedPayloadJson = json.encodeToString(JsonObject.serializer(), payload),
+                errorMessage = null,
+                createdAtMillis = System.currentTimeMillis(),
+            )
+            activeJobDao.upsert(entity)
+            created += entity
+        }
+        return created
+    }
+
     suspend fun enqueueReroll(image: SavedImage): ActiveJobEntity {
         val parsedReq = runCatching {
             json.parseToJsonElement(image.requestJson).jsonObject

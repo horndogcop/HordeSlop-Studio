@@ -135,6 +135,7 @@ fun StudioScreen(
     var showSizeModal by remember { mutableStateOf(false) }
     var civitaiSearchTab by remember { mutableStateOf<String?>(null) } // "lora" | "ti" | null
     var loraDetailTarget by remember { mutableStateOf<AttachedLora?>(null) }
+    var pendingRawReviewPayloads by remember { mutableStateOf<List<String>?>(null) }
 
     val primaryModel = studio.primaryModel
     val activeStyle = studio.activeStyle
@@ -151,7 +152,15 @@ fun StudioScreen(
             imageCount = studio.imageCount,
             onChangeCount = vm::updateImageCount,
             onResetAll = vm::resetAllParametersToDefaults,
-            onGenerate = vm::submitGenerate,
+            onGenerate = {
+                if (studio.prompt.isBlank()) {
+                    vm.showToast("Enter a prompt first")
+                } else if (settings.showRawRequestReview) {
+                    pendingRawReviewPayloads = vm.prepareRawSubmissionPayloads()
+                } else {
+                    vm.submitGenerate()
+                }
+            },
             isWideLayout = isWideLayout,
             isPinnedTop = isPinnedTop,
         )
@@ -1039,6 +1048,101 @@ fun StudioScreen(
             onDismiss = { loraDetailTarget = null },
         )
     }
+
+    pendingRawReviewPayloads?.let { initialChunks ->
+        RawRequestReviewDialog(
+            initialPayloads = initialChunks,
+            onCopyCurl = vm::copyJsonRequestAsCurl,
+            onConfirmSend = { editedChunks ->
+                pendingRawReviewPayloads = null
+                vm.submitRawGenerationPayloads(editedChunks)
+            },
+            onDismiss = { pendingRawReviewPayloads = null },
+        )
+    }
+}
+
+@Composable
+private fun RawRequestReviewDialog(
+    initialPayloads: List<String>,
+    onCopyCurl: (String) -> Unit,
+    onConfirmSend: (List<String>) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    var drafts by remember(initialPayloads) { mutableStateOf(initialPayloads) }
+    var activeIdx by remember(initialPayloads) { mutableStateOf(0) }
+    var errorMessage by remember { mutableStateOf<String?>(null) }
+    val safeIdx = activeIdx.coerceIn(0, (drafts.size - 1).coerceAtLeast(0))
+    val currentText = drafts.getOrElse(safeIdx) { "{}" }
+
+    androidx.compose.material3.AlertDialog(
+        onDismissRequest = onDismiss,
+        containerColor = HordeColors.CardSurface,
+        title = {
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text("Review API Request JSON", color = HordeColors.TextPrimary, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
+                if (drafts.size > 1) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        drafts.indices.forEach { idx ->
+                            ToggleChipButton(
+                                text = "Request ${idx + 1}",
+                                selected = idx == safeIdx,
+                                onClick = { activeIdx = idx },
+                            )
+                        }
+                    }
+                }
+            }
+        },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                OutlinedTextField(
+                    value = currentText,
+                    onValueChange = { next ->
+                        errorMessage = null
+                        drafts = drafts.toMutableList().apply { set(safeIdx, next) }
+                    },
+                    minLines = 10,
+                    maxLines = 16,
+                    textStyle = androidx.compose.ui.text.TextStyle(
+                        fontFamily = FontFamily.Monospace,
+                        fontSize = 11.sp,
+                        color = HordeColors.TextPrimary,
+                    ),
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                errorMessage?.let { err ->
+                    Text(err, fontSize = 11.sp, color = HordeColors.RoseText)
+                }
+            }
+        },
+        dismissButton = {
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                OutlinedButton(onClick = { onCopyCurl(currentText) }) { Text("curl") }
+                TextButton(onClick = onDismiss) { Text("Cancel") }
+            }
+        },
+        confirmButton = {
+            Button(
+                colors = ButtonDefaults.buttonColors(containerColor = HordeColors.TealPrimary),
+                onClick = {
+                    val invalidIdx = drafts.indexOfFirst { raw ->
+                        runCatching {
+                            kotlinx.serialization.json.Json.parseToJsonElement(raw) as kotlinx.serialization.json.JsonObject
+                        }.isFailure
+                    }
+                    if (invalidIdx >= 0) {
+                        activeIdx = invalidIdx
+                        errorMessage = "Request ${invalidIdx + 1} must be valid JSON object"
+                    } else {
+                        onConfirmSend(drafts)
+                    }
+                },
+            ) {
+                Text("Send", color = Color(0xFF020617), fontWeight = FontWeight.SemiBold)
+            }
+        },
+    )
 }
 
 @OptIn(ExperimentalLayoutApi::class)

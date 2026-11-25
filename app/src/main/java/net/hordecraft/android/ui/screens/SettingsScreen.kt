@@ -393,6 +393,23 @@ fun SettingsScreen(
                 )
             }
 
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { vm.setShowRawRequestReview(!settings.showRawRequestReview) },
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Column(Modifier.weight(1f)) {
+                    Text("Review raw API JSON", fontSize = 13.sp, color = HordeColors.TextPrimary)
+                    Text("Inspect and edit request JSON before sending", fontSize = 11.sp, color = HordeColors.TextMuted)
+                }
+                Checkbox(
+                    checked = settings.showRawRequestReview,
+                    onCheckedChange = vm::setShowRawRequestReview,
+                )
+            }
+
             HorizontalDivider(color = HordeColors.BorderSubtle)
 
             // Civitai API key inside Preferences (#90)

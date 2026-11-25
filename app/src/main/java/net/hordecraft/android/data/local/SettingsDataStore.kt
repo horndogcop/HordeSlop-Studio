@@ -27,6 +27,7 @@ data class AppSettings(
     val skipGalleryModalToFullscreen: Boolean = false,
     val autoClearCompletedQueue: Boolean = false,
     val useSeparateActivities: Boolean = true,
+    val showRawRequestReview: Boolean = false,
     val stylesRepoUrls: List<String> = listOf(HordeConstants.DEFAULT_STYLES_REPO_URL),
     val launcherIcon: LauncherIconChoice = LauncherIconChoice.ROBOT_PLACEHOLDER,
     val storageMode: StorageMode = StorageMode.DOWNLOADS,
@@ -49,6 +50,7 @@ class SettingsDataStore(private val context: Context) {
         val SKIP_GALLERY_TO_FULLSCREEN = booleanPreferencesKey("skip_gallery_to_fullscreen")
         val AUTO_CLEAR_COMPLETED_QUEUE = booleanPreferencesKey("auto_clear_completed_queue")
         val USE_SEPARATE_ACTIVITIES = booleanPreferencesKey("use_separate_activities")
+        val SHOW_RAW_REQUEST_REVIEW = booleanPreferencesKey("show_raw_request_review")
         val STYLES_REPO_URLS = stringPreferencesKey("styles_repo_urls")
         val LAUNCHER_ICON = stringPreferencesKey("launcher_icon")
         val STORAGE_MODE = stringPreferencesKey("storage_mode")
@@ -83,6 +85,7 @@ class SettingsDataStore(private val context: Context) {
             skipGalleryModalToFullscreen = prefs[Keys.SKIP_GALLERY_TO_FULLSCREEN] ?: false,
             autoClearCompletedQueue = prefs[Keys.AUTO_CLEAR_COMPLETED_QUEUE] ?: false,
             useSeparateActivities = prefs[Keys.USE_SEPARATE_ACTIVITIES] ?: true,
+            showRawRequestReview = prefs[Keys.SHOW_RAW_REQUEST_REVIEW] ?: false,
             stylesRepoUrls = parsedRepos,
             launcherIcon = LauncherIconChoice.fromKey(prefs[Keys.LAUNCHER_ICON]),
             storageMode = StorageMode.fromKey(prefs[Keys.STORAGE_MODE]),
@@ -130,6 +133,10 @@ class SettingsDataStore(private val context: Context) {
 
     suspend fun setUseSeparateActivities(enabled: Boolean) {
         context.dataStore.edit { it[Keys.USE_SEPARATE_ACTIVITIES] = enabled }
+    }
+
+    suspend fun setShowRawRequestReview(enabled: Boolean) {
+        context.dataStore.edit { it[Keys.SHOW_RAW_REQUEST_REVIEW] = enabled }
     }
 
     suspend fun setStylesRepoUrls(urls: List<String>) {
