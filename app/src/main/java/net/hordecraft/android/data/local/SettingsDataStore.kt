@@ -32,6 +32,7 @@ data class AppSettings(
     val safTreeUri: String? = null,
     val safFolderLabel: String = "Downloads/HordeSlop Studio",
     val keepImagesInInternalStorage: Boolean = false,
+    val preventMediaIndexing: Boolean = false,
     val advancedCollapsed: Boolean = true,
     val onboardingCompleted: Boolean = false,
 )
@@ -52,6 +53,7 @@ class SettingsDataStore(private val context: Context) {
         val SAF_TREE_URI = stringPreferencesKey("saf_tree_uri")
         val SAF_FOLDER_LABEL = stringPreferencesKey("saf_folder_label")
         val KEEP_IMAGES_INTERNAL = booleanPreferencesKey("keep_images_internal")
+        val PREVENT_MEDIA_INDEXING = booleanPreferencesKey("prevent_media_indexing")
         val ADVANCED_COLLAPSED = booleanPreferencesKey("advanced_collapsed")
         val ONBOARDING_COMPLETED = booleanPreferencesKey("onboarding_completed")
     }
@@ -84,6 +86,7 @@ class SettingsDataStore(private val context: Context) {
             safTreeUri = prefs[Keys.SAF_TREE_URI],
             safFolderLabel = prefs[Keys.SAF_FOLDER_LABEL] ?: "Downloads/HordeSlop Studio",
             keepImagesInInternalStorage = prefs[Keys.KEEP_IMAGES_INTERNAL] ?: false,
+            preventMediaIndexing = prefs[Keys.PREVENT_MEDIA_INDEXING] ?: false,
             advancedCollapsed = prefs[Keys.ADVANCED_COLLAPSED] ?: true,
             onboardingCompleted = prefs[Keys.ONBOARDING_COMPLETED] ?: false,
         )
@@ -152,6 +155,10 @@ class SettingsDataStore(private val context: Context) {
 
     suspend fun setKeepImagesInInternalStorage(enabled: Boolean) {
         context.dataStore.edit { it[Keys.KEEP_IMAGES_INTERNAL] = enabled }
+    }
+
+    suspend fun setPreventMediaIndexing(enabled: Boolean) {
+        context.dataStore.edit { it[Keys.PREVENT_MEDIA_INDEXING] = enabled }
     }
 
     suspend fun setAdvancedCollapsed(collapsed: Boolean) {

@@ -70,6 +70,7 @@ class WebpStorageManager(private val context: Context) {
             )
 
             val fileName = "hordeslop_${generationId.take(12)}_${System.currentTimeMillis()}.webp"
+            syncNoMediaFiles(settings)
             if (!settings.keepImagesInInternalStorage) {
                 writeFileToExternalStorage(tempWebp, fileName, settings)?.let { externalResult ->
                     return@withContext externalResult
@@ -87,6 +88,50 @@ class WebpStorageManager(private val context: Context) {
         } finally {
             tempWebp.delete()
         }
+    }
+
+    suspend fun syncNoMediaFiles(settings: AppSettings) = withContext(Dispatchers.IO) {
+        val enabled = settings.preventMediaIndexing
+        runCatching {
+            val internalDir = File(context.filesDir, "images").apply { mkdirs() }
+            val internalNoMedia = File(internalDir, ".nomedia")
+            if (enabled) {
+                if (!internalNoMedia.exists()) internalNoMedia.createNewFile()
+            } else if (internalNoMedia.exists()) {
+                internalNoMedia.delete()
+            }
+        }
+        runCatching {
+            val treeUri = settings.safTreeUri?.let(Uri::parse) ?: return@runCatching
+            val parent = DocumentFile.fromTreeUri(context, treeUri) ?: return@runCatching
+            val existing = parent.findFile(".nomedia")
+            if (enabled) {
+                if (existing == null) {
+                    parent.createFile("application/octet-stream", ".nomedia")
+                }
+            } else {
+                existing?.delete()
+            }
+        }
+        runCatching {
+            @Suppress("DEPRECATION")
+            val downloadsDir = File(
+                Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS),
+                "HordeSlop Studio",
+            )
+            if (downloadsDir.exists() || enabled) {
+                downloadsDir.mkdirs()
+                val externalNoMedia = File(downloadsDir, ".nomedia")
+                if (enabled) {
+                    if (!externalNoMedia.exists() && downloadsDir.canWrite()) {
+                        externalNoMedia.createNewFile()
+                    }
+                } else if (externalNoMedia.exists()) {
+                    externalNoMedia.delete()
+                }
+            }
+        }
+        Unit
     }
 
     fun isInternalImageUri(uriString: String): Boolean {

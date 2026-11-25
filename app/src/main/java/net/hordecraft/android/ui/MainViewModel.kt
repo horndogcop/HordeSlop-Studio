@@ -680,15 +680,28 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun setStorageDownloads() {
-        viewModelScope.launch { repo.settingsStore.setStorageDownloads() }
+        viewModelScope.launch {
+            repo.settingsStore.setStorageDownloads()
+            repo.syncNoMediaFiles()
+        }
     }
 
     fun setStorageSafTree(uriString: String, label: String) {
-        viewModelScope.launch { repo.settingsStore.setStorageSafTree(uriString, label) }
+        viewModelScope.launch {
+            repo.settingsStore.setStorageSafTree(uriString, label)
+            repo.syncNoMediaFiles()
+        }
     }
 
     fun setKeepImagesInInternalStorage(enabled: Boolean) {
         viewModelScope.launch { repo.settingsStore.setKeepImagesInInternalStorage(enabled) }
+    }
+
+    fun setPreventMediaIndexing(enabled: Boolean) {
+        viewModelScope.launch {
+            repo.settingsStore.setPreventMediaIndexing(enabled)
+            repo.syncNoMediaFiles()
+        }
     }
 
     fun moveImageToExternalStorage(image: SavedImage) {

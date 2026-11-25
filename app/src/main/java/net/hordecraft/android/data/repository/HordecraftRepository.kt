@@ -841,6 +841,11 @@ class HordecraftRepository(
         return movedCount
     }
 
+    suspend fun syncNoMediaFiles() {
+        val settings = settingsStore.settings.first()
+        storageManager.syncNoMediaFiles(settings)
+    }
+
     suspend fun pauseQueue() = activeJobDao.pauseAllActive()
     suspend fun resumeQueue() = activeJobDao.resumeAllPaused()
 
