@@ -333,4 +333,37 @@ class IssueFixesTest {
         val defaults = net.hordeslop.studio.data.local.AppSettings()
         assertTrue(defaults.useSeparateActivities)
     }
+
+    @Test
+    fun gallerySearchNegativePrefixMatchesOnlyAfterDelimiter() {
+        val img = SavedImage(
+            id = "1",
+            requestId = "req-123",
+            generationId = "gen-456",
+            fileUri = "content://img/1.webp",
+            prompt = "stone castle under moonlight",
+            negativePrompt = "blurry watermark",
+            model = "Juggernaut XL",
+            seed = "998877",
+            steps = 30,
+            cfg = 7f,
+            clipSkip = 1,
+            sampler = "k_euler",
+            scheduler = "normal",
+            width = 1024,
+            height = 1024,
+            destinationLabel = "Downloads",
+            isFavorite = false,
+            partialFromCancel = false,
+            requestJson = "{}",
+            statusMetadataJson = "{}",
+            createdAtMillis = 1L,
+        )
+        assertTrue(GallerySearchFilter.matches(img, "castle"))
+        assertFalse(GallerySearchFilter.matches(img, "blurry"))
+        assertTrue(GallerySearchFilter.matches(img, "### blurry"))
+        assertTrue(GallerySearchFilter.matches(img, "castle ### watermark"))
+        assertFalse(GallerySearchFilter.matches(img, "castle ### nonexistent"))
+        assertFalse(GallerySearchFilter.matches(img, "forest ### blurry"))
+    }
 }

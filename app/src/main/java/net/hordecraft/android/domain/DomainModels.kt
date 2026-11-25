@@ -513,3 +513,25 @@ object HordeConstants {
 }
 
 typealias JsonMap = JsonObject
+
+object GallerySearchFilter {
+    fun matches(image: SavedImage, rawQuery: String): Boolean {
+        if (rawQuery.isBlank()) return true
+        val idx = rawQuery.indexOf("###")
+        if (idx >= 0) {
+            val posQuery = rawQuery.substring(0, idx).trim().lowercase()
+            val negQuery = rawQuery.substring(idx + 3).trim().lowercase()
+            val posMatches = if (posQuery.isEmpty()) true else matchesPositiveOrMeta(image, posQuery)
+            val negMatches = if (negQuery.isEmpty()) true else image.negativePrompt.lowercase().contains(negQuery)
+            return posMatches && negMatches
+        }
+        return matchesPositiveOrMeta(image, rawQuery.trim().lowercase())
+    }
+
+    private fun matchesPositiveOrMeta(image: SavedImage, query: String): Boolean =
+        image.prompt.lowercase().contains(query) ||
+            image.model.lowercase().contains(query) ||
+            image.requestId.lowercase().contains(query) ||
+            image.generationId.lowercase().contains(query) ||
+            image.seed.lowercase().contains(query)
+}

@@ -92,6 +92,7 @@ import coil.compose.AsyncImage
 import kotlinx.coroutines.launch
 import net.hordeslop.studio.data.local.AppSettings
 import net.hordeslop.studio.domain.ActivityDestination
+import net.hordeslop.studio.domain.GallerySearchFilter
 import net.hordeslop.studio.domain.SavedImage
 import net.hordeslop.studio.ui.MainViewModel
 import net.hordeslop.studio.ui.components.launchActivityForDestination
@@ -128,13 +129,7 @@ fun GalleryScreen(
     val filtered = remember(images, searchQuery, favoritesOnly) {
         images.filter { img ->
             if (favoritesOnly && !img.isFavorite) return@filter false
-            if (searchQuery.isBlank()) return@filter true
-            val q = searchQuery.trim().lowercase()
-            img.prompt.lowercase().contains(q) ||
-                img.model.lowercase().contains(q) ||
-                img.requestId.lowercase().contains(q) ||
-                img.generationId.lowercase().contains(q) ||
-                img.seed.lowercase().contains(q)
+            GallerySearchFilter.matches(img, searchQuery)
         }
     }
 
@@ -171,7 +166,7 @@ fun GalleryScreen(
                 value = searchQuery,
                 onValueChange = { searchQuery = it },
                 singleLine = true,
-                placeholder = { Text("Search prompt, model, or request ID...", fontSize = 12.sp) },
+                placeholder = { Text("Search prompt (### negative), model, or ID...", fontSize = 12.sp) },
                 trailingIcon = {
                     if (searchQuery.isNotBlank()) {
                         IconButton(onClick = { searchQuery = "" }) {
