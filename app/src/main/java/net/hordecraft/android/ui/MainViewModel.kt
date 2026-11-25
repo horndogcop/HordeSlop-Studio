@@ -49,6 +49,8 @@ data class StudioUiState(
     val dispatchMode: MultiModelDispatchMode = MultiModelDispatchMode.COMBINED,
     val styles: List<HordeStyle> = listOf(HordeStyle(id = "none", name = "Raw Prompt", source = "None")),
     val selectedStyleId: String = "none",
+    val selectedStyleIds: List<String> = listOf("none"),
+    val multiStyleEnabled: Boolean = false,
     val seed: String = "",
     val steps: Int = 30,
     val cfg: Float = 7.0f,
@@ -74,14 +76,19 @@ data class StudioUiState(
     val loadingModels: Boolean = false,
     val toastMessage: String? = null,
 ) {
+    val activeStyles: List<HordeStyle>
+        get() = selectedStyleIds
+            .mapNotNull { id -> styles.firstOrNull { it.id == id } }
+            .ifEmpty { listOfNotNull(styles.firstOrNull { it.id == selectedStyleId }) }
+
     val activeStyle: HordeStyle?
-        get() = styles.firstOrNull { it.id == selectedStyleId }
+        get() = activeStyles.firstOrNull()
 
     val primaryModel: HordeModel
         get() = models.firstOrNull { it.name == selectedModels.firstOrNull() } ?: models.first()
 
     fun isFieldLocked(lock: StyleFieldLock): Boolean =
-        selectedStyleId != "none" && (activeStyle?.lockedFields?.contains(lock) == true)
+        activeStyles.any { it.id != "none" && lock in it.lockedFields }
 }
 
 class MainViewModel(application: Application) : AndroidViewModel(application) {
@@ -256,28 +263,80 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    fun selectStyle(style: HordeStyle) {
+    fun setMultiStyleEnabled(enabled: Boolean) {
         _studio.update { state ->
-            if (style.id == "none") {
-                state.copy(selectedStyleId = "none")
+            val trimmed = if (!enabled && state.selectedStyleIds.size > 1) {
+                listOf(state.selectedStyleIds.first())
             } else {
-                val nextModels = style.model?.let { m ->
-                    state.models.firstOrNull { it.name.equals(m, ignoreCase = true) }?.name?.let(::listOf)
-                        ?: state.selectedModels
-                } ?: state.selectedModels
-                state.copy(
-                    selectedStyleId = style.id,
-                    selectedModels = nextModels,
-                    steps = style.steps ?: state.steps,
-                    cfg = style.cfg ?: state.cfg,
-                    sampler = style.sampler ?: state.sampler,
-                    scheduler = style.scheduler ?: state.scheduler,
-                    clipSkip = style.clipSkip ?: state.clipSkip,
-                    width = style.width ?: state.width,
-                    height = style.height ?: state.height,
+                state.selectedStyleIds
+            }
+            state.copy(
+                multiStyleEnabled = enabled,
+                selectedStyleId = trimmed.firstOrNull() ?: "none",
+                selectedStyleIds = trimmed,
+            )
+        }
+    }
+
+    fun toggleStyleSelection(style: HordeStyle) {
+        _studio.update { state ->
+            if (!state.multiStyleEnabled) {
+                return@update applySingleStyleToState(state, style)
+            }
+            if (style.id == "none") {
+                return@update state.copy(
+                    selectedStyleId = "none",
+                    selectedStyleIds = listOf("none"),
                 )
             }
+            val currentIds = state.selectedStyleIds.filter { it != "none" }
+            val adding = style.id !in currentIds
+            val nextIds = if (adding) {
+                currentIds + style.id
+            } else {
+                (currentIds - style.id).ifEmpty { listOf("none") }
+            }
+            state.copy(
+                selectedStyleId = nextIds.firstOrNull() ?: "none",
+                selectedStyleIds = nextIds,
+                steps = if (adding) style.steps ?: state.steps else state.steps,
+                cfg = if (adding) style.cfg ?: state.cfg else state.cfg,
+                sampler = if (adding) style.sampler ?: state.sampler else state.sampler,
+                scheduler = if (adding) style.scheduler ?: state.scheduler else state.scheduler,
+                clipSkip = if (adding) style.clipSkip ?: state.clipSkip else state.clipSkip,
+                width = if (adding) style.width ?: state.width else state.width,
+                height = if (adding) style.height ?: state.height else state.height,
+            )
         }
+    }
+
+    private fun applySingleStyleToState(state: StudioUiState, style: HordeStyle): StudioUiState {
+        if (style.id == "none") {
+            return state.copy(
+                selectedStyleId = "none",
+                selectedStyleIds = listOf("none"),
+            )
+        }
+        val nextModels = style.model?.let { m ->
+            state.models.firstOrNull { it.name.equals(m, ignoreCase = true) }?.name?.let(::listOf)
+                ?: state.selectedModels
+        } ?: state.selectedModels
+        return state.copy(
+            selectedStyleId = style.id,
+            selectedStyleIds = listOf(style.id),
+            selectedModels = nextModels,
+            steps = style.steps ?: state.steps,
+            cfg = style.cfg ?: state.cfg,
+            sampler = style.sampler ?: state.sampler,
+            scheduler = style.scheduler ?: state.scheduler,
+            clipSkip = style.clipSkip ?: state.clipSkip,
+            width = style.width ?: state.width,
+            height = style.height ?: state.height,
+        )
+    }
+
+    fun selectStyle(style: HordeStyle) {
+        _studio.update { state -> applySingleStyleToState(state, style) }
     }
 
     fun resetAllParametersToDefaults() {
@@ -285,6 +344,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             val base = state.primaryModel
             state.copy(
                 selectedStyleId = "none",
+                selectedStyleIds = listOf("none"),
                 prompt = TemplatePrompts.pickRandomTemplatePrompt(exclude = state.prompt),
                 negativePrompt = "",
                 seed = "",
@@ -335,6 +395,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 width = image.width,
                 height = image.height,
                 selectedStyleId = "none",
+                selectedStyleIds = listOf("none"),
             )
         }
     }
@@ -426,6 +487,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                         selectedModels = st.selectedModels,
                         dispatchMode = st.dispatchMode,
                         activeStyle = st.activeStyle,
+                        activeStyles = st.activeStyles,
                         seed = st.seed,
                         steps = st.steps,
                         cfg = st.cfg,

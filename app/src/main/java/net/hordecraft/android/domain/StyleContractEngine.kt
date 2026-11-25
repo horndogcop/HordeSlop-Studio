@@ -15,6 +15,7 @@ data class StudioSubmissionSpec(
     val selectedModels: List<String>,
     val dispatchMode: MultiModelDispatchMode,
     val activeStyle: HordeStyle?,
+    val activeStyles: List<HordeStyle> = listOfNotNull(activeStyle),
     val seed: String,
     val steps: Int,
     val cfg: Float,
@@ -76,14 +77,24 @@ object StyleContractEngine {
         chunkModels: List<String>,
         chunkN: Int,
     ): JsonObject {
-        val style = spec.activeStyle?.takeIf { it.id != "none" }
-        val isServerStyle = style != null && (style.inApi || style.source == "Styles API")
-        val locked = if (isServerStyle) style?.lockedFields ?: emptySet() else emptySet()
+        val effectiveStyles = spec.activeStyles.filter { it.id != "none" }
+        val style = effectiveStyles.firstOrNull() ?: spec.activeStyle?.takeIf { it.id != "none" }
+        val serverStyle = effectiveStyles.firstOrNull { it.inApi || it.source == "Styles API" }
+            ?: style?.takeIf { it.inApi || it.source == "Styles API" }
+        val isServerStyle = serverStyle != null
+        val locked = if (isServerStyle) {
+            buildSet {
+                effectiveStyles.filter { it.inApi || it.source == "Styles API" }.forEach { addAll(it.lockedFields) }
+                style?.let { addAll(it.lockedFields) }
+            }
+        } else {
+            emptySet()
+        }
 
         val params = buildJsonObject {
             put("n", chunkN.coerceIn(1, HordeConstants.MAX_IMAGES_PER_REQUEST))
 
-            if (!isServerStyle || style == null) {
+            if (!isServerStyle || serverStyle == null) {
                 put("steps", spec.steps)
                 put("cfg_scale", spec.cfg)
                 put("clip_skip", spec.clipSkip)
@@ -92,22 +103,22 @@ object StyleContractEngine {
                 put("width", SizeMathEngine.snapTo64(spec.width))
                 put("height", SizeMathEngine.snapTo64(spec.height))
             } else {
-                if (StyleFieldLock.STEPS !in locked && spec.steps != style.steps) {
+                if (StyleFieldLock.STEPS !in locked && spec.steps != serverStyle.steps) {
                     put("steps", spec.steps)
                 }
-                if (StyleFieldLock.CFG !in locked && spec.cfg != style.cfg) {
+                if (StyleFieldLock.CFG !in locked && spec.cfg != serverStyle.cfg) {
                     put("cfg_scale", spec.cfg)
                 }
-                if (StyleFieldLock.CLIP_SKIP !in locked && spec.clipSkip != style.clipSkip) {
+                if (StyleFieldLock.CLIP_SKIP !in locked && spec.clipSkip != serverStyle.clipSkip) {
                     put("clip_skip", spec.clipSkip)
                 }
-                if (StyleFieldLock.SAMPLER !in locked && spec.sampler != style.sampler) {
+                if (StyleFieldLock.SAMPLER !in locked && spec.sampler != serverStyle.sampler) {
                     put("sampler_name", spec.sampler)
                 }
-                if (StyleFieldLock.SCHEDULER !in locked && spec.scheduler != style.scheduler) {
+                if (StyleFieldLock.SCHEDULER !in locked && spec.scheduler != serverStyle.scheduler) {
                     put("scheduler", spec.scheduler)
                 }
-                if (StyleFieldLock.SIZE !in locked && (spec.width != style.width || spec.height != style.height)) {
+                if (StyleFieldLock.SIZE !in locked && (spec.width != serverStyle.width || spec.height != serverStyle.height)) {
                     put("width", SizeMathEngine.snapTo64(spec.width))
                     put("height", SizeMathEngine.snapTo64(spec.height))
                 }
@@ -165,7 +176,22 @@ object StyleContractEngine {
             }
         }
 
-        val combinedPrompt = if (style != null && !isServerStyle) {
+        val clientStyles = effectiveStyles.filter { !it.inApi && it.source != "Styles API" }
+        val combinedPrompt = if (clientStyles.isNotEmpty()) {
+            var curPos = spec.prompt
+            var curNeg = spec.negativePrompt
+            for (cs in clientStyles) {
+                val expanded = expandClientStylePrompt(cs, curPos, curNeg)
+                if (expanded.contains("###")) {
+                    val parts = expanded.split("###", limit = 2)
+                    curPos = parts[0].trim()
+                    curNeg = parts[1].trim()
+                } else {
+                    curPos = expanded.trim()
+                }
+            }
+            if (curNeg.isBlank()) curPos else "$curPos ### $curNeg"
+        } else if (style != null && !isServerStyle) {
             expandClientStylePrompt(style, spec.prompt, spec.negativePrompt)
         } else if (spec.negativePrompt.isBlank()) {
             spec.prompt.trim()
@@ -175,8 +201,8 @@ object StyleContractEngine {
 
         return buildJsonObject {
             put("prompt", combinedPrompt)
-            if (isServerStyle && style != null) {
-                put("style", style.id)
+            if (isServerStyle && serverStyle != null) {
+                put("style", serverStyle.id)
             }
             if (!isServerStyle || StyleFieldLock.MODEL !in locked) {
                 if (chunkModels.isNotEmpty()) {

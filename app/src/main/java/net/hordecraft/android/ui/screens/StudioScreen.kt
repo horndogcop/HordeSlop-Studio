@@ -138,6 +138,9 @@ fun StudioScreen(
 
     val primaryModel = studio.primaryModel
     val activeStyle = studio.activeStyle
+    val activeNonEmptyStyles = studio.activeStyles.filter { it.id != "none" }
+    val isMultiStyle = studio.multiStyleEnabled && activeNonEmptyStyles.size > 1
+    val enabledParamAlpha = if (isMultiStyle) 0.90f else 1.0f
 
     LaunchedEffect(Unit) {
         vm.refreshQueueTracking()
@@ -276,7 +279,11 @@ fun StudioScreen(
                 if (!modelsCollapsed) {
                     PickerRowButton(
                         label = "Style",
-                        value = activeStyle?.name ?: "Raw Prompt",
+                        value = when {
+                            activeNonEmptyStyles.size > 1 -> "${activeNonEmptyStyles.first().name} +${activeNonEmptyStyles.size - 1}"
+                            activeNonEmptyStyles.size == 1 -> activeNonEmptyStyles.first().name
+                            else -> activeStyle?.name ?: "Raw Prompt"
+                        },
                         locked = false,
                         onClick = { showStylesModal = true },
                     )
@@ -287,12 +294,14 @@ fun StudioScreen(
                         locked = studio.isFieldLocked(StyleFieldLock.MODEL),
                         onClick = { showModelModal = true },
                     )
-                    PickerRowButton(
-                        label = "Size",
-                        value = "${studio.width} × ${studio.height} · ${SizeMathEngine.formatAspectRatioLabel(studio.width, studio.height)} · ${SizeMathEngine.formatMegapixels(studio.width, studio.height)}",
-                        locked = studio.isFieldLocked(StyleFieldLock.SIZE),
-                        onClick = { if (!studio.isFieldLocked(StyleFieldLock.SIZE)) showSizeModal = true },
-                    )
+                    Box(modifier = Modifier.alpha(if (!studio.isFieldLocked(StyleFieldLock.SIZE)) enabledParamAlpha else 1f)) {
+                        PickerRowButton(
+                            label = "Size",
+                            value = "${studio.width} × ${studio.height} · ${SizeMathEngine.formatAspectRatioLabel(studio.width, studio.height)} · ${SizeMathEngine.formatMegapixels(studio.width, studio.height)}",
+                            locked = studio.isFieldLocked(StyleFieldLock.SIZE),
+                            onClick = { if (!studio.isFieldLocked(StyleFieldLock.SIZE)) showSizeModal = true },
+                        )
+                    }
                 }
             }
 
@@ -309,29 +318,33 @@ fun StudioScreen(
                     // CFG (Logarithmic 1..20, first 2/3 1..6)
                     val cfgZone = SliderMath.cfgZone(studio.cfg, primaryModel.suggestedMinCfg, primaryModel.suggestedMaxCfg)
                     val renderStepsSlider: @Composable () -> Unit = {
-                        LogIntSliderRow(
-                            label = "Steps",
-                            value = studio.steps,
-                            sliderPosition = SliderMath.stepsToSlider(studio.steps),
-                            onSliderChange = { pos -> vm.updateSteps(SliderMath.sliderToSteps(pos)) },
-                            onManualChange = vm::updateSteps,
-                            minVal = 1,
-                            maxVal = SliderMath.STEPS_MANUAL_MAX,
-                            zone = stepsZone,
-                            enabled = !studio.isFieldLocked(StyleFieldLock.STEPS),
-                        )
+                        Box(modifier = Modifier.alpha(if (!studio.isFieldLocked(StyleFieldLock.STEPS)) enabledParamAlpha else 1f)) {
+                            LogIntSliderRow(
+                                label = "Steps",
+                                value = studio.steps,
+                                sliderPosition = SliderMath.stepsToSlider(studio.steps),
+                                onSliderChange = { pos -> vm.updateSteps(SliderMath.sliderToSteps(pos)) },
+                                onManualChange = vm::updateSteps,
+                                minVal = 1,
+                                maxVal = SliderMath.STEPS_MANUAL_MAX,
+                                zone = stepsZone,
+                                enabled = !studio.isFieldLocked(StyleFieldLock.STEPS),
+                            )
+                        }
                     }
                     val renderCfgSlider: @Composable () -> Unit = {
-                        LogFloatSliderRow(
-                            label = "CFG Scale",
-                            value = studio.cfg,
-                            sliderPosition = SliderMath.cfgToSlider(studio.cfg),
-                            onSliderChange = { pos -> vm.updateCfg(SliderMath.sliderToCfg(pos)) },
-                            onManualChange = vm::updateCfg,
-                            decimals = 1,
-                            zone = cfgZone,
-                            enabled = !studio.isFieldLocked(StyleFieldLock.CFG),
-                        )
+                        Box(modifier = Modifier.alpha(if (!studio.isFieldLocked(StyleFieldLock.CFG)) enabledParamAlpha else 1f)) {
+                            LogFloatSliderRow(
+                                label = "CFG Scale",
+                                value = studio.cfg,
+                                sliderPosition = SliderMath.cfgToSlider(studio.cfg),
+                                onSliderChange = { pos -> vm.updateCfg(SliderMath.sliderToCfg(pos)) },
+                                onManualChange = vm::updateCfg,
+                                decimals = 1,
+                                zone = cfgZone,
+                                enabled = !studio.isFieldLocked(StyleFieldLock.CFG),
+                            )
+                        }
                     }
                     if (isWideLayout) {
                         Row(
@@ -348,36 +361,40 @@ fun StudioScreen(
 
                     // Clip Skip (1..12 slider + numeric input)
                     val clipZone = SliderMath.clipSkipZone(studio.clipSkip)
-                    LinearIntSliderRow(
-                        label = "Clip Skip",
-                        value = studio.clipSkip,
-                        minVal = SliderMath.CLIP_SKIP_MIN,
-                        maxVal = SliderMath.CLIP_SKIP_MAX,
-                        onValueChange = vm::updateClipSkip,
-                        zone = clipZone,
-                        enabled = !studio.isFieldLocked(StyleFieldLock.CLIP_SKIP),
-                    )
+                    Box(modifier = Modifier.alpha(if (!studio.isFieldLocked(StyleFieldLock.CLIP_SKIP)) enabledParamAlpha else 1f)) {
+                        LinearIntSliderRow(
+                            label = "Clip Skip",
+                            value = studio.clipSkip,
+                            minVal = SliderMath.CLIP_SKIP_MIN,
+                            maxVal = SliderMath.CLIP_SKIP_MAX,
+                            onValueChange = vm::updateClipSkip,
+                            zone = clipZone,
+                            enabled = !studio.isFieldLocked(StyleFieldLock.CLIP_SKIP),
+                        )
+                    }
 
                     // Sampler Dropdown
-                    DropdownFieldRow(
-                        label = "Sampler",
-                        selected = studio.sampler,
-                        options = if (studio.showAllSamplers) {
-                            studio.allSamplers
-                        } else {
-                            studio.recommendedSamplers
-                        },
-                        enabled = !studio.isFieldLocked(StyleFieldLock.SAMPLER),
-                        onSelect = vm::updateSampler,
-                        trailingHeaderAction = {
-                            Text(
-                                text = if (studio.showAllSamplers) "Recommended" else "All samplers",
-                                fontSize = 11.sp,
-                                color = HordeColors.TealSoft,
-                                modifier = Modifier.clickable { vm.toggleAllSamplers() },
-                            )
-                        },
-                    )
+                    Box(modifier = Modifier.alpha(if (!studio.isFieldLocked(StyleFieldLock.SAMPLER)) enabledParamAlpha else 1f)) {
+                        DropdownFieldRow(
+                            label = "Sampler",
+                            selected = studio.sampler,
+                            options = if (studio.showAllSamplers) {
+                                studio.allSamplers
+                            } else {
+                                studio.recommendedSamplers
+                            },
+                            enabled = !studio.isFieldLocked(StyleFieldLock.SAMPLER),
+                            onSelect = vm::updateSampler,
+                            trailingHeaderAction = {
+                                Text(
+                                    text = if (studio.showAllSamplers) "Recommended" else "All samplers",
+                                    fontSize = 11.sp,
+                                    color = HordeColors.TealSoft,
+                                    modifier = Modifier.clickable { vm.toggleAllSamplers() },
+                                )
+                            },
+                        )
+                    }
 
                     HorizontalDivider(color = HordeColors.BorderSubtle)
 
@@ -412,7 +429,7 @@ fun StudioScreen(
                                     placeholder = { Text("Blank = random") },
                                     modifier = Modifier.weight(1f),
                                 )
-                                Box(modifier = Modifier.weight(1f)) {
+                                Box(modifier = Modifier.weight(1f).alpha(if (!studio.isFieldLocked(StyleFieldLock.SCHEDULER)) enabledParamAlpha else 1f)) {
                                     DropdownFieldRow(
                                         label = "Scheduler",
                                         selected = studio.scheduler,
@@ -431,13 +448,15 @@ fun StudioScreen(
                                 placeholder = { Text("Blank = random") },
                                 modifier = Modifier.fillMaxWidth(),
                             )
-                            DropdownFieldRow(
-                                label = "Scheduler",
-                                selected = studio.scheduler,
-                                options = HordeConstants.OFFICIAL_SCHEDULERS,
-                                enabled = !studio.isFieldLocked(StyleFieldLock.SCHEDULER),
-                                onSelect = vm::updateScheduler,
-                            )
+                            Box(modifier = Modifier.alpha(if (!studio.isFieldLocked(StyleFieldLock.SCHEDULER)) enabledParamAlpha else 1f)) {
+                                DropdownFieldRow(
+                                    label = "Scheduler",
+                                    selected = studio.scheduler,
+                                    options = HordeConstants.OFFICIAL_SCHEDULERS,
+                                    enabled = !studio.isFieldLocked(StyleFieldLock.SCHEDULER),
+                                    onSelect = vm::updateScheduler,
+                                )
+                            }
                         }
 
                         Row(
@@ -949,10 +968,14 @@ fun StudioScreen(
     if (showStylesModal) {
         StylesPickerDialog(
             styles = studio.styles,
-            selectedStyleId = studio.selectedStyleId,
+            selectedStyleIds = studio.selectedStyleIds,
+            multiStyleEnabled = studio.multiStyleEnabled,
+            onToggleMultiStyle = vm::setMultiStyleEnabled,
             onSelect = {
-                vm.selectStyle(it)
-                showStylesModal = false
+                vm.toggleStyleSelection(it)
+                if (!studio.multiStyleEnabled) {
+                    showStylesModal = false
+                }
             },
             onDismiss = { showStylesModal = false },
         )

@@ -569,7 +569,9 @@ fun ModelPickerDialog(
 @Composable
 fun StylesPickerDialog(
     styles: List<HordeStyle>,
-    selectedStyleId: String,
+    selectedStyleIds: List<String>,
+    multiStyleEnabled: Boolean,
+    onToggleMultiStyle: (Boolean) -> Unit,
     onSelect: (HordeStyle) -> Unit,
     onDismiss: () -> Unit,
 ) {
@@ -611,15 +613,30 @@ fun StylesPickerDialog(
     HordeModalDialog(
         onDismiss = onDismiss,
         header = {
-            Text(
-                text = "Select Style (${(filtered.count { it.id != "none" })})",
-                color = HordeColors.TextPrimary,
-                fontSize = 16.sp,
-                fontWeight = FontWeight.SemiBold,
-            )
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text(
+                    text = "Select Style (${(filtered.count { it.id != "none" })})",
+                    color = HordeColors.TextPrimary,
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.SemiBold,
+                )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.End,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.clickable { onToggleMultiStyle(!multiStyleEnabled) },
+                    ) {
+                        Checkbox(checked = multiStyleEnabled, onCheckedChange = onToggleMultiStyle)
+                        Text("Multistyle", fontSize = 12.sp, color = HordeColors.TextSecondary)
+                    }
+                }
+            }
         },
         footer = {
-            TextButton(onClick = onDismiss) { Text("Close") }
+            TextButton(onClick = onDismiss) { Text("Done") }
         },
     ) {
         OutlinedTextField(
@@ -707,7 +724,7 @@ fun StylesPickerDialog(
             verticalArrangement = Arrangement.spacedBy(6.dp),
         ) {
             items(filtered, key = { "${it.source}:${it.id}" }) { style ->
-                val active = style.id == selectedStyleId
+                val active = style.id in selectedStyleIds
                 val previews = style.previewImageUrls.ifEmpty {
                     listOfNotNull(style.previewImageUrl)
                 }.take(3)
@@ -785,6 +802,11 @@ fun StylesPickerDialog(
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis,
                             )
+                        }
+                        if (multiStyleEnabled && style.id != "none") {
+                            Checkbox(checked = active, onCheckedChange = { onSelect(style) })
+                        } else {
+                            RadioButton(selected = active, onClick = { onSelect(style) })
                         }
                     }
                 }

@@ -197,4 +197,48 @@ class StyleContractEngineTest {
         val allSamplers = (HordeConstants.RECOMMENDED_SAMPLERS + HordeConstants.ADVANCED_SAMPLERS).distinct()
         assertTrue(allSamplers.size >= 40)
     }
+
+    @Test
+    fun multiStyleCombinesMultiplePrompts() {
+        val s1 = HordeStyle(
+            id = "s1",
+            name = "Style One",
+            source = "AI-Horde-Styles",
+            promptTemplate = "watercolor painting of {p}",
+            negativeTemplate = "{np}, signature",
+            rawPromptTemplate = "watercolor painting of {p}###{np}, signature",
+        )
+        val s2 = HordeStyle(
+            id = "s2",
+            name = "Style Two",
+            source = "AI-Horde-Styles",
+            promptTemplate = "{p}, cinematic lighting",
+            negativeTemplate = "{np}, extra limbs",
+            rawPromptTemplate = "{p}, cinematic lighting###{np}, extra limbs",
+        )
+        val spec = StudioSubmissionSpec(
+            prompt = "fox in forest",
+            negativePrompt = "blurry",
+            selectedModels = listOf("Deliberate"),
+            dispatchMode = MultiModelDispatchMode.COMBINED,
+            activeStyle = s1,
+            activeStyles = listOf(s1, s2),
+            seed = "",
+            steps = 28,
+            cfg = 7f,
+            clipSkip = 1,
+            width = 512,
+            height = 512,
+            sampler = "k_euler",
+            scheduler = "normal",
+            nsfw = false,
+            censorNsfw = true,
+            imageCount = 1,
+            loras = emptyList(),
+            tis = emptyList(),
+        )
+        val payload = StyleContractEngine.buildSinglePayload(spec, listOf("Deliberate"), 1)
+        val prompt = payload["prompt"]?.jsonPrimitive?.content
+        assertEquals("watercolor painting of fox in forest, cinematic lighting ### blurry, signature, extra limbs", prompt)
+    }
 }
