@@ -31,6 +31,7 @@ data class AppSettings(
     val storageMode: StorageMode = StorageMode.DOWNLOADS,
     val safTreeUri: String? = null,
     val safFolderLabel: String = "Downloads/HordeSlop Studio",
+    val keepImagesInInternalStorage: Boolean = false,
     val advancedCollapsed: Boolean = true,
     val onboardingCompleted: Boolean = false,
 )
@@ -50,6 +51,7 @@ class SettingsDataStore(private val context: Context) {
         val STORAGE_MODE = stringPreferencesKey("storage_mode")
         val SAF_TREE_URI = stringPreferencesKey("saf_tree_uri")
         val SAF_FOLDER_LABEL = stringPreferencesKey("saf_folder_label")
+        val KEEP_IMAGES_INTERNAL = booleanPreferencesKey("keep_images_internal")
         val ADVANCED_COLLAPSED = booleanPreferencesKey("advanced_collapsed")
         val ONBOARDING_COMPLETED = booleanPreferencesKey("onboarding_completed")
     }
@@ -81,6 +83,7 @@ class SettingsDataStore(private val context: Context) {
             storageMode = StorageMode.fromKey(prefs[Keys.STORAGE_MODE]),
             safTreeUri = prefs[Keys.SAF_TREE_URI],
             safFolderLabel = prefs[Keys.SAF_FOLDER_LABEL] ?: "Downloads/HordeSlop Studio",
+            keepImagesInInternalStorage = prefs[Keys.KEEP_IMAGES_INTERNAL] ?: false,
             advancedCollapsed = prefs[Keys.ADVANCED_COLLAPSED] ?: true,
             onboardingCompleted = prefs[Keys.ONBOARDING_COMPLETED] ?: false,
         )
@@ -145,6 +148,10 @@ class SettingsDataStore(private val context: Context) {
             it[Keys.SAF_TREE_URI] = uriString
             it[Keys.SAF_FOLDER_LABEL] = displayName
         }
+    }
+
+    suspend fun setKeepImagesInInternalStorage(enabled: Boolean) {
+        context.dataStore.edit { it[Keys.KEEP_IMAGES_INTERNAL] = enabled }
     }
 
     suspend fun setAdvancedCollapsed(collapsed: Boolean) {

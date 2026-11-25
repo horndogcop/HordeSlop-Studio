@@ -687,6 +687,24 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch { repo.settingsStore.setStorageSafTree(uriString, label) }
     }
 
+    fun setKeepImagesInInternalStorage(enabled: Boolean) {
+        viewModelScope.launch { repo.settingsStore.setKeepImagesInInternalStorage(enabled) }
+    }
+
+    fun moveImageToExternalStorage(image: SavedImage) {
+        viewModelScope.launch {
+            val dest = repo.moveImageToExternalStorage(image)
+            showToast(if (dest != null) "Moved to $dest" else "Failed to move image")
+        }
+    }
+
+    fun moveAllInternalImagesToExternal() {
+        viewModelScope.launch {
+            val count = repo.moveAllInternalImagesToExternalStorage()
+            showToast(if (count > 0) "Moved $count image(s) to external storage" else "No internal images to move")
+        }
+    }
+
     fun setAdvancedCollapsed(collapsed: Boolean) {
         viewModelScope.launch { repo.settingsStore.setAdvancedCollapsed(collapsed) }
     }

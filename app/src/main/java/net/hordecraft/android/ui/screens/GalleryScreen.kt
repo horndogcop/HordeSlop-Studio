@@ -335,6 +335,9 @@ fun GalleryScreen(
                 onSetWallpaper = { img, flags ->
                     vm.setImageAsWallpaper(img.fileUri, flags)
                 },
+                onMoveToExternal = { img ->
+                    vm.moveImageToExternalStorage(img)
+                },
                 onDelete = { img, deleteFile ->
                     vm.deleteImage(img, deleteFile)
                     if (filtered.size <= 1) {
@@ -370,6 +373,7 @@ private fun GalleryViewerModal(
     onShare: (SavedImage) -> Unit,
     onOpenIn: (SavedImage) -> Unit,
     onSetWallpaper: (SavedImage, Int) -> Unit,
+    onMoveToExternal: (SavedImage) -> Unit,
     onDelete: (SavedImage, Boolean) -> Unit,
     onDismiss: () -> Unit,
 ) {
@@ -492,6 +496,16 @@ private fun GalleryViewerModal(
                                 }
                             },
                         )
+                        if (activeImage.destinationLabel == "App Storage/images") {
+                            DropdownMenuItem(
+                                text = { Text("Move to external storage") },
+                                leadingIcon = { Icon(Icons.Outlined.FolderOpen, null) },
+                                onClick = {
+                                    showMoreMenu = false
+                                    onMoveToExternal(activeImage)
+                                },
+                            )
+                        }
                     }
                 }
             }
@@ -538,6 +552,9 @@ private fun GalleryViewerModal(
                 OverlayPill("Details") { metadataSubMode = "details" }
                 OverlayPill("Copy") { onCopyImage(activeImage) }
                 OverlayPill("Share") { onShare(activeImage) }
+                if (activeImage.destinationLabel == "App Storage/images") {
+                    OverlayPill("Save to external") { onMoveToExternal(activeImage) }
+                }
                 OverlayPill("Delete", isDanger = true) {
                     deleteFileChecked = true
                     deleteConfirmTarget = activeImage

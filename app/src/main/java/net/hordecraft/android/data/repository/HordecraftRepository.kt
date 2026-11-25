@@ -820,6 +820,27 @@ class HordecraftRepository(
         }
     }
 
+    suspend fun moveImageToExternalStorage(image: SavedImage): String? {
+        if (!storageManager.isInternalImageUri(image.fileUri)) return null
+        val settings = settingsStore.settings.first()
+        val moved = storageManager.moveInternalImageToExternal(image.fileUri, settings) ?: return null
+        savedImageDao.updateFileLocation(image.id, moved.uriString, moved.destinationLabel)
+        return moved.destinationLabel
+    }
+
+    suspend fun moveAllInternalImagesToExternalStorage(): Int {
+        val settings = settingsStore.settings.first()
+        val all = savedImageDao.getAll()
+        var movedCount = 0
+        for (entity in all) {
+            if (!storageManager.isInternalImageUri(entity.fileUri)) continue
+            val moved = storageManager.moveInternalImageToExternal(entity.fileUri, settings) ?: continue
+            savedImageDao.updateFileLocation(entity.id, moved.uriString, moved.destinationLabel)
+            movedCount++
+        }
+        return movedCount
+    }
+
     suspend fun pauseQueue() = activeJobDao.pauseAllActive()
     suspend fun resumeQueue() = activeJobDao.resumeAllPaused()
 

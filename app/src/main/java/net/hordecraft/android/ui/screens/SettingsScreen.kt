@@ -503,6 +503,28 @@ fun SettingsScreen(
                 }
             }
             Text("Saving to: ${settings.safFolderLabel}", fontSize = 11.sp, color = HordeColors.TextMuted)
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { vm.setKeepImagesInInternalStorage(!settings.keepImagesInInternalStorage) },
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Column(Modifier.weight(1f)) {
+                    Text("Keep images in internal storage", fontSize = 13.sp, color = HordeColors.TextPrimary)
+                    Text("Download to app storage until exported", fontSize = 11.sp, color = HordeColors.TextMuted)
+                }
+                Checkbox(
+                    checked = settings.keepImagesInInternalStorage,
+                    onCheckedChange = vm::setKeepImagesInInternalStorage,
+                )
+            }
+            OutlinedButton(
+                onClick = { vm.moveAllInternalImagesToExternal() },
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Text("Move internal images to external storage", fontSize = 11.sp)
+            }
 
             HorizontalDivider(color = HordeColors.BorderSubtle)
 

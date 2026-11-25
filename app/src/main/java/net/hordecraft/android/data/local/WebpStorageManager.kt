@@ -70,56 +70,13 @@ class WebpStorageManager(private val context: Context) {
             )
 
             val fileName = "hordeslop_${generationId.take(12)}_${System.currentTimeMillis()}.webp"
-            val treeUri = settings.safTreeUri?.let(Uri::parse)
-
-            if (settings.storageMode.name == "SAF" && treeUri != null) {
-                val parent = DocumentFile.fromTreeUri(context, treeUri)
-                val targetDoc = parent?.createFile("image/webp", fileName)
-                if (targetDoc != null) {
-                    context.contentResolver.openOutputStream(targetDoc.uri)?.use { out ->
-                        tempWebp.inputStream().copyTo(out)
-                    }
-                    return@withContext StoredWebpResult(
-                        uriString = targetDoc.uri.toString(),
-                        destinationLabel = settings.safFolderLabel,
-                    )
+            if (!settings.keepImagesInInternalStorage) {
+                writeFileToExternalStorage(tempWebp, fileName, settings)?.let { externalResult ->
+                    return@withContext externalResult
                 }
             }
 
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                val values = ContentValues().apply {
-                    put(MediaStore.Downloads.DISPLAY_NAME, fileName)
-                    put(MediaStore.Downloads.MIME_TYPE, "image/webp")
-                    put(MediaStore.Downloads.RELATIVE_PATH, "${Environment.DIRECTORY_DOWNLOADS}/HordeSlop Studio")
-                }
-                val itemUri = context.contentResolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, values)
-                if (itemUri != null) {
-                    context.contentResolver.openOutputStream(itemUri)?.use { out ->
-                        tempWebp.inputStream().copyTo(out)
-                    }
-                    return@withContext StoredWebpResult(
-                        uriString = itemUri.toString(),
-                        destinationLabel = "Downloads/HordeSlop Studio",
-                    )
-                }
-            } else {
-                @Suppress("DEPRECATION")
-                val downloadsDir = File(
-                    Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS),
-                    "HordeSlop Studio",
-                )
-                downloadsDir.mkdirs()
-                if (downloadsDir.canWrite()) {
-                    val outFile = File(downloadsDir, fileName)
-                    tempWebp.copyTo(outFile, overwrite = true)
-                    return@withContext StoredWebpResult(
-                        uriString = Uri.fromFile(outFile).toString(),
-                        destinationLabel = "Downloads/HordeSlop Studio",
-                    )
-                }
-            }
-
-            // Internal app-private fallback if external storage unavailable
+            // Internal app storage (when configured or if external storage unavailable)
             val internalDir = File(context.filesDir, "images").apply { mkdirs() }
             val internalFile = File(internalDir, fileName)
             tempWebp.copyTo(internalFile, overwrite = true)
@@ -130,6 +87,80 @@ class WebpStorageManager(private val context: Context) {
         } finally {
             tempWebp.delete()
         }
+    }
+
+    fun isInternalImageUri(uriString: String): Boolean {
+        val uri = runCatching { Uri.parse(uriString) }.getOrNull() ?: return false
+        if (uri.scheme != "file") return false
+        val internalDir = File(context.filesDir, "images").absolutePath
+        return uri.path?.startsWith(internalDir) == true
+    }
+
+    suspend fun moveInternalImageToExternal(
+        uriString: String,
+        settings: AppSettings,
+    ): StoredWebpResult? = withContext(Dispatchers.IO) {
+        val uri = runCatching { Uri.parse(uriString) }.getOrNull() ?: return@withContext null
+        val sourceFile = uri.path?.let(::File)?.takeIf { it.exists() } ?: return@withContext null
+        val externalResult = writeFileToExternalStorage(sourceFile, sourceFile.name, settings)
+            ?: return@withContext null
+        sourceFile.delete()
+        externalResult
+    }
+
+    private fun writeFileToExternalStorage(
+        sourceFile: File,
+        fileName: String,
+        settings: AppSettings,
+    ): StoredWebpResult? {
+        val treeUri = settings.safTreeUri?.let(Uri::parse)
+        if (settings.storageMode.name == "SAF" && treeUri != null) {
+            val parent = DocumentFile.fromTreeUri(context, treeUri)
+            val targetDoc = parent?.createFile("image/webp", fileName)
+            if (targetDoc != null) {
+                context.contentResolver.openOutputStream(targetDoc.uri)?.use { out ->
+                    sourceFile.inputStream().copyTo(out)
+                }
+                return StoredWebpResult(
+                    uriString = targetDoc.uri.toString(),
+                    destinationLabel = settings.safFolderLabel,
+                )
+            }
+        }
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            val values = ContentValues().apply {
+                put(MediaStore.Downloads.DISPLAY_NAME, fileName)
+                put(MediaStore.Downloads.MIME_TYPE, "image/webp")
+                put(MediaStore.Downloads.RELATIVE_PATH, "${Environment.DIRECTORY_DOWNLOADS}/HordeSlop Studio")
+            }
+            val itemUri = context.contentResolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, values)
+            if (itemUri != null) {
+                context.contentResolver.openOutputStream(itemUri)?.use { out ->
+                    sourceFile.inputStream().copyTo(out)
+                }
+                return StoredWebpResult(
+                    uriString = itemUri.toString(),
+                    destinationLabel = "Downloads/HordeSlop Studio",
+                )
+            }
+        } else {
+            @Suppress("DEPRECATION")
+            val downloadsDir = File(
+                Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS),
+                "HordeSlop Studio",
+            )
+            downloadsDir.mkdirs()
+            if (downloadsDir.canWrite()) {
+                val outFile = File(downloadsDir, fileName)
+                sourceFile.copyTo(outFile, overwrite = true)
+                return StoredWebpResult(
+                    uriString = Uri.fromFile(outFile).toString(),
+                    destinationLabel = "Downloads/HordeSlop Studio",
+                )
+            }
+        }
+        return null
     }
 
     private fun ensureWebpBytes(rawBytes: ByteArray): ByteArray {

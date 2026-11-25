@@ -157,6 +157,9 @@ interface SavedImageDao {
     @Query("UPDATE saved_images SET isFavorite = :fav WHERE id = :id")
     suspend fun setFavorite(id: String, fav: Boolean)
 
+    @Query("UPDATE saved_images SET fileUri = :fileUri, destinationLabel = :destinationLabel WHERE id = :id")
+    suspend fun updateFileLocation(id: String, fileUri: String, destinationLabel: String)
+
     @Query("DELETE FROM saved_images WHERE id = :id")
     suspend fun deleteById(id: String)
 
