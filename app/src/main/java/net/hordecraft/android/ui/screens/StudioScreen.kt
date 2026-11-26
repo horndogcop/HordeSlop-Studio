@@ -43,6 +43,7 @@ import androidx.compose.material.icons.outlined.Fullscreen
 import androidx.compose.material.icons.outlined.History
 import androidx.compose.material.icons.outlined.Pause
 import androidx.compose.material.icons.outlined.PlayArrow
+import androidx.compose.material.icons.outlined.RestartAlt
 import androidx.compose.material.icons.outlined.StarBorder
 import androidx.compose.material.icons.outlined.Stop
 import androidx.compose.material3.Button
@@ -215,6 +216,11 @@ fun StudioScreen(
                     onToggle = { promptCollapsed = !promptCollapsed },
                     trailing = {
                         Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            SmallHeaderChip(
+                                label = "Reset",
+                                icon = { Icon(Icons.Outlined.RestartAlt, null, modifier = Modifier.size(14.dp), tint = HordeColors.TextSecondary) },
+                                onClick = vm::resetPromptToTemplate,
+                            )
                             SmallHeaderChip(
                                 label = "Favorites",
                                 icon = { Icon(Icons.Outlined.StarBorder, null, modifier = Modifier.size(14.dp), tint = HordeColors.AmberText) },

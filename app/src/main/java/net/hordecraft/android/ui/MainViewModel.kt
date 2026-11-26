@@ -415,6 +415,14 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    fun resetPromptToTemplate() {
+        _studio.update { state ->
+            state.copy(
+                prompt = TemplatePrompts.pickRandomTemplatePrompt(exclude = state.prompt),
+            )
+        }
+    }
+
     fun applyHistoryRecord(record: PromptRecord) {
         _studio.update { state ->
             state.copy(
