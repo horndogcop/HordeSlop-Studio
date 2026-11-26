@@ -73,6 +73,7 @@ import androidx.compose.ui.unit.sp
 import androidx.documentfile.provider.DocumentFile
 import coil.compose.AsyncImage
 import net.hordeslop.studio.BuildConfig
+import net.hordeslop.studio.R
 import net.hordeslop.studio.data.local.AppSettings
 import net.hordeslop.studio.domain.AuthMode
 import net.hordeslop.studio.domain.GenerateButtonPlacement
@@ -362,7 +363,7 @@ fun SettingsScreen(
                             Icon(Icons.Outlined.Android, null, tint = HordeColors.TealSoft)
                         } else {
                             AsyncImage(
-                                model = HordeConstants.HAIDRA_LOGO_URL,
+                                model = R.drawable.ic_haidra_logo,
                                 contentDescription = "Haidra Logo",
                                 contentScale = ContentScale.Fit,
                                 modifier = Modifier.size(22.dp),
@@ -1028,7 +1029,7 @@ fun SettingsScreen(
                                 verticalArrangement = Arrangement.spacedBy(6.dp),
                             ) {
                                 AsyncImage(
-                                    model = HordeConstants.HAIDRA_LOGO_URL,
+                                    model = R.drawable.ic_haidra_logo,
                                     contentDescription = "Haidra Logo",
                                     contentScale = ContentScale.Fit,
                                     modifier = Modifier.size(32.dp),
