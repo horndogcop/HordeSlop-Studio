@@ -643,21 +643,23 @@ fun SettingsScreen(
                         onCheckedChange = vm::setKeepImagesInInternalStorage,
                     )
                 }
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable { vm.setPreventMediaIndexing(!settings.preventMediaIndexing) },
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Column(Modifier.weight(1f)) {
-                        Text("Hide images from gallery apps", fontSize = 13.sp, color = HordeColors.TextPrimary)
-                        Text("Prevent Android media indexing with a .nomedia file", fontSize = 11.sp, color = HordeColors.TextMuted)
+                if (!settings.keepImagesInInternalStorage) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { vm.setPreventMediaIndexing(!settings.preventMediaIndexing) },
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Column(Modifier.weight(1f)) {
+                            Text("Hide images from gallery apps", fontSize = 13.sp, color = HordeColors.TextPrimary)
+                            Text("Prevent Android media indexing with a .nomedia file", fontSize = 11.sp, color = HordeColors.TextMuted)
+                        }
+                        Checkbox(
+                            checked = settings.preventMediaIndexing,
+                            onCheckedChange = vm::setPreventMediaIndexing,
+                        )
                     }
-                    Checkbox(
-                        checked = settings.preventMediaIndexing,
-                        onCheckedChange = vm::setPreventMediaIndexing,
-                    )
                 }
                 OutlinedButton(
                     onClick = { vm.moveAllInternalImagesToExternal() },
