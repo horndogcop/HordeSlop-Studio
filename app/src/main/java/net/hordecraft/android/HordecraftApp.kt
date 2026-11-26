@@ -61,6 +61,11 @@ class AppContainer(context: Application) {
             HordeRateLimiterInterceptor(
                 baseUrlProvider = { currentBaseUrl.get() },
                 apiKeyProvider = { currentApiKey.get() },
+                minIntervalMsProvider = {
+                    HordeRateLimiterInterceptor.effectiveMinIntervalMs(
+                        currentSettings.get().globalRateLimitSeconds,
+                    )
+                },
             ),
         )
         .build()

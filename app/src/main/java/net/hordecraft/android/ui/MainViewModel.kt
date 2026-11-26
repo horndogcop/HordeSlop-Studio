@@ -758,6 +758,14 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch { repo.settingsStore.setShowRawRequestReview(enabled) }
     }
 
+    fun setGlobalRateLimitSeconds(seconds: Int) {
+        val clamped = seconds.coerceIn(1, 30)
+        app.container.currentSettings.set(
+            app.container.currentSettings.get().copy(globalRateLimitSeconds = clamped),
+        )
+        viewModelScope.launch { repo.settingsStore.setGlobalRateLimitSeconds(clamped) }
+    }
+
     fun saveStylesRepoUrls(urls: List<String>) {
         viewModelScope.launch {
             repo.settingsStore.setStylesRepoUrls(urls)

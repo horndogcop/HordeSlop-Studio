@@ -5,6 +5,7 @@ import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import kotlinx.coroutines.flow.Flow
@@ -38,6 +39,7 @@ data class AppSettings(
     val advancedCollapsed: Boolean = true,
     val onboardingCompleted: Boolean = false,
     val aiNoticeDismissed: Boolean = false,
+    val globalRateLimitSeconds: Int = 3,
 )
 
 class SettingsDataStore(private val context: Context) {
@@ -62,6 +64,7 @@ class SettingsDataStore(private val context: Context) {
         val ADVANCED_COLLAPSED = booleanPreferencesKey("advanced_collapsed")
         val ONBOARDING_COMPLETED = booleanPreferencesKey("onboarding_completed")
         val AI_NOTICE_DISMISSED = booleanPreferencesKey("ai_notice_dismissed")
+        val GLOBAL_RATE_LIMIT_SECONDS = intPreferencesKey("global_rate_limit_seconds")
     }
 
     val settings: Flow<AppSettings> = context.dataStore.data.map { prefs ->
@@ -98,6 +101,7 @@ class SettingsDataStore(private val context: Context) {
             advancedCollapsed = prefs[Keys.ADVANCED_COLLAPSED] ?: true,
             onboardingCompleted = prefs[Keys.ONBOARDING_COMPLETED] ?: false,
             aiNoticeDismissed = prefs[Keys.AI_NOTICE_DISMISSED] ?: false,
+            globalRateLimitSeconds = (prefs[Keys.GLOBAL_RATE_LIMIT_SECONDS] ?: 3).coerceIn(1, 30),
         )
     }
 
@@ -188,5 +192,9 @@ class SettingsDataStore(private val context: Context) {
 
     suspend fun setAiNoticeDismissed(dismissed: Boolean) {
         context.dataStore.edit { it[Keys.AI_NOTICE_DISMISSED] = dismissed }
+    }
+
+    suspend fun setGlobalRateLimitSeconds(seconds: Int) {
+        context.dataStore.edit { it[Keys.GLOBAL_RATE_LIMIT_SECONDS] = seconds.coerceIn(1, 30) }
     }
 }

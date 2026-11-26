@@ -9,13 +9,21 @@ import okhttp3.Response
 class HordeRateLimiterInterceptor(
     private val baseUrlProvider: () -> String,
     private val apiKeyProvider: () -> String,
-    private val minIntervalMs: Long = 1_100L,
+    private val minIntervalMsProvider: () -> Long = { effectiveMinIntervalMs(3) },
 ) : Interceptor {
+
+    companion object {
+        fun effectiveMinIntervalMs(seconds: Int): Long {
+            val clamped = seconds.coerceIn(1, 30)
+            return if (clamped == 1) 1_100L else clamped * 1_000L
+        }
+    }
 
     private val lock = Any()
     private var lastRequestElapsedMs: Long = 0L
 
     override fun intercept(chain: Interceptor.Chain): Response {
+        val minIntervalMs = minIntervalMsProvider().coerceAtLeast(1_100L)
         synchronized(lock) {
             val now = SystemClock.elapsedRealtime()
             val waitMs = (lastRequestElapsedMs + minIntervalMs) - now

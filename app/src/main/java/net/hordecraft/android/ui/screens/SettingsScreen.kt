@@ -45,12 +45,14 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -79,6 +81,7 @@ import net.hordeslop.studio.domain.LauncherIconChoice
 import net.hordeslop.studio.domain.NavLayoutMode
 import net.hordeslop.studio.ui.MainViewModel
 import net.hordeslop.studio.ui.theme.HordeColors
+import kotlin.math.roundToInt
 
 @Composable
 fun SettingsScreen(
@@ -301,6 +304,32 @@ fun SettingsScreen(
                         }
                     }
                 }
+
+                HorizontalDivider(color = HordeColors.BorderSubtle)
+
+                var draftRateLimit by remember(settings.globalRateLimitSeconds) {
+                    mutableIntStateOf(settings.globalRateLimitSeconds.coerceIn(1, 30))
+                }
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text("Rate Limit", fontSize = 12.sp, color = HordeColors.TextSecondary)
+                    Text(
+                        text = "1 request / ${draftRateLimit}s",
+                        fontSize = 12.sp,
+                        fontFamily = FontFamily.Monospace,
+                        color = HordeColors.TealSoft,
+                    )
+                }
+                Slider(
+                    value = draftRateLimit.toFloat(),
+                    onValueChange = { draftRateLimit = it.roundToInt().coerceIn(1, 30) },
+                    onValueChangeFinished = { vm.setGlobalRateLimitSeconds(draftRateLimit) },
+                    valueRange = 1f..30f,
+                    steps = 28,
+                )
             }
         }
 

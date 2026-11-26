@@ -428,4 +428,13 @@ class IssueFixesTest {
         val params = chunks.first().payload["params"]?.jsonObject
         assertTrue(params?.get("hires_fix")?.jsonPrimitive?.booleanOrNull == true)
     }
+
+    @Test
+    fun globalRateLimitDefaultsAndMappingTest() {
+        val defaults = net.hordeslop.studio.data.local.AppSettings()
+        assertEquals(3, defaults.globalRateLimitSeconds)
+        assertEquals(1_100L, net.hordeslop.studio.data.remote.HordeRateLimiterInterceptor.effectiveMinIntervalMs(1))
+        assertEquals(3_000L, net.hordeslop.studio.data.remote.HordeRateLimiterInterceptor.effectiveMinIntervalMs(3))
+        assertEquals(30_000L, net.hordeslop.studio.data.remote.HordeRateLimiterInterceptor.effectiveMinIntervalMs(30))
+    }
 }
