@@ -66,6 +66,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -806,113 +807,116 @@ fun StudioScreen(
                 val hasClearable = jobs.any {
                     it.status == JobStatus.COMPLETED || it.status == JobStatus.CANCELLED_PARTIAL || it.status == JobStatus.FAILED
                 }
+                var queueCollapsed by rememberSaveable { mutableStateOf(false) }
                 StudioCard {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Text("Queue (${jobs.size})", fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = HordeColors.TextPrimary)
-                        Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
-                            if (hasClearable) {
-                                OutlinedButton(onClick = vm::clearCompletedJobs) {
-                                    Text("Clear done", fontSize = 11.sp)
-                                }
-                            }
-                            if (hasActive) {
-                                OutlinedButton(onClick = vm::toggleQueuePause) {
-                                    Icon(
-                                        if (studio.queuePaused) Icons.Outlined.PlayArrow else Icons.Outlined.Pause,
-                                        null,
-                                        modifier = Modifier.size(16.dp),
-                                    )
-                                    Spacer(Modifier.width(4.dp))
-                                    Text(if (studio.queuePaused) "Resume" else "Pause", fontSize = 11.sp)
-                                }
-                            }
-                        }
-                    }
-                    jobs.take(12).forEach { job ->
-                        val isActive = job.status == JobStatus.QUEUED ||
-                            job.status == JobStatus.PROCESSING ||
-                            job.status == JobStatus.PAUSED
-                        val statusText = when (job.status) {
-                            JobStatus.QUEUED -> "Queued"
-                            JobStatus.PROCESSING -> if (job.waitTimeSeconds > 0) "Wait ~${job.waitTimeSeconds}s · #${job.queuePosition}" else "Processing"
-                            JobStatus.PAUSED -> "Paused"
-                            JobStatus.COMPLETED -> "Completed"
-                            JobStatus.CANCELLED_PARTIAL -> "Partial"
-                            JobStatus.FAILED -> job.errorMessage ?: "Failed"
-                        }
-                        Surface(
-                            color = HordeColors.SubCardSurface,
-                            shape = RoundedCornerShape(10.dp),
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .border(1.dp, HordeColors.BorderSubtle, RoundedCornerShape(10.dp)),
-                        ) {
-                            Column(modifier = Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                    verticalAlignment = Alignment.CenterVertically,
-                                ) {
-                                    Column(modifier = Modifier.weight(1f)) {
-                                        Text(
-                                            text = "${job.models.joinToString(", ")} · ${job.finished}/${job.total}",
-                                            fontSize = 12.sp,
-                                            color = HordeColors.TextPrimary,
-                                            maxLines = 1,
-                                            overflow = TextOverflow.Ellipsis,
-                                        )
-                                        Text(
-                                            text = statusText,
-                                            fontSize = 11.sp,
-                                            color = HordeColors.TextMuted,
-                                            maxLines = 1,
-                                            overflow = TextOverflow.Ellipsis,
-                                        )
-                                    }
-                                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                                        if (job.finished > 0) {
-                                            Row(
-                                                modifier = Modifier
-                                                    .clip(RoundedCornerShape(8.dp))
-                                                    .background(HordeColors.TealContainer)
-                                                    .clickable {
-                                                        vm.openRequestInGallery(job.requestId)
-                                                        launchActivityForDestination(context, ActivityDestination.GALLERY)
-                                                    }
-                                                    .padding(horizontal = 8.dp, vertical = 4.dp),
-                                                verticalAlignment = Alignment.CenterVertically,
-                                                horizontalArrangement = Arrangement.spacedBy(4.dp),
-                                            ) {
-                                                Icon(
-                                                    Icons.Outlined.Collections,
-                                                    contentDescription = "View in gallery",
-                                                    tint = HordeColors.TealSoft,
-                                                    modifier = Modifier.size(14.dp),
-                                                )
-                                                Text("View", fontSize = 11.sp, color = HordeColors.TealSoft)
-                                            }
-                                        }
-                                        if (isActive) {
-                                            IconButton(onClick = { vm.cancelJob(job.id) }, modifier = Modifier.size(28.dp)) {
-                                                Icon(Icons.Outlined.Stop, "Cancel", tint = HordeColors.RoseText, modifier = Modifier.size(16.dp))
-                                            }
-                                        } else {
-                                            IconButton(onClick = { vm.dismissJob(job.id) }, modifier = Modifier.size(28.dp)) {
-                                                Icon(Icons.Outlined.DeleteOutline, "Clear", tint = HordeColors.TextSecondary, modifier = Modifier.size(16.dp))
-                                            }
-                                        }
+                    CollapsibleSectionHeader(
+                        title = "Queue (${jobs.size})",
+                        collapsed = queueCollapsed,
+                        onToggle = { queueCollapsed = !queueCollapsed },
+                        trailing = {
+                            Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+                                if (hasClearable) {
+                                    OutlinedButton(onClick = vm::clearCompletedJobs) {
+                                        Text("Clear done", fontSize = 11.sp)
                                     }
                                 }
-                                if (job.status == JobStatus.QUEUED || job.status == JobStatus.PROCESSING) {
-                                    val progress = if (job.total > 0) job.finished.toFloat() / job.total else 0f
-                                    LinearProgressIndicator(
-                                        progress = { progress.coerceIn(0f, 1f) },
+                                if (hasActive) {
+                                    OutlinedButton(onClick = vm::toggleQueuePause) {
+                                        Icon(
+                                            if (studio.queuePaused) Icons.Outlined.PlayArrow else Icons.Outlined.Pause,
+                                            null,
+                                            modifier = Modifier.size(16.dp),
+                                        )
+                                        Spacer(Modifier.width(4.dp))
+                                        Text(if (studio.queuePaused) "Resume" else "Pause", fontSize = 11.sp)
+                                    }
+                                }
+                            }
+                        },
+                    )
+                    if (!queueCollapsed) {
+                        jobs.take(12).forEach { job ->
+                            val isActive = job.status == JobStatus.QUEUED ||
+                                job.status == JobStatus.PROCESSING ||
+                                job.status == JobStatus.PAUSED
+                            val statusText = when (job.status) {
+                                JobStatus.QUEUED -> "Queued"
+                                JobStatus.PROCESSING -> if (job.waitTimeSeconds > 0) "Wait ~${job.waitTimeSeconds}s · #${job.queuePosition}" else "Processing"
+                                JobStatus.PAUSED -> "Paused"
+                                JobStatus.COMPLETED -> "Completed"
+                                JobStatus.CANCELLED_PARTIAL -> "Partial"
+                                JobStatus.FAILED -> job.errorMessage ?: "Failed"
+                            }
+                            Surface(
+                                color = HordeColors.SubCardSurface,
+                                shape = RoundedCornerShape(10.dp),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .border(1.dp, HordeColors.BorderSubtle, RoundedCornerShape(10.dp)),
+                            ) {
+                                Column(modifier = Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                    Row(
                                         modifier = Modifier.fillMaxWidth(),
-                                    )
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically,
+                                    ) {
+                                        Column(modifier = Modifier.weight(1f)) {
+                                            Text(
+                                                text = "${job.models.joinToString(", ")} · ${job.finished}/${job.total}",
+                                                fontSize = 12.sp,
+                                                color = HordeColors.TextPrimary,
+                                                maxLines = 1,
+                                                overflow = TextOverflow.Ellipsis,
+                                            )
+                                            Text(
+                                                text = statusText,
+                                                fontSize = 11.sp,
+                                                color = HordeColors.TextMuted,
+                                                maxLines = 1,
+                                                overflow = TextOverflow.Ellipsis,
+                                            )
+                                        }
+                                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                                            if (job.finished > 0) {
+                                                Row(
+                                                    modifier = Modifier
+                                                        .clip(RoundedCornerShape(8.dp))
+                                                        .background(HordeColors.TealContainer)
+                                                        .clickable {
+                                                            vm.openRequestInGallery(job.requestId)
+                                                            launchActivityForDestination(context, ActivityDestination.GALLERY)
+                                                        }
+                                                        .padding(horizontal = 8.dp, vertical = 4.dp),
+                                                    verticalAlignment = Alignment.CenterVertically,
+                                                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                                                ) {
+                                                    Icon(
+                                                        Icons.Outlined.Collections,
+                                                        contentDescription = "View in gallery",
+                                                        tint = HordeColors.TealSoft,
+                                                        modifier = Modifier.size(14.dp),
+                                                    )
+                                                    Text("View", fontSize = 11.sp, color = HordeColors.TealSoft)
+                                                }
+                                            }
+                                            if (isActive) {
+                                                IconButton(onClick = { vm.cancelJob(job.id) }, modifier = Modifier.size(28.dp)) {
+                                                    Icon(Icons.Outlined.Stop, "Cancel", tint = HordeColors.RoseText, modifier = Modifier.size(16.dp))
+                                                }
+                                            } else {
+                                                IconButton(onClick = { vm.dismissJob(job.id) }, modifier = Modifier.size(28.dp)) {
+                                                    Icon(Icons.Outlined.DeleteOutline, "Clear", tint = HordeColors.TextSecondary, modifier = Modifier.size(16.dp))
+                                                }
+                                            }
+                                        }
+                                    }
+                                    if (job.status == JobStatus.QUEUED || job.status == JobStatus.PROCESSING) {
+                                        val progress = if (job.total > 0) job.finished.toFloat() / job.total else 0f
+                                        LinearProgressIndicator(
+                                            progress = { progress.coerceIn(0f, 1f) },
+                                            modifier = Modifier.fillMaxWidth(),
+                                        )
+                                    }
                                 }
                             }
                         }

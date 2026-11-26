@@ -77,7 +77,7 @@ fun MainHubScreen(
         Triple(
             ActivityDestination.IMAGE_GEN,
             Icons.Outlined.Image,
-            if (pendingJobs > 0) "$pendingJobs active in queue" else "Generate images, styles, LoRAs & TIs",
+            if (pendingJobs > 0) "$pendingJobs active in queue" else "Generate Images",
         ),
         Triple(
             ActivityDestination.GALLERY,
