@@ -12,7 +12,9 @@ import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
@@ -236,38 +238,63 @@ fun FullscreenPromptDialog(
     onChange: (String) -> Unit,
     onDismiss: () -> Unit,
 ) {
-    HordeModalDialog(
-        onDismiss = onDismiss,
-        header = {
-            Text(
-                text = "Edit Prompt",
-                color = HordeColors.TextPrimary,
-                fontSize = 16.sp,
-                fontWeight = FontWeight.SemiBold,
-            )
-        },
-        footer = {
-            Button(
-                colors = ButtonDefaults.buttonColors(containerColor = HordeColors.TealPrimary),
-                onClick = onDismiss,
-            ) {
-                Text("Done", color = Color(0xFF020617), fontWeight = FontWeight.SemiBold)
-            }
-        },
+    val initialPrompt = remember { prompt }
+    var draftPrompt by remember { mutableStateOf(prompt) }
+
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(usePlatformDefaultWidth = false),
     ) {
-        Box(
+        Surface(
+            color = HordeColors.CardSurface,
             modifier = Modifier
-                .fillMaxWidth()
-                .weight(1f, fill = false)
-                .verticalScroll(rememberScrollState()),
+                .fillMaxSize()
+                .imePadding(),
         ) {
-            OutlinedTextField(
-                value = prompt,
-                onValueChange = onChange,
-                minLines = 8,
-                maxLines = 20,
-                modifier = Modifier.fillMaxWidth(),
-            )
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                Text(
+                    text = "Edit Prompt",
+                    color = HordeColors.TextPrimary,
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.SemiBold,
+                )
+                OutlinedTextField(
+                    value = draftPrompt,
+                    onValueChange = { draftPrompt = it },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .weight(1f),
+                )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    TextButton(onClick = onDismiss) {
+                        Text("Cancel")
+                    }
+                    OutlinedButton(
+                        onClick = { draftPrompt = initialPrompt },
+                        enabled = draftPrompt != initialPrompt,
+                    ) {
+                        Text("Revert")
+                    }
+                    Button(
+                        colors = ButtonDefaults.buttonColors(containerColor = HordeColors.TealPrimary),
+                        onClick = {
+                            onChange(draftPrompt)
+                            onDismiss()
+                        },
+                    ) {
+                        Text("OK", color = Color(0xFF020617), fontWeight = FontWeight.SemiBold)
+                    }
+                }
+            }
         }
     }
 }
