@@ -507,4 +507,54 @@ class IssueFixesTest {
         snapshot = null
         assertEquals(4, (snapshot ?: updatedImages).size)
     }
+
+    @Test
+    fun civitaiImageIdParserExtractsIdsCorrectly() {
+        assertEquals(12097475L, CivitaiImageIdParser.parse("12097475"))
+        assertEquals(12097475L, CivitaiImageIdParser.parse("  12097475  "))
+        assertEquals(12097475L, CivitaiImageIdParser.parse("https://civitai.com/images/12097475"))
+        assertEquals(12097475L, CivitaiImageIdParser.parse("https://civitai.com/images/12097475?period=AllTime"))
+        assertEquals(12097475L, CivitaiImageIdParser.parse("http://civitai.com/images/12097475/edit"))
+        assertEquals(null, CivitaiImageIdParser.parse(""))
+        assertEquals(null, CivitaiImageIdParser.parse("   "))
+        assertEquals(null, CivitaiImageIdParser.parse("not an id"))
+    }
+
+    @Test
+    fun civitaiImageResponseParsesMetadataProperly() {
+        val sampleJson = """
+        {
+          "items": [
+            {
+              "id": 1981754,
+              "url": "https://image.civitai.com/sample.jpeg",
+              "baseModel": "SDXL 1.0",
+              "meta": {
+                "Size": "832x1216",
+                "seed": 1938345220,
+                "steps": 45,
+                "sampler": "DPM++ 2M",
+                "cfgScale": 5.0,
+                "prompt": "cyberpunk portrait",
+                "negativePrompt": "blurry, low quality",
+                "Model": "CyberModel",
+                "clipSkip": 2
+              }
+            }
+          ]
+        }
+        """.trimIndent()
+
+        val parsed = json.decodeFromString<net.hordeslop.studio.data.remote.CivitaiImageDetailDto>(sampleJson)
+        val item = parsed
+        assertEquals(1981754L, item.id)
+        assertEquals("SDXL 1.0", item.baseModel)
+        assertEquals("cyberpunk portrait", item.meta?.prompt)
+        assertEquals("blurry, low quality", item.meta?.negativePrompt)
+        assertEquals("832x1216", item.meta?.size)
+        assertEquals("CyberModel", item.meta?.model)
+        assertEquals(45, item.meta?.steps)
+        assertEquals(5.0f, item.meta?.cfgScale ?: 0f, 0.001f)
+        assertEquals(2, item.meta?.clipSkip)
+    }
 }

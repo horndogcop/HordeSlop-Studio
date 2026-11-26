@@ -32,6 +32,7 @@ import androidx.compose.material.icons.outlined.ArrowUpward
 import androidx.compose.material.icons.outlined.ChevronLeft
 import androidx.compose.material.icons.outlined.ChevronRight
 import androidx.compose.material.icons.outlined.Clear
+import androidx.compose.material.icons.outlined.CloudDownload
 import androidx.compose.material.icons.outlined.Code
 import androidx.compose.material.icons.outlined.Collections
 import androidx.compose.material.icons.outlined.ContentCopy
@@ -132,6 +133,7 @@ fun StudioScreen(
     var collapsedTiIds by remember { mutableStateOf<Set<String>>(emptySet()) }
 
     var showHistoryModalMode by remember { mutableStateOf<String?>(null) } // "history" | "favorites" | null
+    var showCivitaiImageModal by remember { mutableStateOf(false) }
     var showFullscreenPrompt by remember { mutableStateOf(false) }
     var showModelModal by remember { mutableStateOf(false) }
     var showStylesModal by remember { mutableStateOf(false) }
@@ -230,6 +232,11 @@ fun StudioScreen(
                                 label = "History",
                                 icon = { Icon(Icons.Outlined.History, null, modifier = Modifier.size(14.dp), tint = HordeColors.TextSecondary) },
                                 onClick = { showHistoryModalMode = "history" },
+                            )
+                            SmallHeaderChip(
+                                label = "Civitai",
+                                icon = { Icon(Icons.Outlined.CloudDownload, null, modifier = Modifier.size(14.dp), tint = HordeColors.TealSoft) },
+                                onClick = { showCivitaiImageModal = true },
                             )
                         }
                     },
@@ -977,6 +984,17 @@ fun StudioScreen(
             },
             onToggleFavorite = vm::toggleHistoryFavorite,
             onDismiss = { showHistoryModalMode = null },
+        )
+    }
+
+    if (showCivitaiImageModal) {
+        CivitaiImageImportDialog(
+            onFetch = vm::fetchCivitaiImageMetadata,
+            onApply = { meta, applyAll ->
+                vm.applyCivitaiMetadata(meta, applyAll)
+                showCivitaiImageModal = false
+            },
+            onDismiss = { showCivitaiImageModal = false },
         )
     }
 

@@ -323,6 +323,33 @@ data class OssCredit(
     val url: String,
 )
 
+data class CivitaiImageMetadataResult(
+    val id: Long,
+    val prompt: String,
+    val negativePrompt: String,
+    val model: String?,
+    val seed: String?,
+    val steps: Int?,
+    val cfg: Float?,
+    val clipSkip: Int?,
+    val sampler: String?,
+    val width: Int?,
+    val height: Int?,
+    val previewUrl: String?,
+)
+
+object CivitaiImageIdParser {
+    private val URL_REGEX = Regex("""civitai\.com/images/(\d+)""")
+
+    fun parse(input: String): Long? {
+        val trimmed = input.trim()
+        if (trimmed.isEmpty()) return null
+        trimmed.toLongOrNull()?.let { return it }
+        val match = URL_REGEX.find(trimmed)
+        return match?.groupValues?.get(1)?.toLongOrNull()
+    }
+}
+
 data class NotificationChannelSpec(
     val id: String,
     val name: String,

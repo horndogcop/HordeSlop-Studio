@@ -47,6 +47,7 @@ import net.hordeslop.studio.domain.AttachedLora
 import net.hordeslop.studio.domain.AttachedTi
 import net.hordeslop.studio.domain.AuthMode
 import net.hordeslop.studio.domain.CivitaiPreview
+import net.hordeslop.studio.domain.CivitaiImageMetadataResult
 import net.hordeslop.studio.domain.CivitaiVersion
 import net.hordeslop.studio.domain.GenerationChunk
 import net.hordeslop.studio.domain.HordeConstants
@@ -397,6 +398,34 @@ class HordecraftRepository(
         pinned.forEach { combined[it.modelId] = it }
         searched.forEach { if (!combined.containsKey(it.modelId)) combined[it.modelId] = it }
         return combined.values.toList()
+    }
+
+    suspend fun fetchCivitaiImageMetadata(imageId: Long): Result<CivitaiImageMetadataResult> = withContext(Dispatchers.IO) {
+        runCatching {
+            val apiKey = settingsStore.settings.first().civitaiApiKey.trim().takeIf { it.isNotEmpty() }
+            val authHeader = apiKey?.let { "Bearer $it" }
+            val item = civitaiApi.getImageById(authHeader, imageId)
+            
+            val meta = item.meta ?: throw IllegalStateException("Image #$imageId has no generation metadata")
+            val (w, h) = meta.size?.split("x")?.let { parts ->
+                if (parts.size == 2) parts[0].toIntOrNull() to parts[1].toIntOrNull() else null to null
+            } ?: (null to null)
+
+            CivitaiImageMetadataResult(
+                id = item.id,
+                prompt = meta.prompt ?: "",
+                negativePrompt = meta.negativePrompt ?: "",
+                model = meta.model,
+                seed = meta.seed?.toString(),
+                steps = meta.steps,
+                cfg = meta.cfgScale,
+                clipSkip = meta.clipSkip,
+                sampler = meta.sampler,
+                width = w,
+                height = h,
+                previewUrl = item.url,
+            )
+        }
     }
 
     private fun mapCivitaiLoraDto(dto: CivitaiModelDto, preferredVersionId: Long? = null): AttachedLora? {

@@ -438,6 +438,39 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    suspend fun fetchCivitaiImageMetadata(imageId: Long): Result<CivitaiImageMetadataResult> {
+        return repo.fetchCivitaiImageMetadata(imageId)
+    }
+
+    fun applyCivitaiMetadata(meta: CivitaiImageMetadataResult, applyAll: Boolean) {
+        _studio.update { state ->
+            if (applyAll) {
+                var s = state.copy(
+                    prompt = meta.prompt,
+                    negativePrompt = meta.negativePrompt,
+                )
+                meta.model?.takeIf { it.isNotBlank() }?.let { m ->
+                    s = s.copy(selectedModels = listOf(m))
+                }
+                meta.steps?.let { s = s.copy(steps = it.coerceIn(1, SliderMath.STEPS_MANUAL_MAX)) }
+                meta.cfg?.let { s = s.copy(cfg = it.coerceIn(1f, 20f)) }
+                meta.clipSkip?.let { s = s.copy(clipSkip = it.coerceIn(1, 12)) }
+                meta.sampler?.let { s = s.copy(sampler = it) }
+                meta.seed?.let { s = s.copy(seed = it) }
+                if (meta.width != null && meta.height != null) {
+                    s = s.copy(width = SizeMathEngine.snapTo64(meta.width), height = SizeMathEngine.snapTo64(meta.height))
+                }
+                s.withRecomputedClipSkipLocation()
+            } else {
+                state.copy(
+                    prompt = meta.prompt,
+                    negativePrompt = if (meta.negativePrompt.isNotBlank()) meta.negativePrompt else state.negativePrompt,
+                )
+            }
+        }
+        showToast("Applied Civitai image parameters")
+    }
+
     fun applySavedImageParameters(image: SavedImage) {
         _studio.update { state ->
             state.copy(

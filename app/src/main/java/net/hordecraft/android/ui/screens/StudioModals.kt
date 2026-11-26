@@ -71,6 +71,10 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import coil.compose.AsyncImage
+import androidx.compose.runtime.rememberCoroutineScope
+import kotlinx.coroutines.launch
+import net.hordeslop.studio.domain.CivitaiImageIdParser
+import net.hordeslop.studio.domain.CivitaiImageMetadataResult
 import net.hordeslop.studio.domain.AspectRatioPreset
 import net.hordeslop.studio.domain.AttachedLora
 import net.hordeslop.studio.domain.AttachedTi
@@ -1194,6 +1198,181 @@ fun LoraDetailDialog(
                     onInsertPrompt = onInsertPrompt,
                     onInsertNegative = onInsertNegative,
                 )
+            }
+        }
+    }
+}
+
+@Composable
+fun CivitaiImageImportDialog(
+    onFetch: suspend (Long) -> Result<CivitaiImageMetadataResult>,
+    onApply: (CivitaiImageMetadataResult, Boolean) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    var input by remember { mutableStateOf("") }
+    var isLoading by remember { mutableStateOf(false) }
+    var errorMessage by remember { mutableStateOf<String?>(null) }
+    var result by remember { mutableStateOf<CivitaiImageMetadataResult?>(null) }
+    val scope = rememberCoroutineScope()
+
+    HordeModalDialog(
+        onDismiss = onDismiss,
+        header = {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    text = "Import Civitai Image Prompt",
+                    color = HordeColors.TextPrimary,
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.SemiBold,
+                )
+                IconButton(onClick = onDismiss) { Icon(Icons.Outlined.Close, null) }
+            }
+        },
+        footer = {
+            val currentResult = result
+            if (currentResult != null) {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedButton(
+                        onClick = { onApply(currentResult, false) },
+                    ) {
+                        Text("Prompt Only", fontSize = 12.sp)
+                    }
+                    Button(
+                        colors = ButtonDefaults.buttonColors(containerColor = HordeColors.TealPrimary),
+                        onClick = { onApply(currentResult, true) },
+                    ) {
+                        Text("Apply All", color = Color(0xFF020617), fontWeight = FontWeight.SemiBold, fontSize = 12.sp)
+                    }
+                }
+            } else {
+                TextButton(onClick = onDismiss) { Text("Cancel") }
+            }
+        },
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .weight(1f, fill = false)
+                .verticalScroll(rememberScrollState()),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                OutlinedTextField(
+                    value = input,
+                    onValueChange = {
+                        input = it
+                        errorMessage = null
+                    },
+                    singleLine = true,
+                    placeholder = { Text("Image ID or civitai.com/images/... URL", fontSize = 12.sp) },
+                    modifier = Modifier.weight(1f),
+                )
+                Button(
+                    onClick = {
+                        val parsedId = CivitaiImageIdParser.parse(input)
+                        if (parsedId == null) {
+                            errorMessage = "Invalid Civitai image ID or URL"
+                            return@Button
+                        }
+                        isLoading = true
+                        errorMessage = null
+                        result = null
+                        scope.launch {
+                            val res = onFetch(parsedId)
+                            isLoading = false
+                            res.onSuccess {
+                                result = it
+                            }.onFailure { err ->
+                                errorMessage = err.message ?: "Failed to fetch Civitai image metadata"
+                            }
+                        }
+                    },
+                    enabled = input.isNotBlank() && !isLoading,
+                    colors = ButtonDefaults.buttonColors(containerColor = HordeColors.TealPrimary),
+                ) {
+                    Text("Fetch", color = Color(0xFF020617), fontWeight = FontWeight.SemiBold)
+                }
+            }
+
+            if (isLoading) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    CircularProgressIndicator(color = HordeColors.TealSoft, modifier = Modifier.size(28.dp))
+                }
+            }
+
+            errorMessage?.let { msg ->
+                Text(
+                    text = msg,
+                    color = HordeColors.RoseText,
+                    fontSize = 12.sp,
+                    modifier = Modifier.padding(horizontal = 4.dp),
+                )
+            }
+
+            result?.let { meta ->
+                Surface(
+                    color = HordeColors.SubCardSurface,
+                    shape = RoundedCornerShape(10.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .border(1.dp, HordeColors.BorderSubtle, RoundedCornerShape(10.dp))
+                        .padding(10.dp),
+                ) {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(10.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            meta.previewUrl?.let { url ->
+                                AsyncImage(
+                                    model = url,
+                                    contentDescription = null,
+                                    contentScale = ContentScale.Crop,
+                                    modifier = Modifier
+                                        .size(64.dp)
+                                        .clip(RoundedCornerShape(8.dp)),
+                                )
+                            }
+                            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                                Text("Civitai Image #${meta.id}", fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = HordeColors.TextPrimary)
+                                meta.model?.let { m -> Text("Model: $m", fontSize = 11.sp, color = HordeColors.TealSoft) }
+                                val specs = listOfNotNull(
+                                    meta.steps?.let { "Steps: $it" },
+                                    meta.cfg?.let { "CFG: $it" },
+                                    meta.sampler?.let { "Sampler: $it" },
+                                    if (meta.width != null && meta.height != null) "${meta.width}x${meta.height}" else null,
+                                )
+                                if (specs.isNotEmpty()) {
+                                    Text(specs.joinToString(" · "), fontSize = 10.sp, color = HordeColors.TextMuted, fontFamily = FontFamily.Monospace)
+                                }
+                            }
+                        }
+
+                        if (meta.prompt.isNotBlank()) {
+                            Text("Positive Prompt", fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = HordeColors.TextSecondary)
+                            Text(meta.prompt, fontSize = 11.sp, color = HordeColors.TextPrimary, maxLines = 6, overflow = TextOverflow.Ellipsis)
+                        }
+
+                        if (meta.negativePrompt.isNotBlank()) {
+                            Text("Negative Prompt", fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = HordeColors.AmberText)
+                            Text(meta.negativePrompt, fontSize = 11.sp, color = HordeColors.TextMuted, maxLines = 4, overflow = TextOverflow.Ellipsis)
+                        }
+                    }
+                }
             }
         }
     }
