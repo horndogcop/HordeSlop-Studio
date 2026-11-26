@@ -50,6 +50,16 @@ object TemplatePrompts {
         "moss-draped ancient redwood cathedral grove, shafts of morning fog and golden light filtering down",
         "restored 1960s silver Airstream trailer parked beside pine-ringed alpine lake at dusk",
         "sunlit ceramic courtyard kiln in Oaxaca, stacked clay pots, warm terracotta shadows and desert sky",
+        "Batman wearing Superman costume",
+        "hello kitty eating a frog",
+        "short hair, messy hair, black and white, round glasses, nose, lips, upper teeth, grin, closed eyes, slim, diamond pattern waistcoat, long sleeves, white shirt, bow tie, puffy pants, earrings, rating: safe, shirttail, waist pouch, waistband, tall shirtcollar, solo###tail, multiple, group, duo, clone, content rating, watermark, text",
+        ":T, pout, cute, bulging cheeks, catgirl, portrait, dynamic, rating: safe, close-up",
+        "a maid wearing a {WWI|WWII} gas mask",
+        "a golden retriever wearing a powdered wig and judge robes presiding over a courtroom full of squirrels",
+        "Darth Vader aggressively knitting a pastel rainbow scarf on a crowded subway train",
+        "two Victorian gentlemen in top hats fiercely dueling with giant inflatable pool noodles",
+        "a medieval knight riding a giant rubber duck into battle across a calm suburban swimming pool",
+        "Shrek dressed as a 1920s jazz saxophonist performing under dramatic spotlight in a smoky basement club",
     )
 
     private val PLAIN_TRIGGER_MODEL_REGEX = Regex("anima|krea|turbo", RegexOption.IGNORE_CASE)
