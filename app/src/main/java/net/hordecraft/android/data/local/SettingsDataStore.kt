@@ -40,6 +40,7 @@ data class AppSettings(
     val onboardingCompleted: Boolean = false,
     val aiNoticeDismissed: Boolean = false,
     val globalRateLimitSeconds: Int = 3,
+    val galleryColumns: Int = 2,
 )
 
 class SettingsDataStore(private val context: Context) {
@@ -65,6 +66,7 @@ class SettingsDataStore(private val context: Context) {
         val ONBOARDING_COMPLETED = booleanPreferencesKey("onboarding_completed")
         val AI_NOTICE_DISMISSED = booleanPreferencesKey("ai_notice_dismissed")
         val GLOBAL_RATE_LIMIT_SECONDS = intPreferencesKey("global_rate_limit_seconds")
+        val GALLERY_COLUMNS = intPreferencesKey("gallery_columns")
     }
 
     val settings: Flow<AppSettings> = context.dataStore.data.map { prefs ->
@@ -102,6 +104,7 @@ class SettingsDataStore(private val context: Context) {
             onboardingCompleted = prefs[Keys.ONBOARDING_COMPLETED] ?: false,
             aiNoticeDismissed = prefs[Keys.AI_NOTICE_DISMISSED] ?: false,
             globalRateLimitSeconds = (prefs[Keys.GLOBAL_RATE_LIMIT_SECONDS] ?: 3).coerceIn(1, 30),
+            galleryColumns = (prefs[Keys.GALLERY_COLUMNS] ?: 2).coerceIn(2, 6),
         )
     }
 
@@ -194,6 +197,10 @@ class SettingsDataStore(private val context: Context) {
 
     suspend fun setAiNoticeDismissed(dismissed: Boolean) {
         context.dataStore.edit { it[Keys.AI_NOTICE_DISMISSED] = dismissed }
+    }
+
+    suspend fun setGalleryColumns(columns: Int) {
+        context.dataStore.edit { it[Keys.GALLERY_COLUMNS] = columns.coerceIn(2, 6) }
     }
 
     suspend fun setGlobalRateLimitSeconds(seconds: Int) {

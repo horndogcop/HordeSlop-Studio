@@ -107,7 +107,6 @@ fun GalleryScreen(
     pendingSearchQuery: String? = null,
 ) {
     val context = LocalContext.current
-    val config = LocalConfiguration.current
     val scope = rememberCoroutineScope()
 
     var searchQuery by remember { mutableStateOf("") }
@@ -116,6 +115,7 @@ fun GalleryScreen(
     var viewerStartIndex by remember { mutableStateOf<Int?>(null) }
     var isFullscreen by remember { mutableStateOf(false) }
     var fullscreenHudVisible by remember { mutableStateOf(false) }
+    var columnsMenuExpanded by remember { mutableStateOf(false) }
 
     LaunchedEffect(pendingSearchQuery) {
         if (!pendingSearchQuery.isNullOrBlank()) {
@@ -133,7 +133,7 @@ fun GalleryScreen(
         }
     }
 
-    val columns = if (config.screenWidthDp >= 600) 3 else 2
+    val columns = settings.galleryColumns.coerceIn(2, 6)
 
     Column(
         modifier = Modifier
@@ -201,11 +201,60 @@ fun GalleryScreen(
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                modifier = Modifier.weight(1f),
+            ) {
                 Icon(Icons.Outlined.FolderOpen, null, tint = HordeColors.TealSoft, modifier = Modifier.size(14.dp))
-                Text(settings.safFolderLabel, fontSize = 11.sp, color = HordeColors.TextMuted)
+                Text(
+                    settings.safFolderLabel,
+                    fontSize = 11.sp,
+                    color = HordeColors.TextMuted,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
             }
-            Text("${filtered.size} images", fontSize = 11.sp, fontFamily = FontFamily.Monospace, color = HordeColors.TextMuted)
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                Box {
+                    Text(
+                        text = "${columns} cols",
+                        fontSize = 11.sp,
+                        fontFamily = FontFamily.Monospace,
+                        color = HordeColors.TealSoft,
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(6.dp))
+                            .background(HordeColors.CardSurface)
+                            .border(1.dp, HordeColors.BorderSubtle, RoundedCornerShape(6.dp))
+                            .clickable { columnsMenuExpanded = true }
+                            .padding(horizontal = 8.dp, vertical = 3.dp),
+                    )
+                    DropdownMenu(
+                        expanded = columnsMenuExpanded,
+                        onDismissRequest = { columnsMenuExpanded = false },
+                    ) {
+                        (2..6).forEach { count ->
+                            DropdownMenuItem(
+                                text = {
+                                    Text(
+                                        text = "$count per row",
+                                        fontWeight = if (count == columns) FontWeight.SemiBold else FontWeight.Normal,
+                                        color = if (count == columns) HordeColors.TealSoft else HordeColors.TextPrimary,
+                                    )
+                                },
+                                onClick = {
+                                    vm.setGalleryColumns(count)
+                                    columnsMenuExpanded = false
+                                },
+                            )
+                        }
+                    }
+                }
+                Text("${filtered.size} images", fontSize = 11.sp, fontFamily = FontFamily.Monospace, color = HordeColors.TextMuted)
+            }
         }
 
         if (filtered.isEmpty()) {

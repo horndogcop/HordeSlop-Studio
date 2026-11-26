@@ -404,6 +404,18 @@ fun SettingsScreen(
                     }
                 }
 
+                // Gallery Grid Density
+                Text("Gallery Columns", fontSize = 12.sp, color = HordeColors.TextSecondary)
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    (2..6).forEach { count ->
+                        ToggleChipButton(
+                            text = count.toString(),
+                            selected = settings.galleryColumns == count,
+                            onClick = { vm.setGalleryColumns(count) },
+                        )
+                    }
+                }
+
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
