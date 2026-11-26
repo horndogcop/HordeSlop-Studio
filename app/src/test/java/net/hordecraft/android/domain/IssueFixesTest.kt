@@ -437,4 +437,28 @@ class IssueFixesTest {
         assertEquals(3_000L, net.hordeslop.studio.data.remote.HordeRateLimiterInterceptor.effectiveMinIntervalMs(3))
         assertEquals(30_000L, net.hordeslop.studio.data.remote.HordeRateLimiterInterceptor.effectiveMinIntervalMs(30))
     }
+
+    @Test
+    fun fallbackFailoverOnlyAppliesToDefaultServerAndRewritesToStableHorde() {
+        val interceptorClass = net.hordeslop.studio.data.remote.HordeRateLimiterInterceptor
+        assertTrue(interceptorClass.isFallbackEligible(""))
+        assertTrue(interceptorClass.isFallbackEligible("https://aihorde.net/api/v2"))
+        assertTrue(interceptorClass.isFallbackEligible("https://aihorde.net/api/v2/"))
+        assertFalse(interceptorClass.isFallbackEligible("https://custom.example.com/api/v2/"))
+        assertFalse(interceptorClass.isFallbackEligible("https://stablehorde.net/api/v2/"))
+
+        assertTrue(interceptorClass.shouldRetryWithFallback(500))
+        assertTrue(interceptorClass.shouldRetryWithFallback(503))
+        assertTrue(interceptorClass.shouldRetryWithFallback(408))
+        assertFalse(interceptorClass.shouldRetryWithFallback(404))
+        assertFalse(interceptorClass.shouldRetryWithFallback(429))
+
+        val originalUrl = okhttp3.HttpUrl.Builder()
+            .scheme("https")
+            .host("aihorde.net")
+            .addPathSegments("api/v2/generate/async")
+            .build()
+        val rewritten = interceptorClass.rewriteBaseUrl(originalUrl, HordeConstants.FALLBACK_API_BASE_URL)
+        assertEquals("https://stablehorde.net/api/v2/generate/async", rewritten.toString())
+    }
 }

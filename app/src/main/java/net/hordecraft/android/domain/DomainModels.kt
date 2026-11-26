@@ -332,6 +332,7 @@ data class NotificationChannelSpec(
 
 object HordeConstants {
     const val DEFAULT_API_BASE_URL = "https://aihorde.net/api/v2/"
+    const val FALLBACK_API_BASE_URL = "https://stablehorde.net/api/v2/"
     const val DEFAULT_STYLES_REPO_URL =
         "https://raw.githubusercontent.com/Haidra-Org/AI-Horde-Styles/main/styles.json"
     const val DEFAULT_STYLES_PREVIEWS_URL =
