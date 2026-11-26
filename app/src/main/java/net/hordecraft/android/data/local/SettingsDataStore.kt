@@ -163,6 +163,7 @@ class SettingsDataStore(private val context: Context) {
         context.dataStore.edit {
             it[Keys.STORAGE_MODE] = StorageMode.DOWNLOADS.storageKey
             it[Keys.SAF_FOLDER_LABEL] = "Downloads/HordeSlop Studio"
+            it[Keys.KEEP_IMAGES_INTERNAL] = false
         }
     }
 
@@ -171,6 +172,7 @@ class SettingsDataStore(private val context: Context) {
             it[Keys.STORAGE_MODE] = StorageMode.SAF.storageKey
             it[Keys.SAF_TREE_URI] = uriString
             it[Keys.SAF_FOLDER_LABEL] = displayName
+            it[Keys.KEEP_IMAGES_INTERNAL] = false
         }
     }
 

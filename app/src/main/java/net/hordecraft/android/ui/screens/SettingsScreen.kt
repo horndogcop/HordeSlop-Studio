@@ -79,6 +79,7 @@ import net.hordeslop.studio.domain.GenerateButtonPlacement
 import net.hordeslop.studio.domain.HordeConstants
 import net.hordeslop.studio.domain.LauncherIconChoice
 import net.hordeslop.studio.domain.NavLayoutMode
+import net.hordeslop.studio.domain.StorageMode
 import net.hordeslop.studio.ui.MainViewModel
 import net.hordeslop.studio.ui.theme.HordeColors
 import kotlin.math.roundToInt
@@ -602,46 +603,84 @@ fun SettingsScreen(
             HorizontalDivider(color = HordeColors.BorderSubtle)
 
             // Section 4: Storage Location
+            val activeStorageSummary = when {
+                settings.keepImagesInInternalStorage -> "Internal"
+                settings.storageMode == StorageMode.SAF -> "Custom"
+                else -> "Downloads"
+            }
+            val activeStoragePath = if (settings.keepImagesInInternalStorage) {
+                "Internal App Storage"
+            } else {
+                settings.safFolderLabel
+            }
             CollapsiblePrefHeader(
                 title = "Storage Location",
                 collapsed = storageCollapsed,
                 onToggle = { storageCollapsed = !storageCollapsed },
                 trailing = {
-                    Text(if (settings.keepImagesInInternalStorage) "Internal" else "Downloads", fontSize = 11.sp, color = HordeColors.TextMuted)
+                    Text(activeStorageSummary, fontSize = 11.sp, color = HordeColors.TextMuted)
                 },
             )
             if (!storageCollapsed) {
+                Surface(
+                    shape = RoundedCornerShape(10.dp),
+                    color = HordeColors.InputSurface,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .border(1.dp, HordeColors.BorderSubtle, RoundedCornerShape(10.dp))
+                        .clickable { safFolderLauncher.launch(null) },
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 12.dp, vertical = 10.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "Saving to: $activeStoragePath",
+                                fontSize = 12.sp,
+                                color = HordeColors.TextPrimary,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                            Text(
+                                text = "Tap to choose a custom folder",
+                                fontSize = 11.sp,
+                                color = HordeColors.TextMuted,
+                            )
+                        }
+                        Icon(
+                            imageVector = Icons.Outlined.Edit,
+                            contentDescription = "Choose storage folder",
+                            tint = HordeColors.TextMuted,
+                            modifier = Modifier.size(16.dp),
+                        )
+                    }
+                }
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     OutlinedButton(
                         onClick = { vm.setStorageDownloads() },
                         modifier = Modifier.weight(1f),
                     ) {
-                        Text("Downloads/HordeSlop Studio", fontSize = 11.sp)
+                        Text("Downloads/HordeSlop Studio", fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     }
                     Button(
-                        onClick = { safFolderLauncher.launch(null) },
-                        colors = ButtonDefaults.buttonColors(containerColor = HordeColors.ElevatedButton),
+                        onClick = { vm.setKeepImagesInInternalStorage(true) },
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = if (settings.keepImagesInInternalStorage) HordeColors.TealPrimary else HordeColors.ElevatedButton,
+                        ),
                         modifier = Modifier.weight(1f),
                     ) {
-                        Text("Choose Folder", fontSize = 11.sp, color = HordeColors.TextPrimary)
+                        Text(
+                            text = "Use Internal Storage",
+                            fontSize = 11.sp,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            color = if (settings.keepImagesInInternalStorage) Color(0xFF020617) else HordeColors.TextPrimary,
+                        )
                     }
-                }
-                Text("Saving to: ${settings.safFolderLabel}", fontSize = 11.sp, color = HordeColors.TextMuted)
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable { vm.setKeepImagesInInternalStorage(!settings.keepImagesInInternalStorage) },
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Column(Modifier.weight(1f)) {
-                        Text("Keep images in internal storage", fontSize = 13.sp, color = HordeColors.TextPrimary)
-                        Text("Download to app storage until exported", fontSize = 11.sp, color = HordeColors.TextMuted)
-                    }
-                    Checkbox(
-                        checked = settings.keepImagesInInternalStorage,
-                        onCheckedChange = vm::setKeepImagesInInternalStorage,
-                    )
                 }
                 if (!settings.keepImagesInInternalStorage) {
                     Row(
