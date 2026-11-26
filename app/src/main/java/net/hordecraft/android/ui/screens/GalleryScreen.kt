@@ -299,12 +299,34 @@ fun GalleryScreen(
                                 fontSize = 10.sp,
                                 color = HordeColors.AmberText,
                                 modifier = Modifier
-                                    .align(Alignment.BottomStart)
+                                    .align(Alignment.TopStart)
                                     .padding(6.dp)
                                     .clip(RoundedCornerShape(6.dp))
                                     .background(Color.Black.copy(alpha = 0.65f))
                                     .padding(horizontal = 6.dp, vertical = 2.dp),
                             )
+                        }
+                        if (settings.showGalleryPromptOverlay && img.prompt.isNotBlank()) {
+                            Box(
+                                modifier = Modifier
+                                    .align(Alignment.BottomCenter)
+                                    .fillMaxWidth()
+                                    .background(
+                                        Brush.verticalGradient(
+                                            listOf(Color.Transparent, Color.Black.copy(alpha = 0.80f)),
+                                        ),
+                                    )
+                                    .padding(horizontal = 8.dp, vertical = 6.dp),
+                            ) {
+                                Text(
+                                    text = img.prompt.trim(),
+                                    color = Color.White,
+                                    fontSize = 10.sp,
+                                    lineHeight = 13.sp,
+                                    maxLines = 2,
+                                    overflow = TextOverflow.Ellipsis,
+                                )
+                            }
                         }
                         IconButton(
                             onClick = { vm.toggleImageFavorite(img.id, img.isFavorite) },

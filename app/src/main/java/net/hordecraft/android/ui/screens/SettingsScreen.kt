@@ -450,6 +450,23 @@ fun SettingsScreen(
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
+                        .clickable { vm.setShowGalleryPromptOverlay(!settings.showGalleryPromptOverlay) },
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Column(Modifier.weight(1f)) {
+                        Text("Gallery prompt preview", fontSize = 13.sp, color = HordeColors.TextPrimary)
+                        Text("Show prompt text overlay on gallery cards", fontSize = 11.sp, color = HordeColors.TextMuted)
+                    }
+                    Checkbox(
+                        checked = settings.showGalleryPromptOverlay,
+                        onCheckedChange = vm::setShowGalleryPromptOverlay,
+                    )
+                }
+
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
                         .clickable { vm.setAutoClearCompletedQueue(!settings.autoClearCompletedQueue) },
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically,

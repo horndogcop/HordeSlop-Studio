@@ -41,6 +41,7 @@ data class AppSettings(
     val aiNoticeDismissed: Boolean = false,
     val globalRateLimitSeconds: Int = 3,
     val galleryColumns: Int = 2,
+    val showGalleryPromptOverlay: Boolean = true,
 )
 
 class SettingsDataStore(private val context: Context) {
@@ -67,6 +68,7 @@ class SettingsDataStore(private val context: Context) {
         val AI_NOTICE_DISMISSED = booleanPreferencesKey("ai_notice_dismissed")
         val GLOBAL_RATE_LIMIT_SECONDS = intPreferencesKey("global_rate_limit_seconds")
         val GALLERY_COLUMNS = intPreferencesKey("gallery_columns")
+        val SHOW_GALLERY_PROMPT_OVERLAY = booleanPreferencesKey("show_gallery_prompt_overlay")
     }
 
     val settings: Flow<AppSettings> = context.dataStore.data.map { prefs ->
@@ -105,6 +107,7 @@ class SettingsDataStore(private val context: Context) {
             aiNoticeDismissed = prefs[Keys.AI_NOTICE_DISMISSED] ?: false,
             globalRateLimitSeconds = (prefs[Keys.GLOBAL_RATE_LIMIT_SECONDS] ?: 3).coerceIn(1, 30),
             galleryColumns = (prefs[Keys.GALLERY_COLUMNS] ?: 2).coerceIn(2, 6),
+            showGalleryPromptOverlay = prefs[Keys.SHOW_GALLERY_PROMPT_OVERLAY] ?: true,
         )
     }
 
@@ -197,6 +200,10 @@ class SettingsDataStore(private val context: Context) {
 
     suspend fun setAiNoticeDismissed(dismissed: Boolean) {
         context.dataStore.edit { it[Keys.AI_NOTICE_DISMISSED] = dismissed }
+    }
+
+    suspend fun setShowGalleryPromptOverlay(enabled: Boolean) {
+        context.dataStore.edit { it[Keys.SHOW_GALLERY_PROMPT_OVERLAY] = enabled }
     }
 
     suspend fun setGalleryColumns(columns: Int) {

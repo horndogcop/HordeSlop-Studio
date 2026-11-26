@@ -766,6 +766,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch { repo.settingsStore.setShowRawRequestReview(enabled) }
     }
 
+    fun setShowGalleryPromptOverlay(enabled: Boolean) {
+        viewModelScope.launch { repo.settingsStore.setShowGalleryPromptOverlay(enabled) }
+    }
+
     fun setGalleryColumns(columns: Int) {
         viewModelScope.launch { repo.settingsStore.setGalleryColumns(columns) }
     }
