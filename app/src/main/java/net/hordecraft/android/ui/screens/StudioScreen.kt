@@ -32,6 +32,7 @@ import androidx.compose.material.icons.outlined.ArrowUpward
 import androidx.compose.material.icons.outlined.ChevronLeft
 import androidx.compose.material.icons.outlined.ChevronRight
 import androidx.compose.material.icons.outlined.Clear
+import androidx.compose.material.icons.outlined.Code
 import androidx.compose.material.icons.outlined.Collections
 import androidx.compose.material.icons.outlined.ContentCopy
 import androidx.compose.material.icons.outlined.ContentPaste
@@ -137,6 +138,7 @@ fun StudioScreen(
     var civitaiSearchTab by remember { mutableStateOf<String?>(null) } // "lora" | "ti" | null
     var loraDetailTarget by remember { mutableStateOf<AttachedLora?>(null) }
     var pendingRawReviewPayloads by remember { mutableStateOf<List<String>?>(null) }
+    var viewOnlyRawJsonPayloads by remember { mutableStateOf<List<String>?>(null) }
 
     val primaryModel = studio.primaryModel
     val activeStyle = studio.activeStyle
@@ -153,6 +155,7 @@ fun StudioScreen(
             imageCount = studio.imageCount,
             onChangeCount = vm::updateImageCount,
             onResetAll = vm::resetAllParametersToDefaults,
+            onViewJson = { viewOnlyRawJsonPayloads = vm.prepareRawSubmissionPayloads() },
             onGenerate = {
                 if (studio.prompt.isBlank()) {
                     vm.showToast("Enter a prompt first")
@@ -1075,6 +1078,8 @@ fun StudioScreen(
     pendingRawReviewPayloads?.let { initialChunks ->
         RawRequestReviewDialog(
             initialPayloads = initialChunks,
+            viewOnly = false,
+            onCopyJson = { text -> vm.copyText("request JSON", text) },
             onCopyCurl = vm::copyJsonRequestAsCurl,
             onConfirmSend = { editedChunks ->
                 pendingRawReviewPayloads = null
@@ -1083,11 +1088,24 @@ fun StudioScreen(
             onDismiss = { pendingRawReviewPayloads = null },
         )
     }
+
+    viewOnlyRawJsonPayloads?.let { currentChunks ->
+        RawRequestReviewDialog(
+            initialPayloads = currentChunks,
+            viewOnly = true,
+            onCopyJson = { text -> vm.copyText("request JSON", text) },
+            onCopyCurl = vm::copyJsonRequestAsCurl,
+            onConfirmSend = {},
+            onDismiss = { viewOnlyRawJsonPayloads = null },
+        )
+    }
 }
 
 @Composable
 private fun RawRequestReviewDialog(
     initialPayloads: List<String>,
+    viewOnly: Boolean,
+    onCopyJson: (String) -> Unit,
     onCopyCurl: (String) -> Unit,
     onConfirmSend: (List<String>) -> Unit,
     onDismiss: () -> Unit,
@@ -1103,7 +1121,12 @@ private fun RawRequestReviewDialog(
         containerColor = HordeColors.CardSurface,
         title = {
             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                Text("Review API Request JSON", color = HordeColors.TextPrimary, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
+                Text(
+                    text = if (viewOnly) "Current Request JSON" else "Review API Request JSON",
+                    color = HordeColors.TextPrimary,
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.SemiBold,
+                )
                 if (drafts.size > 1) {
                     Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                         drafts.indices.forEach { idx ->
@@ -1122,9 +1145,12 @@ private fun RawRequestReviewDialog(
                 OutlinedTextField(
                     value = currentText,
                     onValueChange = { next ->
-                        errorMessage = null
-                        drafts = drafts.toMutableList().apply { set(safeIdx, next) }
+                        if (!viewOnly) {
+                            errorMessage = null
+                            drafts = drafts.toMutableList().apply { set(safeIdx, next) }
+                        }
                     },
+                    readOnly = viewOnly,
                     minLines = 10,
                     maxLines = 16,
                     textStyle = androidx.compose.ui.text.TextStyle(
@@ -1141,28 +1167,40 @@ private fun RawRequestReviewDialog(
         },
         dismissButton = {
             Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                OutlinedButton(onClick = { onCopyJson(currentText) }) { Text("Copy") }
                 OutlinedButton(onClick = { onCopyCurl(currentText) }) { Text("curl") }
-                TextButton(onClick = onDismiss) { Text("Cancel") }
+                if (!viewOnly) {
+                    TextButton(onClick = onDismiss) { Text("Cancel") }
+                }
             }
         },
         confirmButton = {
-            Button(
-                colors = ButtonDefaults.buttonColors(containerColor = HordeColors.TealPrimary),
-                onClick = {
-                    val invalidIdx = drafts.indexOfFirst { raw ->
-                        runCatching {
-                            kotlinx.serialization.json.Json.parseToJsonElement(raw) as kotlinx.serialization.json.JsonObject
-                        }.isFailure
-                    }
-                    if (invalidIdx >= 0) {
-                        activeIdx = invalidIdx
-                        errorMessage = "Request ${invalidIdx + 1} must be valid JSON object"
-                    } else {
-                        onConfirmSend(drafts)
-                    }
-                },
-            ) {
-                Text("Send", color = Color(0xFF020617), fontWeight = FontWeight.SemiBold)
+            if (viewOnly) {
+                Button(
+                    colors = ButtonDefaults.buttonColors(containerColor = HordeColors.TealPrimary),
+                    onClick = onDismiss,
+                ) {
+                    Text("Close", color = Color(0xFF020617), fontWeight = FontWeight.SemiBold)
+                }
+            } else {
+                Button(
+                    colors = ButtonDefaults.buttonColors(containerColor = HordeColors.TealPrimary),
+                    onClick = {
+                        val invalidIdx = drafts.indexOfFirst { raw ->
+                            runCatching {
+                                kotlinx.serialization.json.Json.parseToJsonElement(raw) as kotlinx.serialization.json.JsonObject
+                            }.isFailure
+                        }
+                        if (invalidIdx >= 0) {
+                            activeIdx = invalidIdx
+                            errorMessage = "Request ${invalidIdx + 1} must be valid JSON object"
+                        } else {
+                            onConfirmSend(drafts)
+                        }
+                    },
+                ) {
+                    Text("Send", color = Color(0xFF020617), fontWeight = FontWeight.SemiBold)
+                }
             }
         },
     )
@@ -1278,6 +1316,7 @@ private fun GenerateActionBar(
     imageCount: Int,
     onChangeCount: (Int) -> Unit,
     onResetAll: () -> Unit,
+    onViewJson: () -> Unit,
     onGenerate: () -> Unit,
     isWideLayout: Boolean,
     isPinnedTop: Boolean,
@@ -1337,6 +1376,19 @@ private fun GenerateActionBar(
         }
     }
 
+    val viewJsonBtn: @Composable () -> Unit = {
+        IconButton(
+            onClick = onViewJson,
+            modifier = Modifier
+                .size(44.dp)
+                .clip(RoundedCornerShape(12.dp))
+                .background(HordeColors.CardSurface)
+                .border(1.dp, HordeColors.BorderStrong, RoundedCornerShape(12.dp)),
+        ) {
+            Icon(Icons.Outlined.Code, "View request JSON", tint = HordeColors.TextSecondary)
+        }
+    }
+
     val generateBtn: @Composable (Modifier) -> Unit = { mod ->
         Button(
             onClick = onGenerate,
@@ -1354,9 +1406,10 @@ private fun GenerateActionBar(
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            trashBtn()
-            generateBtn(Modifier.weight(1f))
             countBox(Modifier)
+            generateBtn(Modifier.weight(1f))
+            viewJsonBtn()
+            trashBtn()
         }
     } else if (isPinnedTop) {
         Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -1365,21 +1418,35 @@ private fun GenerateActionBar(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                trashBtn()
                 countBox(Modifier.weight(1f))
+                trashBtn()
             }
-            generateBtn(Modifier.fillMaxWidth())
-        }
-    } else {
-        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            generateBtn(Modifier.fillMaxWidth())
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                trashBtn()
+                generateBtn(Modifier.weight(1f))
+                viewJsonBtn()
+            }
+        }
+    } else {
+        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                generateBtn(Modifier.weight(1f))
+                viewJsonBtn()
+            }
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
                 countBox(Modifier.weight(1f))
+                trashBtn()
             }
         }
     }
