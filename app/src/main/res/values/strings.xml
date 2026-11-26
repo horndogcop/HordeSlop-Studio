@@ -7,4 +7,12 @@
     <string name="title_activity_models">HordeSlop Studio · Models</string>
     <string name="title_activity_text">HordeSlop Studio · Text</string>
     <string name="title_activity_alchemist">HordeSlop Studio · Alchemist</string>
+    <string name="shortcut_image_short">Image</string>
+    <string name="shortcut_image_long">Generate Images</string>
+    <string name="shortcut_gallery_short">Gallery</string>
+    <string name="shortcut_gallery_long">Image Gallery</string>
+    <string name="shortcut_user_short">Horde</string>
+    <string name="shortcut_user_long">Horde Account</string>
+    <string name="shortcut_settings_short">Settings</string>
+    <string name="shortcut_settings_long">App Settings</string>
 </resources>

@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="utf-8"?>
+<shortcuts xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    tools:ignore="UnusedAttribute">
+    <shortcut
+        android:shortcutId="image_gen"
+        android:enabled="true"
+        android:icon="@drawable/ic_shortcut_image"
+        android:shortcutShortLabel="@string/shortcut_image_short"
+        android:shortcutLongLabel="@string/shortcut_image_long">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:targetPackage="net.hordeslop.studio.debug"
+            android:targetClass="net.hordeslop.studio.ui.activities.ImageGenActivity" />
+    </shortcut>
+    <shortcut
+        android:shortcutId="gallery"
+        android:enabled="true"
+        android:icon="@drawable/ic_shortcut_gallery"
+        android:shortcutShortLabel="@string/shortcut_gallery_short"
+        android:shortcutLongLabel="@string/shortcut_gallery_long">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:targetPackage="net.hordeslop.studio.debug"
+            android:targetClass="net.hordeslop.studio.ui.activities.GalleryActivity" />
+    </shortcut>
+    <shortcut
+        android:shortcutId="user"
+        android:enabled="true"
+        android:icon="@drawable/ic_shortcut_horde"
+        android:shortcutShortLabel="@string/shortcut_user_short"
+        android:shortcutLongLabel="@string/shortcut_user_long">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:targetPackage="net.hordeslop.studio.debug"
+            android:targetClass="net.hordeslop.studio.ui.activities.UserActivity" />
+    </shortcut>
+    <shortcut
+        android:shortcutId="settings"
+        android:enabled="true"
+        android:icon="@drawable/ic_shortcut_settings"
+        android:shortcutShortLabel="@string/shortcut_settings_short"
+        android:shortcutLongLabel="@string/shortcut_settings_long">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:targetPackage="net.hordeslop.studio.debug"
+            android:targetClass="net.hordeslop.studio.ui.activities.SettingsActivity" />
+    </shortcut>
+</shortcuts>
