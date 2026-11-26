@@ -788,6 +788,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch { repo.settingsStore.setAdvancedCollapsed(collapsed) }
     }
 
+    fun setAiNoticeDismissed(dismissed: Boolean) {
+        viewModelScope.launch { repo.settingsStore.setAiNoticeDismissed(dismissed) }
+    }
+
     fun exportDatabase(uri: Uri) {
         viewModelScope.launch {
             runCatching { repo.exportDatabaseToUri(uri) }

@@ -37,6 +37,7 @@ data class AppSettings(
     val preventMediaIndexing: Boolean = false,
     val advancedCollapsed: Boolean = true,
     val onboardingCompleted: Boolean = false,
+    val aiNoticeDismissed: Boolean = false,
 )
 
 class SettingsDataStore(private val context: Context) {
@@ -60,6 +61,7 @@ class SettingsDataStore(private val context: Context) {
         val PREVENT_MEDIA_INDEXING = booleanPreferencesKey("prevent_media_indexing")
         val ADVANCED_COLLAPSED = booleanPreferencesKey("advanced_collapsed")
         val ONBOARDING_COMPLETED = booleanPreferencesKey("onboarding_completed")
+        val AI_NOTICE_DISMISSED = booleanPreferencesKey("ai_notice_dismissed")
     }
 
     val settings: Flow<AppSettings> = context.dataStore.data.map { prefs ->
@@ -95,6 +97,7 @@ class SettingsDataStore(private val context: Context) {
             preventMediaIndexing = prefs[Keys.PREVENT_MEDIA_INDEXING] ?: false,
             advancedCollapsed = prefs[Keys.ADVANCED_COLLAPSED] ?: true,
             onboardingCompleted = prefs[Keys.ONBOARDING_COMPLETED] ?: false,
+            aiNoticeDismissed = prefs[Keys.AI_NOTICE_DISMISSED] ?: false,
         )
     }
 
@@ -181,5 +184,9 @@ class SettingsDataStore(private val context: Context) {
 
     suspend fun setOnboardingCompleted(completed: Boolean) {
         context.dataStore.edit { it[Keys.ONBOARDING_COMPLETED] = completed }
+    }
+
+    suspend fun setAiNoticeDismissed(dismissed: Boolean) {
+        context.dataStore.edit { it[Keys.AI_NOTICE_DISMISSED] = dismissed }
     }
 }

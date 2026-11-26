@@ -23,7 +23,7 @@ android {
         versionName = overrideVersionName ?: "0.1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
-        buildConfigField("String", "AI_ATTRIBUTION_MODEL", "\"models/gemini-4-hydrogen\"")
+        buildConfigField("String", "AI_ATTRIBUTION_MODEL", "\"models/gemini-4-hydrogen, Gemini 3.5 flash lite, Gemini flash latest\"")
         buildConfigField("String", "REPO_URL", "\"https://github.com/horndogcop/hordeslop-studio\"")
     }
 

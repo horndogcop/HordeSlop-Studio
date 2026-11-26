@@ -26,8 +26,11 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.Android
 import androidx.compose.material.icons.outlined.Balance
+import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.DeleteOutline
 import androidx.compose.material.icons.outlined.Edit
+import androidx.compose.material.icons.outlined.ExpandLess
+import androidx.compose.material.icons.outlined.ExpandMore
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.OpenInNew
 import androidx.compose.material.icons.outlined.RestartAlt
@@ -50,6 +53,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -142,6 +146,51 @@ fun SettingsScreen(
 
     val currentAuthMode = AuthMode.inferFromKey(settings.hordeApiKey)
 
+    var aiHordeCollapsed by rememberSaveable { mutableStateOf(false) }
+    var interfaceCollapsed by rememberSaveable { mutableStateOf(false) }
+    var civitaiCollapsed by rememberSaveable { mutableStateOf(false) }
+    var stylesReposCollapsed by rememberSaveable { mutableStateOf(false) }
+    var storageCollapsed by rememberSaveable { mutableStateOf(false) }
+    var databaseCollapsed by rememberSaveable { mutableStateOf(false) }
+    var notificationsCollapsed by rememberSaveable { mutableStateOf(false) }
+    var legalCollapsed by rememberSaveable { mutableStateOf(false) }
+
+    val aiNoticeComposable = @Composable {
+        Surface(
+            color = Color(0xFF18202B),
+            shape = RoundedCornerShape(14.dp),
+            modifier = Modifier
+                .fillMaxWidth()
+                .border(1.dp, HordeColors.AmberZone.copy(alpha = 0.35f), RoundedCornerShape(14.dp)),
+        ) {
+            Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Icon(Icons.Outlined.Info, null, tint = HordeColors.AmberText, modifier = Modifier.size(16.dp))
+                        Text("Built with AI", fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = HordeColors.AmberText)
+                    }
+                    if (!settings.aiNoticeDismissed) {
+                        IconButton(
+                            onClick = { vm.setAiNoticeDismissed(true) },
+                            modifier = Modifier.size(24.dp),
+                        ) {
+                            Icon(Icons.Outlined.Close, "Dismiss AI Notice", tint = HordeColors.TextMuted, modifier = Modifier.size(16.dp))
+                        }
+                    }
+                }
+                Text(
+                    "All code in HordeSlop Studio is 100% vibeslopped by AI (${BuildConfig.AI_ATTRIBUTION_MODEL}).",
+                    fontSize = 12.sp,
+                    color = HordeColors.TextSecondary,
+                )
+            }
+        }
+    }
+
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -165,148 +214,146 @@ fun SettingsScreen(
             }
         }
 
-        // Top of Settings: AI Notice
-        Surface(
-            color = Color(0xFF18202B),
-            shape = RoundedCornerShape(14.dp),
-            modifier = Modifier
-                .fillMaxWidth()
-                .border(1.dp, HordeColors.AmberZone.copy(alpha = 0.35f), RoundedCornerShape(14.dp)),
-        ) {
-            Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    Icon(Icons.Outlined.Info, null, tint = HordeColors.AmberText, modifier = Modifier.size(16.dp))
-                    Text("Built with AI", fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = HordeColors.AmberText)
-                }
-                Text(
-                    "All code in HordeSlop Studio is 100% vibeslopped by AI (${BuildConfig.AI_ATTRIBUTION_MODEL}).",
-                    fontSize = 12.sp,
-                    color = HordeColors.TextSecondary,
-                )
-            }
+        // Top of Settings: AI Notice (if not dismissed)
+        if (!settings.aiNoticeDismissed) {
+            aiNoticeComposable()
         }
 
         // AI Horde section: Horde API Key + Server URL (#89)
         StudioCard {
-            Text("AI Horde", fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = HordeColors.TextPrimary)
+            CollapsiblePrefHeader(
+                title = "AI Horde",
+                collapsed = aiHordeCollapsed,
+                onToggle = { aiHordeCollapsed = !aiHordeCollapsed },
+                trailing = {
+                    Text(
+                        text = when (currentAuthMode) {
+                            AuthMode.USER_KEY -> "Personal Key"
+                            AuthMode.SHARED_KEY -> "Shared Key"
+                            AuthMode.ANONYMOUS -> "Anonymous"
+                        },
+                        fontSize = 12.sp,
+                        color = HordeColors.TealSoft,
+                    )
+                },
+            )
 
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                Text("API Key", fontSize = 12.sp, color = HordeColors.TextSecondary)
-                Text(
-                    text = when (currentAuthMode) {
-                        AuthMode.USER_KEY -> "Personal Key"
-                        AuthMode.SHARED_KEY -> "Shared Key"
-                        AuthMode.ANONYMOUS -> "Anonymous"
-                    },
-                    fontSize = 12.sp,
-                    color = HordeColors.TealSoft,
-                )
-            }
-            Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
-                OutlinedTextField(
-                    value = draftHordeKey,
-                    onValueChange = { draftHordeKey = it },
-                    singleLine = true,
-                    visualTransformation = if (showHordeKey) VisualTransformation.None else PasswordVisualTransformation(),
-                    trailingIcon = {
-                        IconButton(onClick = { showHordeKey = !showHordeKey }) {
-                            Icon(if (showHordeKey) Icons.Outlined.VisibilityOff else Icons.Outlined.Visibility, null)
-                        }
-                    },
-                    modifier = Modifier.weight(1f),
-                )
-                Button(
-                    onClick = { vm.saveHordeApiKey(draftHordeKey) },
-                    colors = ButtonDefaults.buttonColors(containerColor = HordeColors.TealPrimary),
-                ) {
-                    Text("Save", color = Color(0xFF020617), fontWeight = FontWeight.SemiBold)
+            if (!aiHordeCollapsed) {
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                    Text("API Key", fontSize = 12.sp, color = HordeColors.TextSecondary)
                 }
-            }
-
-            HorizontalDivider(color = HordeColors.BorderSubtle)
-
-            Text("Server", fontSize = 12.sp, color = HordeColors.TextSecondary)
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                ToggleChipButton(
-                    text = "aihorde.net",
-                    selected = !endpointModeOther,
-                    onClick = {
-                        endpointModeOther = false
-                        draftEndpointUrl = HordeConstants.DEFAULT_API_BASE_URL
-                        vm.saveApiBaseUrl(HordeConstants.DEFAULT_API_BASE_URL)
-                    },
-                )
-                ToggleChipButton(
-                    text = "Other",
-                    selected = endpointModeOther,
-                    onClick = {
-                        endpointModeOther = true
-                        if (draftEndpointUrl.isBlank()) draftEndpointUrl = HordeConstants.DEFAULT_API_BASE_URL
-                    },
-                )
-            }
-            if (endpointModeOther) {
                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
                     OutlinedTextField(
-                        value = draftEndpointUrl,
-                        onValueChange = { draftEndpointUrl = it },
+                        value = draftHordeKey,
+                        onValueChange = { draftHordeKey = it },
                         singleLine = true,
+                        visualTransformation = if (showHordeKey) VisualTransformation.None else PasswordVisualTransformation(),
+                        trailingIcon = {
+                            IconButton(onClick = { showHordeKey = !showHordeKey }) {
+                                Icon(if (showHordeKey) Icons.Outlined.VisibilityOff else Icons.Outlined.Visibility, null)
+                            }
+                        },
                         modifier = Modifier.weight(1f),
                     )
                     Button(
-                        onClick = { vm.saveApiBaseUrl(draftEndpointUrl) },
+                        onClick = { vm.saveHordeApiKey(draftHordeKey) },
                         colors = ButtonDefaults.buttonColors(containerColor = HordeColors.TealPrimary),
                     ) {
-                        Text("Apply", color = Color(0xFF020617), fontWeight = FontWeight.SemiBold)
+                        Text("Save", color = Color(0xFF020617), fontWeight = FontWeight.SemiBold)
+                    }
+                }
+
+                HorizontalDivider(color = HordeColors.BorderSubtle)
+
+                Text("Server", fontSize = 12.sp, color = HordeColors.TextSecondary)
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    ToggleChipButton(
+                        text = "aihorde.net",
+                        selected = !endpointModeOther,
+                        onClick = {
+                            endpointModeOther = false
+                            draftEndpointUrl = HordeConstants.DEFAULT_API_BASE_URL
+                            vm.saveApiBaseUrl(HordeConstants.DEFAULT_API_BASE_URL)
+                        },
+                    )
+                    ToggleChipButton(
+                        text = "Other",
+                        selected = endpointModeOther,
+                        onClick = {
+                            endpointModeOther = true
+                            if (draftEndpointUrl.isBlank()) draftEndpointUrl = HordeConstants.DEFAULT_API_BASE_URL
+                        },
+                    )
+                }
+                if (endpointModeOther) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+                        OutlinedTextField(
+                            value = draftEndpointUrl,
+                            onValueChange = { draftEndpointUrl = it },
+                            singleLine = true,
+                            modifier = Modifier.weight(1f),
+                        )
+                        Button(
+                            onClick = { vm.saveApiBaseUrl(draftEndpointUrl) },
+                            colors = ButtonDefaults.buttonColors(containerColor = HordeColors.TealPrimary),
+                        ) {
+                            Text("Apply", color = Color(0xFF020617), fontWeight = FontWeight.SemiBold)
+                        }
                     }
                 }
             }
         }
 
-        // Preferences (#90: Navigation, Civitai key, Storage location, Styles Repos, Auto-clear, App Icon, Generate Button, Previews, Full-screen)
+        // Preferences: Interface, Civitai, Styles Repos, Storage, Database
         StudioCard {
             Text("Preferences", fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = HordeColors.TextPrimary)
 
-            // App Icon Switcher
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(10.dp))
-                    .background(HordeColors.SubCardSurface)
-                    .border(1.dp, HordeColors.BorderSubtle, RoundedCornerShape(10.dp))
-                    .clickable { showLauncherIconModal = true }
-                    .padding(10.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    if (settings.launcherIcon == LauncherIconChoice.ROBOT_PLACEHOLDER) {
-                        Icon(Icons.Outlined.Android, null, tint = HordeColors.TealSoft)
-                    } else {
-                        AsyncImage(
-                            model = HordeConstants.HAIDRA_LOGO_URL,
-                            contentDescription = "Haidra Logo",
-                            contentScale = ContentScale.Fit,
-                            modifier = Modifier.size(22.dp),
-                        )
+            // Section 1: Interface & Controls
+            CollapsiblePrefHeader(
+                title = "Interface & Controls",
+                collapsed = interfaceCollapsed,
+                onToggle = { interfaceCollapsed = !interfaceCollapsed },
+            )
+            if (!interfaceCollapsed) {
+                // App Icon Switcher
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(HordeColors.SubCardSurface)
+                        .border(1.dp, HordeColors.BorderSubtle, RoundedCornerShape(10.dp))
+                        .clickable { showLauncherIconModal = true }
+                        .padding(10.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        if (settings.launcherIcon == LauncherIconChoice.ROBOT_PLACEHOLDER) {
+                            Icon(Icons.Outlined.Android, null, tint = HordeColors.TealSoft)
+                        } else {
+                            AsyncImage(
+                                model = HordeConstants.HAIDRA_LOGO_URL,
+                                contentDescription = "Haidra Logo",
+                                contentScale = ContentScale.Fit,
+                                modifier = Modifier.size(22.dp),
+                            )
+                        }
+                        Column {
+                            Text("App Icon", fontSize = 13.sp, color = HordeColors.TextPrimary)
+                            Text(
+                                if (settings.launcherIcon == LauncherIconChoice.ROBOT_PLACEHOLDER) "Robot (Default)" else "Haidra Logo",
+                                fontSize = 11.sp,
+                                color = HordeColors.TextMuted,
+                            )
+                        }
                     }
-                    Column {
-                        Text("App Icon", fontSize = 13.sp, color = HordeColors.TextPrimary)
-                        Text(
-                            if (settings.launcherIcon == LauncherIconChoice.ROBOT_PLACEHOLDER) "Robot (Default)" else "Haidra Logo",
-                            fontSize = 11.sp,
-                            color = HordeColors.TextMuted,
-                        )
-                    }
+                    Text("Change", fontSize = 12.sp, color = HordeColors.TealSoft)
                 }
-                Text("Change", fontSize = 12.sp, color = HordeColors.TealSoft)
-            }
 
-            // Navigation layout
-            Text("Navigation", fontSize = 12.sp, color = HordeColors.TextSecondary)
-            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                NavLayoutMode.entries.forEach { mode ->
-                    Box(modifier = Modifier.weight(1f)) {
+                // Navigation layout (fixed padding matching generate button)
+                Text("Navigation", fontSize = 12.sp, color = HordeColors.TextSecondary)
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    NavLayoutMode.entries.forEach { mode ->
                         ToggleChipButton(
                             text = mode.label,
                             selected = settings.navLayout == mode,
@@ -314,323 +361,351 @@ fun SettingsScreen(
                         )
                     }
                 }
-            }
 
-            // Generate Button Placement
-            Text("Generate Button", fontSize = 12.sp, color = HordeColors.TextSecondary)
-            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                GenerateButtonPlacement.entries.forEach { placement ->
-                    ToggleChipButton(
-                        text = placement.label,
-                        selected = settings.generateButtonPlacement == placement,
-                        onClick = { vm.setGenerateButtonPlacement(placement) },
+                // Generate Button Placement
+                Text("Generate Button", fontSize = 12.sp, color = HordeColors.TextSecondary)
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    GenerateButtonPlacement.entries.forEach { placement ->
+                        ToggleChipButton(
+                            text = placement.label,
+                            selected = settings.generateButtonPlacement == placement,
+                            onClick = { vm.setGenerateButtonPlacement(placement) },
+                        )
+                    }
+                }
+
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { vm.setShowModelPreviews(!settings.showModelPreviews) },
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Column(Modifier.weight(1f)) {
+                        Text("Model previews", fontSize = 13.sp, color = HordeColors.TextPrimary)
+                        Text("Show images when picking models", fontSize = 11.sp, color = HordeColors.TextMuted)
+                    }
+                    Checkbox(checked = settings.showModelPreviews, onCheckedChange = vm::setShowModelPreviews)
+                }
+
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { vm.setSkipGalleryModalToFullscreen(!settings.skipGalleryModalToFullscreen) },
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Column(Modifier.weight(1f)) {
+                        Text("Full-screen gallery", fontSize = 13.sp, color = HordeColors.TextPrimary)
+                        Text("Open tapped images in full screen", fontSize = 11.sp, color = HordeColors.TextMuted)
+                    }
+                    Checkbox(
+                        checked = settings.skipGalleryModalToFullscreen,
+                        onCheckedChange = vm::setSkipGalleryModalToFullscreen,
+                    )
+                }
+
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { vm.setAutoClearCompletedQueue(!settings.autoClearCompletedQueue) },
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Column(Modifier.weight(1f)) {
+                        Text("Auto-clear completed requests", fontSize = 13.sp, color = HordeColors.TextPrimary)
+                        Text("Automatically clear finished items from Queue", fontSize = 11.sp, color = HordeColors.TextMuted)
+                    }
+                    Checkbox(
+                        checked = settings.autoClearCompletedQueue,
+                        onCheckedChange = vm::setAutoClearCompletedQueue,
+                    )
+                }
+
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { vm.setUseSeparateActivities(!settings.useSeparateActivities) },
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Column(Modifier.weight(1f)) {
+                        Text("Separate windows", fontSize = 13.sp, color = HordeColors.TextPrimary)
+                        Text("Open screens separately in Recents", fontSize = 11.sp, color = HordeColors.TextMuted)
+                    }
+                    Checkbox(
+                        checked = settings.useSeparateActivities,
+                        onCheckedChange = vm::setUseSeparateActivities,
+                    )
+                }
+
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { vm.setShowRawRequestReview(!settings.showRawRequestReview) },
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Column(Modifier.weight(1f)) {
+                        Text("Review raw API JSON", fontSize = 13.sp, color = HordeColors.TextPrimary)
+                        Text("Inspect and edit request JSON before sending", fontSize = 11.sp, color = HordeColors.TextMuted)
+                    }
+                    Checkbox(
+                        checked = settings.showRawRequestReview,
+                        onCheckedChange = vm::setShowRawRequestReview,
                     )
                 }
             }
 
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clickable { vm.setShowModelPreviews(!settings.showModelPreviews) },
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Column(Modifier.weight(1f)) {
-                    Text("Model previews", fontSize = 13.sp, color = HordeColors.TextPrimary)
-                    Text("Show images when picking models", fontSize = 11.sp, color = HordeColors.TextMuted)
-                }
-                Checkbox(checked = settings.showModelPreviews, onCheckedChange = vm::setShowModelPreviews)
-            }
-
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clickable { vm.setSkipGalleryModalToFullscreen(!settings.skipGalleryModalToFullscreen) },
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Column(Modifier.weight(1f)) {
-                    Text("Full-screen gallery", fontSize = 13.sp, color = HordeColors.TextPrimary)
-                    Text("Open tapped images in full screen", fontSize = 11.sp, color = HordeColors.TextMuted)
-                }
-                Checkbox(
-                    checked = settings.skipGalleryModalToFullscreen,
-                    onCheckedChange = vm::setSkipGalleryModalToFullscreen,
-                )
-            }
-
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clickable { vm.setAutoClearCompletedQueue(!settings.autoClearCompletedQueue) },
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Column(Modifier.weight(1f)) {
-                    Text("Auto-clear completed requests", fontSize = 13.sp, color = HordeColors.TextPrimary)
-                    Text("Automatically clear finished items from Queue", fontSize = 11.sp, color = HordeColors.TextMuted)
-                }
-                Checkbox(
-                    checked = settings.autoClearCompletedQueue,
-                    onCheckedChange = vm::setAutoClearCompletedQueue,
-                )
-            }
-
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clickable { vm.setUseSeparateActivities(!settings.useSeparateActivities) },
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Column(Modifier.weight(1f)) {
-                    Text("Separate windows", fontSize = 13.sp, color = HordeColors.TextPrimary)
-                    Text("Open screens separately in Recents", fontSize = 11.sp, color = HordeColors.TextMuted)
-                }
-                Checkbox(
-                    checked = settings.useSeparateActivities,
-                    onCheckedChange = vm::setUseSeparateActivities,
-                )
-            }
-
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clickable { vm.setShowRawRequestReview(!settings.showRawRequestReview) },
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Column(Modifier.weight(1f)) {
-                    Text("Review raw API JSON", fontSize = 13.sp, color = HordeColors.TextPrimary)
-                    Text("Inspect and edit request JSON before sending", fontSize = 11.sp, color = HordeColors.TextMuted)
-                }
-                Checkbox(
-                    checked = settings.showRawRequestReview,
-                    onCheckedChange = vm::setShowRawRequestReview,
-                )
-            }
-
             HorizontalDivider(color = HordeColors.BorderSubtle)
 
-            // Civitai API key inside Preferences (#90)
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                Text("Civitai API Key (Optional)", fontSize = 12.sp, color = HordeColors.TextSecondary)
-                Text(if (settings.civitaiApiKey.isNotBlank()) "Saved" else "None", fontSize = 11.sp, color = HordeColors.TextMuted)
-            }
-            Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
-                OutlinedTextField(
-                    value = draftCivitaiKey,
-                    onValueChange = { draftCivitaiKey = it },
-                    singleLine = true,
-                    placeholder = { Text("Civitai key...") },
-                    visualTransformation = if (showCivitaiKey) VisualTransformation.None else PasswordVisualTransformation(),
-                    trailingIcon = {
-                        IconButton(onClick = { showCivitaiKey = !showCivitaiKey }) {
-                            Icon(if (showCivitaiKey) Icons.Outlined.VisibilityOff else Icons.Outlined.Visibility, null)
-                        }
-                    },
-                    modifier = Modifier.weight(1f),
-                )
-                Button(
-                    onClick = { vm.saveCivitaiApiKey(draftCivitaiKey) },
-                    colors = ButtonDefaults.buttonColors(containerColor = HordeColors.TealPrimary),
-                ) {
-                    Text("Save", color = Color(0xFF020617), fontWeight = FontWeight.SemiBold)
-                }
-            }
-
-
-
-            HorizontalDivider(color = HordeColors.BorderSubtle)
-
-            // Styles Repos (#83, #84)
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Text("Styles Repos (${settings.stylesRepoUrls.size})", fontSize = 12.sp, color = HordeColors.TextSecondary)
-                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                    TextButton(
-                        onClick = { vm.resetStylesRepoUrls() },
-                    ) {
-                        Icon(Icons.Outlined.RestartAlt, null, modifier = Modifier.size(14.dp))
-                        Spacer(Modifier.size(3.dp))
-                        Text("Reset", fontSize = 11.sp)
-                    }
-                    TextButton(
-                        onClick = {
-                            draftRepoUrl = ""
-                            editingRepoIndex = -1
-                        },
-                    ) {
-                        Icon(Icons.Outlined.Add, null, modifier = Modifier.size(14.dp))
-                        Spacer(Modifier.size(3.dp))
-                        Text("Add", fontSize = 11.sp)
-                    }
-                }
-            }
-            if (settings.stylesRepoUrls.isEmpty()) {
-                Text("No styles repos configured.", fontSize = 11.sp, color = HordeColors.TextMuted)
-            } else {
-                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    settings.stylesRepoUrls.forEachIndexed { idx, repoUrl ->
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clip(RoundedCornerShape(8.dp))
-                                .background(HordeColors.SubCardSurface)
-                                .border(1.dp, HordeColors.BorderSubtle, RoundedCornerShape(8.dp))
-                                .padding(horizontal = 10.dp, vertical = 6.dp),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            Text(
-                                text = repoUrl,
-                                fontSize = 11.sp,
-                                fontFamily = FontFamily.Monospace,
-                                color = HordeColors.TextPrimary,
-                                maxLines = 2,
-                                overflow = TextOverflow.Ellipsis,
-                                modifier = Modifier.weight(1f),
-                            )
-                            IconButton(
-                                onClick = {
-                                    draftRepoUrl = repoUrl
-                                    editingRepoIndex = idx
-                                },
-                                modifier = Modifier.size(28.dp),
-                            ) {
-                                Icon(Icons.Outlined.Edit, "Edit repo", tint = HordeColors.TextSecondary, modifier = Modifier.size(15.dp))
-                            }
-                            IconButton(
-                                onClick = {
-                                    val updated = settings.stylesRepoUrls.toMutableList().apply { removeAt(idx) }
-                                    vm.saveStylesRepoUrls(updated)
-                                },
-                                modifier = Modifier.size(28.dp),
-                            ) {
-                                Icon(Icons.Outlined.DeleteOutline, "Remove repo", tint = HordeColors.RoseText, modifier = Modifier.size(15.dp))
-                            }
-                        }
-                    }
-                }
-            }
-
-            HorizontalDivider(color = HordeColors.BorderSubtle)
-
-            // Storage location inside Preferences (#90)
-            Text("Storage Location", fontSize = 12.sp, color = HordeColors.TextSecondary)
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedButton(
-                    onClick = { vm.setStorageDownloads() },
-                    modifier = Modifier.weight(1f),
-                ) {
-                    Text("Downloads/HordeSlop Studio", fontSize = 11.sp)
-                }
-                Button(
-                    onClick = { safFolderLauncher.launch(null) },
-                    colors = ButtonDefaults.buttonColors(containerColor = HordeColors.ElevatedButton),
-                    modifier = Modifier.weight(1f),
-                ) {
-                    Text("Choose Folder", fontSize = 11.sp, color = HordeColors.TextPrimary)
-                }
-            }
-            Text("Saving to: ${settings.safFolderLabel}", fontSize = 11.sp, color = HordeColors.TextMuted)
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clickable { vm.setKeepImagesInInternalStorage(!settings.keepImagesInInternalStorage) },
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Column(Modifier.weight(1f)) {
-                    Text("Keep images in internal storage", fontSize = 13.sp, color = HordeColors.TextPrimary)
-                    Text("Download to app storage until exported", fontSize = 11.sp, color = HordeColors.TextMuted)
-                }
-                Checkbox(
-                    checked = settings.keepImagesInInternalStorage,
-                    onCheckedChange = vm::setKeepImagesInInternalStorage,
-                )
-            }
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clickable { vm.setPreventMediaIndexing(!settings.preventMediaIndexing) },
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Column(Modifier.weight(1f)) {
-                    Text("Hide images from gallery apps", fontSize = 13.sp, color = HordeColors.TextPrimary)
-                    Text("Prevent Android media indexing with a .nomedia file", fontSize = 11.sp, color = HordeColors.TextMuted)
-                }
-                Checkbox(
-                    checked = settings.preventMediaIndexing,
-                    onCheckedChange = vm::setPreventMediaIndexing,
-                )
-            }
-            OutlinedButton(
-                onClick = { vm.moveAllInternalImagesToExternal() },
-                modifier = Modifier.fillMaxWidth(),
-            ) {
-                Text("Move internal images to external storage", fontSize = 11.sp)
-            }
-
-            HorizontalDivider(color = HordeColors.BorderSubtle)
-
-            Text("Database", fontSize = 12.sp, color = HordeColors.TextSecondary)
-            Text(
-                "Back up or restore prompt history, favorites, model defaults, and gallery metadata.",
-                fontSize = 11.sp,
-                color = HordeColors.TextMuted,
+            // Section 2: Civitai API Key
+            CollapsiblePrefHeader(
+                title = "Civitai API Key (Optional)",
+                collapsed = civitaiCollapsed,
+                onToggle = { civitaiCollapsed = !civitaiCollapsed },
+                trailing = {
+                    Text(if (settings.civitaiApiKey.isNotBlank()) "Saved" else "None", fontSize = 11.sp, color = HordeColors.TextMuted)
+                },
             )
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedButton(
-                    onClick = { exportDbLauncher.launch("hordeslop-studio-database.json") },
-                    modifier = Modifier.weight(1f),
-                ) {
-                    Text("Export", fontSize = 12.sp)
+            if (!civitaiCollapsed) {
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+                    OutlinedTextField(
+                        value = draftCivitaiKey,
+                        onValueChange = { draftCivitaiKey = it },
+                        singleLine = true,
+                        placeholder = { Text("Civitai key...") },
+                        visualTransformation = if (showCivitaiKey) VisualTransformation.None else PasswordVisualTransformation(),
+                        trailingIcon = {
+                            IconButton(onClick = { showCivitaiKey = !showCivitaiKey }) {
+                                Icon(if (showCivitaiKey) Icons.Outlined.VisibilityOff else Icons.Outlined.Visibility, null)
+                            }
+                        },
+                        modifier = Modifier.weight(1f),
+                    )
+                    Button(
+                        onClick = { vm.saveCivitaiApiKey(draftCivitaiKey) },
+                        colors = ButtonDefaults.buttonColors(containerColor = HordeColors.TealPrimary),
+                    ) {
+                        Text("Save", color = Color(0xFF020617), fontWeight = FontWeight.SemiBold)
+                    }
                 }
-                Button(
-                    onClick = { importDbLauncher.launch(arrayOf("application/json", "*/*")) },
-                    colors = ButtonDefaults.buttonColors(containerColor = HordeColors.ElevatedButton),
-                    modifier = Modifier.weight(1f),
+            }
+
+            HorizontalDivider(color = HordeColors.BorderSubtle)
+
+            // Section 3: Styles Repos
+            CollapsiblePrefHeader(
+                title = "Styles Repos (${settings.stylesRepoUrls.size})",
+                collapsed = stylesReposCollapsed,
+                onToggle = { stylesReposCollapsed = !stylesReposCollapsed },
+                trailing = {
+                    Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                        TextButton(
+                            onClick = { vm.resetStylesRepoUrls() },
+                        ) {
+                            Icon(Icons.Outlined.RestartAlt, null, modifier = Modifier.size(14.dp))
+                            Spacer(Modifier.size(3.dp))
+                            Text("Reset", fontSize = 11.sp)
+                        }
+                        TextButton(
+                            onClick = {
+                                draftRepoUrl = ""
+                                editingRepoIndex = -1
+                            },
+                        ) {
+                            Icon(Icons.Outlined.Add, null, modifier = Modifier.size(14.dp))
+                            Spacer(Modifier.size(3.dp))
+                            Text("Add", fontSize = 11.sp)
+                        }
+                    }
+                },
+            )
+            if (!stylesReposCollapsed) {
+                if (settings.stylesRepoUrls.isEmpty()) {
+                    Text("No styles repos configured.", fontSize = 11.sp, color = HordeColors.TextMuted)
+                } else {
+                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        settings.stylesRepoUrls.forEachIndexed { idx, repoUrl ->
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .background(HordeColors.SubCardSurface)
+                                    .border(1.dp, HordeColors.BorderSubtle, RoundedCornerShape(8.dp))
+                                    .padding(horizontal = 10.dp, vertical = 6.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Text(
+                                    text = repoUrl,
+                                    fontSize = 11.sp,
+                                    fontFamily = FontFamily.Monospace,
+                                    color = HordeColors.TextPrimary,
+                                    maxLines = 2,
+                                    overflow = TextOverflow.Ellipsis,
+                                    modifier = Modifier.weight(1f),
+                                )
+                                IconButton(
+                                    onClick = {
+                                        draftRepoUrl = repoUrl
+                                        editingRepoIndex = idx
+                                    },
+                                    modifier = Modifier.size(28.dp),
+                                ) {
+                                    Icon(Icons.Outlined.Edit, "Edit repo", tint = HordeColors.TextSecondary, modifier = Modifier.size(15.dp))
+                                }
+                                IconButton(
+                                    onClick = {
+                                        val updated = settings.stylesRepoUrls.toMutableList().apply { removeAt(idx) }
+                                        vm.saveStylesRepoUrls(updated)
+                                    },
+                                    modifier = Modifier.size(28.dp),
+                                ) {
+                                    Icon(Icons.Outlined.DeleteOutline, "Remove repo", tint = HordeColors.RoseText, modifier = Modifier.size(15.dp))
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            HorizontalDivider(color = HordeColors.BorderSubtle)
+
+            // Section 4: Storage Location
+            CollapsiblePrefHeader(
+                title = "Storage Location",
+                collapsed = storageCollapsed,
+                onToggle = { storageCollapsed = !storageCollapsed },
+                trailing = {
+                    Text(if (settings.keepImagesInInternalStorage) "Internal" else "Downloads", fontSize = 11.sp, color = HordeColors.TextMuted)
+                },
+            )
+            if (!storageCollapsed) {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedButton(
+                        onClick = { vm.setStorageDownloads() },
+                        modifier = Modifier.weight(1f),
+                    ) {
+                        Text("Downloads/HordeSlop Studio", fontSize = 11.sp)
+                    }
+                    Button(
+                        onClick = { safFolderLauncher.launch(null) },
+                        colors = ButtonDefaults.buttonColors(containerColor = HordeColors.ElevatedButton),
+                        modifier = Modifier.weight(1f),
+                    ) {
+                        Text("Choose Folder", fontSize = 11.sp, color = HordeColors.TextPrimary)
+                    }
+                }
+                Text("Saving to: ${settings.safFolderLabel}", fontSize = 11.sp, color = HordeColors.TextMuted)
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { vm.setKeepImagesInInternalStorage(!settings.keepImagesInInternalStorage) },
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Text("Import", fontSize = 12.sp, color = HordeColors.TextPrimary)
+                    Column(Modifier.weight(1f)) {
+                        Text("Keep images in internal storage", fontSize = 13.sp, color = HordeColors.TextPrimary)
+                        Text("Download to app storage until exported", fontSize = 11.sp, color = HordeColors.TextMuted)
+                    }
+                    Checkbox(
+                        checked = settings.keepImagesInInternalStorage,
+                        onCheckedChange = vm::setKeepImagesInInternalStorage,
+                    )
+                }
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { vm.setPreventMediaIndexing(!settings.preventMediaIndexing) },
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Column(Modifier.weight(1f)) {
+                        Text("Hide images from gallery apps", fontSize = 13.sp, color = HordeColors.TextPrimary)
+                        Text("Prevent Android media indexing with a .nomedia file", fontSize = 11.sp, color = HordeColors.TextMuted)
+                    }
+                    Checkbox(
+                        checked = settings.preventMediaIndexing,
+                        onCheckedChange = vm::setPreventMediaIndexing,
+                    )
+                }
+                OutlinedButton(
+                    onClick = { vm.moveAllInternalImagesToExternal() },
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Text("Move internal images to external storage", fontSize = 11.sp)
+                }
+            }
+
+            HorizontalDivider(color = HordeColors.BorderSubtle)
+
+            // Section 5: Database
+            CollapsiblePrefHeader(
+                title = "Database Backup & Restore",
+                collapsed = databaseCollapsed,
+                onToggle = { databaseCollapsed = !databaseCollapsed },
+            )
+            if (!databaseCollapsed) {
+                Text(
+                    "Back up or restore prompt history, favorites, model defaults, and gallery metadata.",
+                    fontSize = 11.sp,
+                    color = HordeColors.TextMuted,
+                )
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedButton(
+                        onClick = { exportDbLauncher.launch("hordeslop-studio-database.json") },
+                        modifier = Modifier.weight(1f),
+                    ) {
+                        Text("Export", fontSize = 12.sp)
+                    }
+                    Button(
+                        onClick = { importDbLauncher.launch(arrayOf("application/json", "*/*")) },
+                        colors = ButtonDefaults.buttonColors(containerColor = HordeColors.ElevatedButton),
+                        modifier = Modifier.weight(1f),
+                    ) {
+                        Text("Import", fontSize = 12.sp, color = HordeColors.TextPrimary)
+                    }
                 }
             }
         }
 
         // Notifications
         StudioCard {
-            Text("Notifications", fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = HordeColors.TextPrimary)
-            HordeConstants.NOTIFICATION_CHANNELS.forEach { ch ->
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(10.dp))
-                        .background(HordeColors.SubCardSurface)
-                        .clickable {
-                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                                runCatching {
-                                    context.startActivity(
-                                        Intent(Settings.ACTION_CHANNEL_NOTIFICATION_SETTINGS)
-                                            .putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName)
-                                            .putExtra(Settings.EXTRA_CHANNEL_ID, ch.id),
-                                    )
+            CollapsiblePrefHeader(
+                title = "Notifications",
+                collapsed = notificationsCollapsed,
+                onToggle = { notificationsCollapsed = !notificationsCollapsed },
+            )
+            if (!notificationsCollapsed) {
+                HordeConstants.NOTIFICATION_CHANNELS.forEach { ch ->
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(10.dp))
+                            .background(HordeColors.SubCardSurface)
+                            .clickable {
+                                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                                    runCatching {
+                                        context.startActivity(
+                                            Intent(Settings.ACTION_CHANNEL_NOTIFICATION_SETTINGS)
+                                                .putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName)
+                                                .putExtra(Settings.EXTRA_CHANNEL_ID, ch.id),
+                                        )
+                                    }
                                 }
                             }
+                            .padding(10.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Column {
+                            Text(ch.name, fontSize = 12.sp, color = HordeColors.TextPrimary)
+                            Text(ch.importanceLabel, fontSize = 11.sp, color = HordeColors.TextMuted)
                         }
-                        .padding(10.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Column {
-                        Text(ch.name, fontSize = 12.sp, color = HordeColors.TextPrimary)
-                        Text(ch.importanceLabel, fontSize = 11.sp, color = HordeColors.TextMuted)
-                    }
-                    if (!ch.activeInMvp) {
-                        Text("Later", fontSize = 11.sp, color = HordeColors.TextMuted)
+                        if (!ch.activeInMvp) {
+                            Text("Later", fontSize = 11.sp, color = HordeColors.TextMuted)
+                        }
                     }
                 }
             }
@@ -638,42 +713,54 @@ fun SettingsScreen(
 
         // Open Source Licenses & Privacy / Legal (Modals)
         StudioCard {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(10.dp))
-                    .background(HordeColors.SubCardSurface)
-                    .clickable { showOssCreditsModal = true }
-                    .padding(12.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Icon(Icons.Outlined.Balance, null, tint = HordeColors.TealSoft)
-                    Column {
-                        Text("Open Source Licenses", fontSize = 13.sp, fontWeight = FontWeight.Medium, color = HordeColors.TextPrimary)
-                        Text("AGPL-3.0-or-later", fontSize = 11.sp, color = HordeColors.TextMuted)
+            CollapsiblePrefHeader(
+                title = "Licenses & Privacy",
+                collapsed = legalCollapsed,
+                onToggle = { legalCollapsed = !legalCollapsed },
+            )
+            if (!legalCollapsed) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(HordeColors.SubCardSurface)
+                        .clickable { showOssCreditsModal = true }
+                        .padding(12.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Icon(Icons.Outlined.Balance, null, tint = HordeColors.TealSoft)
+                        Column {
+                            Text("Open Source Licenses", fontSize = 13.sp, fontWeight = FontWeight.Medium, color = HordeColors.TextPrimary)
+                            Text("AGPL-3.0-or-later", fontSize = 11.sp, color = HordeColors.TextMuted)
+                        }
                     }
+                    Text("View", fontSize = 12.sp, color = HordeColors.TealSoft)
                 }
-                Text("View", fontSize = 12.sp, color = HordeColors.TealSoft)
-            }
 
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(10.dp))
-                    .background(HordeColors.SubCardSurface)
-                    .clickable { showPrivacyLegalModal = true }
-                    .padding(12.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Column {
-                    Text("Privacy & Legal", fontSize = 13.sp, fontWeight = FontWeight.Medium, color = HordeColors.TextPrimary)
-                    Text("App privacy, AI Horde terms & links", fontSize = 11.sp, color = HordeColors.TextMuted)
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(HordeColors.SubCardSurface)
+                        .clickable { showPrivacyLegalModal = true }
+                        .padding(12.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Column {
+                        Text("Privacy & Legal", fontSize = 13.sp, fontWeight = FontWeight.Medium, color = HordeColors.TextPrimary)
+                        Text("App privacy, AI Horde terms & links", fontSize = 11.sp, color = HordeColors.TextMuted)
+                    }
+                    Text("View", fontSize = 12.sp, color = HordeColors.TealSoft)
                 }
-                Text("View", fontSize = 12.sp, color = HordeColors.TealSoft)
             }
+        }
+
+        // Bottom of Settings: AI Notice (when dismissed from top)
+        if (settings.aiNoticeDismissed) {
+            aiNoticeComposable()
         }
     }
 
@@ -974,3 +1061,33 @@ fun SettingsScreen(
         )
     }
 }
+
+@Composable
+private fun CollapsiblePrefHeader(
+    title: String,
+    collapsed: Boolean,
+    onToggle: () -> Unit,
+    trailing: (@Composable () -> Unit)? = null,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(6.dp))
+            .clickable { onToggle() }
+            .padding(vertical = 4.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            Text(title, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = HordeColors.TextPrimary)
+            Icon(
+                if (collapsed) Icons.Outlined.ExpandMore else Icons.Outlined.ExpandLess,
+                contentDescription = if (collapsed) "Expand $title" else "Collapse $title",
+                tint = HordeColors.TextMuted,
+                modifier = Modifier.size(18.dp),
+            )
+        }
+        trailing?.invoke()
+    }
+}
+
