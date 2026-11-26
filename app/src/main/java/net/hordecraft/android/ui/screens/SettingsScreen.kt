@@ -23,6 +23,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.outlined.OpenInNew
 import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.Android
 import androidx.compose.material.icons.outlined.Balance
@@ -32,7 +33,6 @@ import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.ExpandLess
 import androidx.compose.material.icons.outlined.ExpandMore
 import androidx.compose.material.icons.outlined.Info
-import androidx.compose.material.icons.outlined.OpenInNew
 import androidx.compose.material.icons.outlined.RestartAlt
 import androidx.compose.material.icons.outlined.Visibility
 import androidx.compose.material.icons.outlined.VisibilityOff
@@ -1001,7 +1001,7 @@ fun SettingsScreen(
                                 Text(lib.name, fontSize = 12.sp, fontWeight = FontWeight.Medium, color = HordeColors.TextPrimary)
                                 Text(lib.license, fontSize = 11.sp, fontFamily = FontFamily.Monospace, color = HordeColors.TextMuted)
                             }
-                            Icon(Icons.Outlined.OpenInNew, null, tint = HordeColors.TextMuted, modifier = Modifier.size(16.dp))
+                            Icon(Icons.AutoMirrored.Outlined.OpenInNew, null, tint = HordeColors.TextMuted, modifier = Modifier.size(16.dp))
                         }
                         HorizontalDivider(color = HordeColors.BorderSubtle)
                     }

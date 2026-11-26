@@ -82,6 +82,8 @@ class HordecraftRepository(
     private val downloadOkHttpClient: OkHttpClient,
     private val json: Json,
 ) {
+    private val prettyJson = Json { prettyPrint = true }
+
     val settingsFlow: Flow<AppSettings> = settingsStore.settings
 
     val historyFlow: Flow<List<PromptRecord>> = promptHistoryDao.observeAll().map { list ->
@@ -623,7 +625,7 @@ class HordecraftRepository(
                 put("params", cleanedParams)
             }
         }
-        val payloadStr = Json { prettyPrint = true }.encodeToString(JsonObject.serializer(), payload)
+        val payloadStr = prettyJson.encodeToString(JsonObject.serializer(), payload)
         val resp = hordeApi.submitAsync(payload)
         val entity = ActiveJobEntity(
             id = resp.id,

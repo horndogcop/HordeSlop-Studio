@@ -83,8 +83,7 @@ object StyleContractEngine {
         val style = effectiveStyles.firstOrNull() ?: spec.activeStyle?.takeIf { it.id != "none" }
         val serverStyle = effectiveStyles.firstOrNull { it.inApi || it.source == "Styles API" }
             ?: style?.takeIf { it.inApi || it.source == "Styles API" }
-        val isServerStyle = serverStyle != null
-        val locked = if (isServerStyle) {
+        val locked = if (serverStyle != null) {
             buildSet {
                 effectiveStyles.filter { it.inApi || it.source == "Styles API" }.forEach { addAll(it.lockedFields) }
                 style?.let { addAll(it.lockedFields) }
@@ -96,7 +95,7 @@ object StyleContractEngine {
         val params = buildJsonObject {
             put("n", chunkN.coerceIn(1, HordeConstants.MAX_IMAGES_PER_REQUEST))
 
-            if (!isServerStyle || serverStyle == null) {
+            if (serverStyle == null) {
                 put("steps", spec.steps)
                 put("cfg_scale", spec.cfg)
                 put("clip_skip", spec.clipSkip)
@@ -197,7 +196,7 @@ object StyleContractEngine {
                 }
             }
             if (curNeg.isBlank()) curPos else "$curPos ### $curNeg"
-        } else if (style != null && !isServerStyle) {
+        } else if (style != null && serverStyle == null) {
             expandClientStylePrompt(style, spec.prompt, spec.negativePrompt)
         } else if (spec.negativePrompt.isBlank()) {
             spec.prompt.trim()
@@ -207,10 +206,10 @@ object StyleContractEngine {
 
         return buildJsonObject {
             put("prompt", combinedPrompt)
-            if (isServerStyle && serverStyle != null) {
+            if (serverStyle != null) {
                 put("style", serverStyle.id)
             }
-            if (!isServerStyle || StyleFieldLock.MODEL !in locked) {
+            if (serverStyle == null || StyleFieldLock.MODEL !in locked) {
                 if (chunkModels.isNotEmpty()) {
                     put(
                         "models",

@@ -37,6 +37,8 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.outlined.OpenInNew
+import androidx.compose.material.icons.automirrored.outlined.Send
 import androidx.compose.material.icons.outlined.ChevronLeft
 import androidx.compose.material.icons.outlined.ChevronRight
 import androidx.compose.material.icons.outlined.Clear
@@ -48,9 +50,7 @@ import androidx.compose.material.icons.outlined.FolderOpen
 import androidx.compose.material.icons.outlined.Fullscreen
 import androidx.compose.material.icons.outlined.FullscreenExit
 import androidx.compose.material.icons.outlined.MoreHoriz
-import androidx.compose.material.icons.outlined.OpenInNew
 import androidx.compose.material.icons.outlined.Refresh
-import androidx.compose.material.icons.outlined.Send
 import androidx.compose.material.icons.outlined.Share
 import androidx.compose.material.icons.outlined.Wallpaper
 import androidx.compose.material3.AlertDialog
@@ -439,7 +439,7 @@ private fun GalleryViewerModal(
                     onClick = { onUseSettings(activeImage) },
                     modifier = Modifier.clip(CircleShape).background(Color.Black.copy(alpha = 0.55f)),
                 ) {
-                    Icon(Icons.Outlined.Send, "Use settings", tint = Color.White)
+                    Icon(Icons.AutoMirrored.Outlined.Send, "Use settings", tint = Color.White)
                 }
                 IconButton(
                     onClick = if (fullscreenMode) onExitFullscreen else onEnterFullscreen,
@@ -475,7 +475,7 @@ private fun GalleryViewerModal(
                         )
                         DropdownMenuItem(
                             text = { Text("Open in...") },
-                            leadingIcon = { Icon(Icons.Outlined.OpenInNew, null) },
+                            leadingIcon = { Icon(Icons.AutoMirrored.Outlined.OpenInNew, null) },
                             onClick = {
                                 showMoreMenu = false
                                 onOpenIn(activeImage)
