@@ -1,7 +1,6 @@
 package net.hordeslop.studio.data.remote
 
 import kotlinx.serialization.Serializable
-import kotlinx.serialization.json.JsonElement
 import retrofit2.http.GET
 import retrofit2.http.Header
 import retrofit2.http.Path
@@ -48,20 +47,6 @@ data class CivitaiImageDto(
     val height: Int? = null,
 )
 
-@Serializable
-data class CivitaiImagesResponseDto(
-    val items: List<CivitaiImageItemDto> = emptyList(),
-)
-
-@Serializable
-data class CivitaiImageItemDto(
-    val id: Long = 0,
-    val url: String = "",
-    val width: Int? = null,
-    val height: Int? = null,
-    val meta: JsonElement? = null,
-)
-
 interface CivitaiApiService {
     @GET("api/v1/models")
     suspend fun searchModels(
@@ -85,10 +70,4 @@ interface CivitaiApiService {
         @Header("Authorization") authHeader: String?,
         @Path("id") id: Long,
     ): CivitaiModelVersionDto
-
-    @GET("api/v1/images")
-    suspend fun getImageById(
-        @Header("Authorization") authHeader: String?,
-        @Query("imageId") imageId: Long,
-    ): CivitaiImagesResponseDto
 }

@@ -79,7 +79,7 @@ data class StudioUiState(
     val hordePerformance: HordePerformanceSummary? = null,
     val loadingModels: Boolean = false,
     val toastMessage: String? = null,
-    val clipSkipInAdvanced: Boolean = false,
+    val clipSkipInAdvanced: Boolean = true,
     val hiresFix: Boolean = false,
 ) {
     val activeStyles: List<HordeStyle>
@@ -100,8 +100,19 @@ data class StudioUiState(
         copy(clipSkipInAdvanced = shouldMoveClipSkipToAdvanced(primaryModel, clipSkip, activeStyle))
 
     companion object {
-        fun shouldMoveClipSkipToAdvanced(model: HordeModel, clipSkip: Int, activeStyle: HordeStyle?): Boolean {
-            val defaultSkip = activeStyle?.clipSkip ?: model.defaultClipSkip
+        fun shouldMoveClipSkipToAdvanced(
+            model: HordeModel,
+            clipSkip: Int,
+            activeStyle: HordeStyle? = null,
+        ): Boolean {
+            val isPony = model.name.contains("pony", ignoreCase = true) ||
+                model.baseline.contains("pony", ignoreCase = true)
+            val styleClip = activeStyle?.takeIf { it.id != "none" }?.clipSkip
+            val defaultSkip = when {
+                styleClip != null -> styleClip
+                isPony -> 2
+                else -> model.defaultClipSkip
+            }
             return clipSkip == defaultSkip
         }
     }

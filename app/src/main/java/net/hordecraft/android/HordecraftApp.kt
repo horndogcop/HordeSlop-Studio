@@ -101,8 +101,6 @@ class AppContainer(context: Application) {
         modelDefaultsDao = database.modelDefaultsDao(),
         savedImageDao = database.savedImageDao(),
         activeJobDao = database.activeJobDao(),
-        favoriteLoraDao = database.favoriteLoraDao(),
-        favoriteTiDao = database.favoriteTiDao(),
         hordeApi = hordeApi,
         civitaiApi = civitaiApi,
         modelRefRepo = modelReferenceRepo,

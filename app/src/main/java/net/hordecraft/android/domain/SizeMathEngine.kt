@@ -1,4 +1,4 @@
-package net.hordecraft.android.domain
+package net.hordeslop.studio.domain
 
 import java.util.Locale
 import kotlin.math.roundToInt

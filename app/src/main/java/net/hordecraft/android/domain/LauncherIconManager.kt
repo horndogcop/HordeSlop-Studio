@@ -1,11 +1,11 @@
-package net.hordecraft.android.domain
+package net.hordeslop.studio.domain
 
 import android.content.ComponentName
 import android.content.Context
 import android.content.pm.PackageManager
 
 object LauncherIconManager {
-    private const val MANIFEST_NAMESPACE = "net.hordecraft.android"
+    private const val MANIFEST_NAMESPACE = "net.hordeslop.studio"
 
     fun componentClassName(choice: LauncherIconChoice): String =
         MANIFEST_NAMESPACE + choice.aliasClassSuffix
