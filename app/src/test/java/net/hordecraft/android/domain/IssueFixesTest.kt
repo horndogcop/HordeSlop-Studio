@@ -461,4 +461,50 @@ class IssueFixesTest {
         val rewritten = interceptorClass.rewriteBaseUrl(originalUrl, HordeConstants.FALLBACK_API_BASE_URL)
         assertEquals("https://stablehorde.net/api/v2/generate/async", rewritten.toString())
     }
+
+    @Test
+    fun viewerSnapshotAnchorsCurrentImageWhenNewGenerationsArrive() {
+        fun makeImg(id: String) = SavedImage(
+            id = id,
+            requestId = "req-$id",
+            generationId = "gen-$id",
+            fileUri = "file://$id.webp",
+            prompt = "prompt $id",
+            negativePrompt = "",
+            model = "model",
+            seed = "123",
+            steps = 20,
+            cfg = 7f,
+            clipSkip = 1,
+            sampler = "k_euler",
+            scheduler = "karras",
+            width = 512,
+            height = 512,
+            destinationLabel = "App Storage",
+            isFavorite = false,
+            partialFromCancel = false,
+            requestJson = "{}",
+            statusMetadataJson = "{}",
+            createdAtMillis = 1000L,
+        )
+
+        val initialImages = listOf(makeImg("1"), makeImg("2"), makeImg("3"))
+        var snapshot: List<SavedImage>? = initialImages
+        val activeIndex = 1
+
+        val updatedImages = listOf(makeImg("4")) + initialImages
+
+        val latestById = updatedImages.associateBy { it.id }
+        val anchoredViewerList = snapshot?.mapNotNull { snapImg ->
+            latestById[snapImg.id] ?: snapImg
+        }
+
+        assertEquals(3, anchoredViewerList?.size)
+        assertEquals("1", anchoredViewerList?.get(0)?.id)
+        assertEquals("2", anchoredViewerList?.get(activeIndex)?.id)
+        assertEquals("3", anchoredViewerList?.get(2)?.id)
+
+        snapshot = null
+        assertEquals(4, (snapshot ?: updatedImages).size)
+    }
 }

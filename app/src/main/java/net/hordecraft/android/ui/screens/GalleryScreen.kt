@@ -113,6 +113,7 @@ fun GalleryScreen(
     var favoritesOnly by remember { mutableStateOf(false) }
 
     var viewerStartIndex by remember { mutableStateOf<Int?>(null) }
+    var viewerImagesSnapshot by remember { mutableStateOf<List<SavedImage>?>(null) }
     var isFullscreen by remember { mutableStateOf(false) }
     var fullscreenHudVisible by remember { mutableStateOf(false) }
     var columnsMenuExpanded by remember { mutableStateOf(false) }
@@ -121,6 +122,7 @@ fun GalleryScreen(
         if (!pendingSearchQuery.isNullOrBlank()) {
             searchQuery = pendingSearchQuery
             viewerStartIndex = null
+            viewerImagesSnapshot = null
             isFullscreen = false
             vm.clearPendingGallerySearchQuery()
         }
@@ -283,6 +285,7 @@ fun GalleryScreen(
                             .border(1.dp, HordeColors.BorderSubtle, RoundedCornerShape(14.dp))
                             .clickable {
                                 viewerStartIndex = idx
+                                viewerImagesSnapshot = filtered
                                 isFullscreen = settings.skipGalleryModalToFullscreen
                                 fullscreenHudVisible = false
                             },
@@ -350,11 +353,21 @@ fun GalleryScreen(
         }
     }
 
+    val activeViewerImages = remember(viewerImagesSnapshot, images) {
+        viewerImagesSnapshot?.let { snapshot ->
+            val latestById = images.associateBy { it.id }
+            snapshot.mapNotNull { snapImg ->
+                latestById[snapImg.id] ?: snapImg
+            }
+        }
+    }
+
     viewerStartIndex?.let { startIndex ->
-        if (filtered.isNotEmpty()) {
-            val safeStart = startIndex.coerceIn(0, filtered.lastIndex)
+        val currentViewerList = activeViewerImages ?: filtered
+        if (currentViewerList.isNotEmpty()) {
+            val safeStart = startIndex.coerceIn(0, currentViewerList.lastIndex)
             GalleryViewerModal(
-                images = filtered,
+                images = currentViewerList,
                 initialIndex = safeStart,
                 isFullscreen = isFullscreen,
                 fullscreenHudVisible = fullscreenHudVisible,
@@ -369,16 +382,23 @@ fun GalleryScreen(
                 onToggleHudVisibility = {
                     fullscreenHudVisible = !fullscreenHudVisible
                 },
-                onToggleFavorite = { vm.toggleImageFavorite(it.id, it.isFavorite) },
+                onToggleFavorite = { img ->
+                    vm.toggleImageFavorite(img.id, img.isFavorite)
+                    viewerImagesSnapshot = viewerImagesSnapshot?.map {
+                        if (it.id == img.id) it.copy(isFavorite = !img.isFavorite) else it
+                    }
+                },
                 onReroll = { vm.rerollImage(it) },
                 onUseSettings = { img ->
                     vm.applySavedImageParameters(img)
                     viewerStartIndex = null
+                    viewerImagesSnapshot = null
                     isFullscreen = false
                     launchActivityForDestination(context, ActivityDestination.IMAGE_GEN)
                 },
                 onSameRequest = { reqId ->
                     viewerStartIndex = null
+                    viewerImagesSnapshot = null
                     isFullscreen = false
                     searchQuery = reqId
                 },
@@ -407,13 +427,17 @@ fun GalleryScreen(
                 },
                 onDelete = { img, deleteFile ->
                     vm.deleteImage(img, deleteFile)
-                    if (filtered.size <= 1) {
+                    val remaining = viewerImagesSnapshot?.filter { it.id != img.id } ?: emptyList()
+                    viewerImagesSnapshot = remaining
+                    if (remaining.isEmpty()) {
                         viewerStartIndex = null
+                        viewerImagesSnapshot = null
                         isFullscreen = false
                     }
                 },
                 onDismiss = {
                     viewerStartIndex = null
+                    viewerImagesSnapshot = null
                     isFullscreen = false
                     fullscreenHudVisible = false
                 },
