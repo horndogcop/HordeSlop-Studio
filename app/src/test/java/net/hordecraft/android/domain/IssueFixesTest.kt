@@ -280,6 +280,36 @@ class IssueFixesTest {
                 ),
             ),
             activeJobs = emptyList(),
+            favoriteLoras = listOf(
+                net.hordeslop.studio.data.local.FavoriteLoraEntity(
+                    modelVersionId = 555001L,
+                    modelId = 555000L,
+                    name = "Cool Style LoRA",
+                    versionName = "v1.0",
+                    strengthModel = 0.85f,
+                    strengthClip = 0.65f,
+                    baseModel = "SDXL 1.0",
+                    trainedWordsJson = """["coolstyle"]""",
+                    useApiTrigger = false,
+                    triggerTarget = "PROMPT",
+                    triggerMode = "CUSTOM",
+                    selectedTriggersJson = """["coolstyle"]""",
+                    createdAtMillis = 4444L,
+                ),
+            ),
+            favoriteTis = listOf(
+                net.hordeslop.studio.data.local.FavoriteTiEntity(
+                    modelVersionId = 777001L,
+                    modelId = 777000L,
+                    name = "BadHandsTI",
+                    versionLabel = "v1",
+                    strength = 1.1f,
+                    injectTi = "NEGPROMPT",
+                    lastTarget = "NEGPROMPT",
+                    baseModel = "SD 1.5",
+                    createdAtMillis = 4445L,
+                ),
+            ),
             exportedAtMillis = 5555L,
         )
         val encoded = net.hordeslop.studio.data.local.DatabaseBackupCodec.encodeJson(bundle)
@@ -290,6 +320,11 @@ class IssueFixesTest {
         assertEquals("Juggernaut XL", decoded.modelDefaults.first().modelName)
         assertEquals(1, decoded.savedImages.size)
         assertEquals("req1", decoded.savedImages.first().requestId)
+        assertEquals(1, decoded.favoriteLoras.size)
+        assertEquals(555001L, decoded.favoriteLoras.first().modelVersionId)
+        assertEquals(0.85f, decoded.favoriteLoras.first().strengthModel)
+        assertEquals(1, decoded.favoriteTis.size)
+        assertEquals(777001L, decoded.favoriteTis.first().modelVersionId)
         assertEquals(5555L, decoded.exportedAtMillis)
         assertTrue(
             net.hordeslop.studio.data.local.DatabaseBackupCodec.isSqliteDatabaseBytes(
@@ -394,5 +429,98 @@ class IssueFixesTest {
     fun showRawRequestReviewDefaultsToFalse() {
         val defaults = net.hordeslop.studio.data.local.AppSettings()
         assertFalse(defaults.showRawRequestReview)
+    }
+
+    @Test
+    fun civitaiImageParserExtractsIdAndMetadata() {
+        assertEquals(987654L, CivitaiImageParser.extractImageId("987654"))
+        assertEquals(1234567L, CivitaiImageParser.extractImageId("https://civitai.com/images/1234567?postId=99"))
+        assertEquals(null, CivitaiImageParser.extractImageId("not-an-id"))
+
+        val metaJson = json.parseToJsonElement(
+            """
+            {
+              "prompt": "sunlit forest temple",
+              "negativePrompt": "lowres, blurry",
+              "steps": 28,
+              "cfgScale": 6.5,
+              "sampler": "DPM++ 2M Karras",
+              "seed": 424242,
+              "Clip skip": 2,
+              "Size": "832x1216",
+              "Model": "Juggernaut XL"
+            }
+            """.trimIndent(),
+        ).jsonObject
+        val parsed = CivitaiImageParser.parseMetaObject(
+            imageId = 1234567L,
+            imageUrl = "https://image.civitai.com/example.jpeg",
+            fallbackWidth = 512,
+            fallbackHeight = 512,
+            meta = metaJson,
+            availableModels = HordeConstants.FALLBACK_SEED_MODELS,
+        )
+        assertEquals("sunlit forest temple", parsed.prompt)
+        assertEquals("lowres, blurry", parsed.negativePrompt)
+        assertEquals("Juggernaut XL", parsed.modelName)
+        assertEquals(28, parsed.steps)
+        assertEquals(6.5f, parsed.cfg)
+        assertEquals("k_dpmpp_2m", parsed.sampler)
+        assertEquals("karras", parsed.scheduler)
+        assertEquals("424242", parsed.seed)
+        assertEquals(2, parsed.clipSkip)
+        assertEquals(832, parsed.width)
+        assertEquals(1216, parsed.height)
+    }
+
+    @Test
+    fun invertedClipSkipLocationTest() {
+        val standardModel = HordeModel(
+            name = "SD 1.5",
+            baseline = "SD 1.5",
+            workers = 1,
+            queued = 0,
+            etaSeconds = 0,
+            defaultSteps = 28,
+            defaultSampler = "k_euler",
+            defaultScheduler = "normal",
+            defaultClipSkip = 1,
+            suggestedMinSteps = 20,
+            suggestedMaxSteps = 40,
+            suggestedMinCfg = 4f,
+            suggestedMaxCfg = 10f,
+            suggestedWidth = 512,
+            suggestedHeight = 512,
+        )
+        assertTrue(net.hordeslop.studio.ui.MainViewModel.StudioUiState.shouldMoveClipSkipToAdvanced(standardModel, 1, null))
+        assertFalse(net.hordeslop.studio.ui.MainViewModel.StudioUiState.shouldMoveClipSkipToAdvanced(standardModel, 2, null))
+    }
+
+    @Test
+    fun hiresFixPayloadSerializationTest() {
+        val spec = StudioSubmissionSpec(
+            prompt = "cat",
+            negativePrompt = "",
+            selectedModels = listOf("Deliberate"),
+            dispatchMode = MultiModelDispatchMode.COMBINED,
+            activeStyle = null,
+            seed = "",
+            steps = 28,
+            cfg = 7f,
+            clipSkip = 1,
+            width = 512,
+            height = 512,
+            sampler = "k_euler",
+            scheduler = "normal",
+            nsfw = false,
+            censorNsfw = true,
+            imageCount = 1,
+            loras = emptyList(),
+            tis = emptyList(),
+            hiresFix = true,
+        )
+        val chunks = StyleContractEngine.buildSubmissionChunks(spec)
+        val payload = chunks.first().payload
+        assertTrue(payload["hires_fix"]?.jsonPrimitive?.booleanOrNull == true)
     }
 }

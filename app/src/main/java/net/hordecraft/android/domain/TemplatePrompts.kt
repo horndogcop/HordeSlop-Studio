@@ -1,4 +1,4 @@
-package net.hordeslop.studio.domain
+package net.hordecraft.android.domain
 
 import java.util.Locale
 import kotlin.random.Random

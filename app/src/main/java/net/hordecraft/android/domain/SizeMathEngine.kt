@@ -1,4 +1,4 @@
-package net.hordeslop.studio.domain
+package net.hordecraft.android.domain
 
 import java.util.Locale
 import kotlin.math.roundToInt
@@ -19,6 +19,7 @@ object SizeMathEngine {
 
     val MP_PRESETS = listOf(
         MegapixelPreset("0.25 MP", 0.25),
+        MegapixelPreset("0.6 MP (768px)", 0.589824),
         MegapixelPreset("1 MP", 1.0),
         MegapixelPreset("1.5 MP", 1.5),
         MegapixelPreset("2 MP", 2.0),

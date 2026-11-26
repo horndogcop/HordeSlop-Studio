@@ -92,6 +92,36 @@ data class ActiveJobEntity(
     val dismissedAtFinishedCount: Int = 0,
 )
 
+@Entity(tableName = "favorite_loras")
+data class FavoriteLoraEntity(
+    @PrimaryKey val modelVersionId: Long,
+    val modelId: Long,
+    val name: String,
+    val versionName: String,
+    val strengthModel: Float,
+    val strengthClip: Float,
+    val baseModel: String,
+    val trainedWordsJson: String,
+    val useApiTrigger: Boolean,
+    val triggerTarget: String,
+    val triggerMode: String,
+    val selectedTriggersJson: String,
+    val createdAtMillis: Long,
+)
+
+@Entity(tableName = "favorite_tis")
+data class FavoriteTiEntity(
+    @PrimaryKey val modelVersionId: Long,
+    val modelId: Long,
+    val name: String,
+    val versionLabel: String,
+    val strength: Float,
+    val injectTi: String,
+    val lastTarget: String,
+    val baseModel: String,
+    val createdAtMillis: Long,
+)
+
 @Dao
 interface PromptHistoryDao {
     @Query("SELECT * FROM prompt_history ORDER BY timestampMillis DESC")
@@ -212,14 +242,64 @@ interface ActiveJobDao {
     suspend fun deleteAll()
 }
 
+@Dao
+interface FavoriteLoraDao {
+    @Query("SELECT * FROM favorite_loras ORDER BY createdAtMillis DESC")
+    fun observeAll(): Flow<List<FavoriteLoraEntity>>
+
+    @Query("SELECT * FROM favorite_loras ORDER BY createdAtMillis DESC")
+    suspend fun getAll(): List<FavoriteLoraEntity>
+
+    @Query("SELECT * FROM favorite_loras WHERE modelVersionId = :versionId LIMIT 1")
+    suspend fun findByVersionId(versionId: Long): FavoriteLoraEntity?
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsert(entity: FavoriteLoraEntity)
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsertAll(entities: List<FavoriteLoraEntity>)
+
+    @Query("DELETE FROM favorite_loras WHERE modelVersionId = :versionId")
+    suspend fun deleteByVersionId(versionId: Long)
+
+    @Query("DELETE FROM favorite_loras")
+    suspend fun deleteAll()
+}
+
+@Dao
+interface FavoriteTiDao {
+    @Query("SELECT * FROM favorite_tis ORDER BY createdAtMillis DESC")
+    fun observeAll(): Flow<List<FavoriteTiEntity>>
+
+    @Query("SELECT * FROM favorite_tis ORDER BY createdAtMillis DESC")
+    suspend fun getAll(): List<FavoriteTiEntity>
+
+    @Query("SELECT * FROM favorite_tis WHERE modelVersionId = :versionId LIMIT 1")
+    suspend fun findByVersionId(versionId: Long): FavoriteTiEntity?
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsert(entity: FavoriteTiEntity)
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsertAll(entities: List<FavoriteTiEntity>)
+
+    @Query("DELETE FROM favorite_tis WHERE modelVersionId = :versionId")
+    suspend fun deleteByVersionId(versionId: Long)
+
+    @Query("DELETE FROM favorite_tis")
+    suspend fun deleteAll()
+}
+
 @Database(
     entities = [
         PromptHistoryEntity::class,
         ModelDefaultsEntity::class,
         SavedImageEntity::class,
         ActiveJobEntity::class,
+        FavoriteLoraEntity::class,
+        FavoriteTiEntity::class,
     ],
-    version = 2,
+    version = 3,
     exportSchema = true,
 )
 abstract class HordecraftDatabase : RoomDatabase() {
@@ -227,6 +307,8 @@ abstract class HordecraftDatabase : RoomDatabase() {
     abstract fun modelDefaultsDao(): ModelDefaultsDao
     abstract fun savedImageDao(): SavedImageDao
     abstract fun activeJobDao(): ActiveJobDao
+    abstract fun favoriteLoraDao(): FavoriteLoraDao
+    abstract fun favoriteTiDao(): FavoriteTiDao
 
     companion object {
         val MIGRATION_1_2 = object : Migration(1, 2) {
@@ -236,12 +318,53 @@ abstract class HordecraftDatabase : RoomDatabase() {
             }
         }
 
+        val MIGRATION_2_3 = object : Migration(2, 3) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `favorite_loras` (
+                        `modelVersionId` INTEGER NOT NULL,
+                        `modelId` INTEGER NOT NULL,
+                        `name` TEXT NOT NULL,
+                        `versionName` TEXT NOT NULL,
+                        `strengthModel` REAL NOT NULL,
+                        `strengthClip` REAL NOT NULL,
+                        `baseModel` TEXT NOT NULL,
+                        `trainedWordsJson` TEXT NOT NULL,
+                        `useApiTrigger` INTEGER NOT NULL,
+                        `triggerTarget` TEXT NOT NULL,
+                        `triggerMode` TEXT NOT NULL,
+                        `selectedTriggersJson` TEXT NOT NULL,
+                        `createdAtMillis` INTEGER NOT NULL,
+                        PRIMARY KEY(`modelVersionId`)
+                    )
+                    """.trimIndent(),
+                )
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `favorite_tis` (
+                        `modelVersionId` INTEGER NOT NULL,
+                        `modelId` INTEGER NOT NULL,
+                        `name` TEXT NOT NULL,
+                        `versionLabel` TEXT NOT NULL,
+                        `strength` REAL NOT NULL,
+                        `injectTi` TEXT NOT NULL,
+                        `lastTarget` TEXT NOT NULL,
+                        `baseModel` TEXT NOT NULL,
+                        `createdAtMillis` INTEGER NOT NULL,
+                        PRIMARY KEY(`modelVersionId`)
+                    )
+                    """.trimIndent(),
+                )
+            }
+        }
+
         fun build(context: Context): HordecraftDatabase =
             Room.databaseBuilder(
                 context.applicationContext,
                 HordecraftDatabase::class.java,
                 "hordeslop_studio.db",
-            ).addMigrations(MIGRATION_1_2)
+            ).addMigrations(MIGRATION_1_2, MIGRATION_2_3)
                 .fallbackToDestructiveMigration()
                 .build()
     }

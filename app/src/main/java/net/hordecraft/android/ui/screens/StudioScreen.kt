@@ -503,6 +503,25 @@ fun StudioScreen(
                                 Text("Censor NSFW", fontSize = 12.sp, color = HordeColors.TextSecondary)
                             }
                         }
+                        val supportsHiresFix = remember(studio.primaryModel) {
+                            val b = studio.primaryModel.baseline.lowercase()
+                            val n = studio.primaryModel.name.lowercase()
+                            b.contains("sd 1") || b.contains("sd 2") || b.contains("sdxl") ||
+                                b.contains("pony") || b.contains("illustrious") || b.contains("noob") ||
+                                n.contains("sd 1") || n.contains("sd 2") || n.contains("sdxl") ||
+                                n.contains("pony") || n.contains("illustrious") || n.contains("noob")
+                        }
+                        if (supportsHiresFix) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable { vm.updateHiresFix(!studio.hiresFix) },
+                            ) {
+                                Checkbox(checked = studio.hiresFix, onCheckedChange = vm::updateHiresFix)
+                                Text("Hires-Fix", fontSize = 12.sp, color = HordeColors.TextSecondary)
+                            }
+                        }
                         OutlinedButton(
                             onClick = vm::copyCurrentRequestAsCurl,
                             modifier = Modifier.fillMaxWidth(),

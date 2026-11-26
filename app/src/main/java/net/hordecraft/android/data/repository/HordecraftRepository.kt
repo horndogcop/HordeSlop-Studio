@@ -27,6 +27,10 @@ import net.hordeslop.studio.data.local.AppSettings
 import net.hordeslop.studio.data.local.DatabaseBackupCodec
 import net.hordeslop.studio.data.local.DatabaseBackupCodec.toEntity
 import net.hordeslop.studio.data.local.DatabaseSyncCounts
+import net.hordeslop.studio.data.local.FavoriteLoraDao
+import net.hordeslop.studio.data.local.FavoriteLoraEntity
+import net.hordeslop.studio.data.local.FavoriteTiDao
+import net.hordeslop.studio.data.local.FavoriteTiEntity
 import net.hordeslop.studio.data.local.HordecraftDatabase
 import net.hordeslop.studio.data.local.ModelDefaultsDao
 import net.hordeslop.studio.data.local.ModelDefaultsEntity
@@ -46,6 +50,8 @@ import net.hordeslop.studio.data.remote.ModelReferenceRepository
 import net.hordeslop.studio.domain.AttachedLora
 import net.hordeslop.studio.domain.AttachedTi
 import net.hordeslop.studio.domain.AuthMode
+import net.hordeslop.studio.domain.CivitaiImageMetadata
+import net.hordeslop.studio.domain.CivitaiImageParser
 import net.hordeslop.studio.domain.CivitaiPreview
 import net.hordeslop.studio.domain.CivitaiVersion
 import net.hordeslop.studio.domain.GenerationChunk
@@ -55,12 +61,15 @@ import net.hordeslop.studio.domain.HordeModel
 import net.hordeslop.studio.domain.HordePerformanceSummary
 import net.hordeslop.studio.domain.HordeStyle
 import net.hordeslop.studio.domain.JobStatus
+import net.hordeslop.studio.domain.LoraTriggerMode
 import net.hordeslop.studio.domain.PromptRecord
+import net.hordeslop.studio.domain.PromptTarget
 import net.hordeslop.studio.domain.SavedImage
 import net.hordeslop.studio.domain.StudioSubmissionSpec
 import net.hordeslop.studio.domain.StyleContractEngine
 import net.hordeslop.studio.domain.TiInjectMode
 import net.hordeslop.studio.domain.UserStatsSummary
+import kotlinx.serialization.encodeToString
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import retrofit2.HttpException
@@ -75,6 +84,8 @@ class HordecraftRepository(
     private val modelDefaultsDao: ModelDefaultsDao,
     private val savedImageDao: SavedImageDao,
     private val activeJobDao: ActiveJobDao,
+    private val favoriteLoraDao: FavoriteLoraDao,
+    private val favoriteTiDao: FavoriteTiDao,
     private val hordeApi: HordeApiService,
     private val civitaiApi: CivitaiApiService,
     private val modelRefRepo: ModelReferenceRepository,
@@ -150,6 +161,48 @@ class HordecraftRepository(
                 total = e.total,
                 submittedPayloadJson = e.submittedPayloadJson,
                 errorMessage = e.errorMessage,
+            )
+        }
+    }
+
+    val favoriteLorasFlow: Flow<List<AttachedLora>> = favoriteLoraDao.observeAll().map { list ->
+        list.map { e ->
+            val trainedWords = runCatching {
+                json.decodeFromString<List<String>>(e.trainedWordsJson)
+            }.getOrDefault(emptyList())
+            val selectedTriggers = runCatching {
+                json.decodeFromString<List<String>>(e.selectedTriggersJson)
+            }.getOrDefault(emptyList())
+            AttachedLora(
+                id = "lora_${e.modelId}_${e.modelVersionId}",
+                modelId = e.modelId,
+                name = e.name,
+                versionName = e.versionName,
+                modelVersionId = e.modelVersionId,
+                strengthModel = e.strengthModel,
+                strengthClip = e.strengthClip,
+                baseModel = e.baseModel,
+                trainedWords = trainedWords,
+                useApiTrigger = e.useApiTrigger,
+                triggerTarget = runCatching { PromptTarget.valueOf(e.triggerTarget) }.getOrDefault(PromptTarget.PROMPT),
+                triggerMode = runCatching { LoraTriggerMode.valueOf(e.triggerMode) }.getOrDefault(LoraTriggerMode.CUSTOM),
+                selectedTriggers = selectedTriggers,
+            )
+        }
+    }
+
+    val favoriteTisFlow: Flow<List<AttachedTi>> = favoriteTiDao.observeAll().map { list ->
+        list.map { e ->
+            AttachedTi(
+                id = "ti_${e.modelId}_${e.modelVersionId}",
+                modelId = e.modelId,
+                modelVersionId = e.modelVersionId,
+                name = e.name,
+                versionLabel = e.versionLabel,
+                strength = e.strength,
+                injectTi = runCatching { TiInjectMode.valueOf(e.injectTi) }.getOrDefault(TiInjectMode.NEGPROMPT),
+                lastTarget = runCatching { PromptTarget.valueOf(e.lastTarget) }.getOrDefault(PromptTarget.NEGPROMPT),
+                baseModel = e.baseModel,
             )
         }
     }
@@ -395,6 +448,28 @@ class HordecraftRepository(
         pinned.forEach { combined[it.modelId] = it }
         searched.forEach { if (!combined.containsKey(it.modelId)) combined[it.modelId] = it }
         return combined.values.toList()
+    }
+
+    suspend fun fetchCivitaiImageMetadata(
+        rawInput: String,
+        availableModels: List<HordeModel>,
+    ): CivitaiImageMetadata {
+        val imageId = CivitaiImageParser.extractImageId(rawInput)
+            ?: throw IllegalArgumentException("Enter a valid Civitai image ID or civitai.com/images/<id> URL")
+        val apiKey = settingsStore.settings.first().civitaiApiKey
+        val auth = apiKey.takeIf { it.isNotBlank() }?.let { "Bearer $it" }
+        val response = civitaiApi.getImageById(authHeader = auth, imageId = imageId)
+        val item = response.items.firstOrNull { it.id == imageId } ?: response.items.firstOrNull()
+            ?: throw IllegalStateException("No Civitai image found for #$imageId")
+        val metaObj = runCatching { item.meta?.jsonObject }.getOrNull()
+        return CivitaiImageParser.parseMetaObject(
+            imageId = if (item.id > 0L) item.id else imageId,
+            imageUrl = item.url,
+            fallbackWidth = item.width,
+            fallbackHeight = item.height,
+            meta = metaObj,
+            availableModels = availableModels,
+        )
     }
 
     private fun mapCivitaiLoraDto(dto: CivitaiModelDto, preferredVersionId: Long? = null): AttachedLora? {
@@ -875,6 +950,56 @@ class HordecraftRepository(
     suspend fun toggleHistoryFavorite(id: String, fav: Boolean) = promptHistoryDao.setFavorite(id, fav)
     suspend fun toggleImageFavorite(id: String, fav: Boolean) = savedImageDao.setFavorite(id, fav)
 
+    suspend fun toggleFavoriteLora(lora: AttachedLora): Boolean {
+        val existing = favoriteLoraDao.findByVersionId(lora.modelVersionId)
+        return if (existing != null) {
+            favoriteLoraDao.deleteByVersionId(lora.modelVersionId)
+            false
+        } else {
+            favoriteLoraDao.upsert(
+                FavoriteLoraEntity(
+                    modelVersionId = lora.modelVersionId,
+                    modelId = lora.modelId,
+                    name = lora.name,
+                    versionName = lora.versionName,
+                    strengthModel = lora.strengthModel,
+                    strengthClip = lora.strengthClip,
+                    baseModel = lora.baseModel,
+                    trainedWordsJson = json.encodeToString(lora.trainedWords),
+                    useApiTrigger = lora.useApiTrigger,
+                    triggerTarget = lora.triggerTarget.name,
+                    triggerMode = lora.triggerMode.name,
+                    selectedTriggersJson = json.encodeToString(lora.selectedTriggers),
+                    createdAtMillis = System.currentTimeMillis(),
+                ),
+            )
+            true
+        }
+    }
+
+    suspend fun toggleFavoriteTi(ti: AttachedTi): Boolean {
+        val existing = favoriteTiDao.findByVersionId(ti.modelVersionId)
+        return if (existing != null) {
+            favoriteTiDao.deleteByVersionId(ti.modelVersionId)
+            false
+        } else {
+            favoriteTiDao.upsert(
+                FavoriteTiEntity(
+                    modelVersionId = ti.modelVersionId,
+                    modelId = ti.modelId,
+                    name = ti.name,
+                    versionLabel = ti.versionLabel,
+                    strength = ti.strength,
+                    injectTi = ti.injectTi.name,
+                    lastTarget = ti.lastTarget.name,
+                    baseModel = ti.baseModel,
+                    createdAtMillis = System.currentTimeMillis(),
+                ),
+            )
+            true
+        }
+    }
+
     suspend fun deleteSavedImage(image: SavedImage, deleteBackingFile: Boolean) {
         savedImageDao.deleteById(image.id)
         if (deleteBackingFile) {
@@ -920,11 +1045,15 @@ class HordecraftRepository(
         val defaults = modelDefaultsDao.getAll()
         val images = savedImageDao.getAll()
         val jobs = activeJobDao.getAll()
+        val favLoras = favoriteLoraDao.getAll()
+        val favTis = favoriteTiDao.getAll()
         val bundle = DatabaseBackupCodec.buildBundle(
             promptHistory = history,
             modelDefaults = defaults,
             savedImages = images,
             activeJobs = jobs,
+            favoriteLoras = favLoras,
+            favoriteTis = favTis,
         )
         val encoded = DatabaseBackupCodec.encodeJson(bundle)
         val outStream = context.contentResolver.openOutputStream(uri)
@@ -937,6 +1066,8 @@ class HordecraftRepository(
             modelDefaultsCount = defaults.size,
             savedImagesCount = images.size,
             activeJobsCount = jobs.size,
+            favoriteLorasCount = favLoras.size,
+            favoriteTisCount = favTis.size,
         )
     }
 
@@ -960,6 +1091,8 @@ class HordecraftRepository(
             val defaultEntities = bundle.modelDefaults.map { it.toEntity() }
             val imageEntities = bundle.savedImages.map { it.toEntity() }
             val jobEntities = bundle.activeJobs.map { it.toEntity() }
+            val favLoraEntities = bundle.favoriteLoras.map { it.toEntity() }
+            val favTiEntities = bundle.favoriteTis.map { it.toEntity() }
 
             database.withTransaction {
                 if (replaceExisting) {
@@ -967,11 +1100,15 @@ class HordecraftRepository(
                     modelDefaultsDao.deleteAll()
                     savedImageDao.deleteAll()
                     activeJobDao.deleteAll()
+                    favoriteLoraDao.deleteAll()
+                    favoriteTiDao.deleteAll()
                 }
                 if (historyEntities.isNotEmpty()) promptHistoryDao.upsertAll(historyEntities)
                 if (defaultEntities.isNotEmpty()) modelDefaultsDao.upsertAll(defaultEntities)
                 if (imageEntities.isNotEmpty()) savedImageDao.upsertAll(imageEntities)
                 if (jobEntities.isNotEmpty()) activeJobDao.upsertAll(jobEntities)
+                if (favLoraEntities.isNotEmpty()) favoriteLoraDao.upsertAll(favLoraEntities)
+                if (favTiEntities.isNotEmpty()) favoriteTiDao.upsertAll(favTiEntities)
             }
 
             DatabaseSyncCounts(
@@ -979,6 +1116,8 @@ class HordecraftRepository(
                 modelDefaultsCount = defaultEntities.size,
                 savedImagesCount = imageEntities.size,
                 activeJobsCount = jobEntities.size,
+                favoriteLorasCount = favLoraEntities.size,
+                favoriteTisCount = favTiEntities.size,
             )
         }
 

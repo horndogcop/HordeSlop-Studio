@@ -86,6 +86,36 @@ data class ActiveJobBackupDto(
 )
 
 @Serializable
+data class FavoriteLoraBackupDto(
+    val modelVersionId: Long,
+    val modelId: Long,
+    val name: String,
+    val versionName: String = "",
+    val strengthModel: Float = 0.75f,
+    val strengthClip: Float = 0.75f,
+    val baseModel: String = "SDXL 1.0",
+    val trainedWordsJson: String = "[]",
+    val useApiTrigger: Boolean = false,
+    val triggerTarget: String = "PROMPT",
+    val triggerMode: String = "CUSTOM",
+    val selectedTriggersJson: String = "[]",
+    val createdAtMillis: Long = 0L,
+)
+
+@Serializable
+data class FavoriteTiBackupDto(
+    val modelVersionId: Long,
+    val modelId: Long,
+    val name: String,
+    val versionLabel: String = "",
+    val strength: Float = 1.0f,
+    val injectTi: String = "NEGPROMPT",
+    val lastTarget: String = "NEGPROMPT",
+    val baseModel: String = "SD 1.5",
+    val createdAtMillis: Long = 0L,
+)
+
+@Serializable
 data class DatabaseBackupBundle(
     val app: String = "hordeslop-studio",
     val formatVersion: Int = 1,
@@ -94,6 +124,8 @@ data class DatabaseBackupBundle(
     val modelDefaults: List<ModelDefaultsBackupDto> = emptyList(),
     val savedImages: List<SavedImageBackupDto> = emptyList(),
     val activeJobs: List<ActiveJobBackupDto> = emptyList(),
+    val favoriteLoras: List<FavoriteLoraBackupDto> = emptyList(),
+    val favoriteTis: List<FavoriteTiBackupDto> = emptyList(),
 )
 
 data class DatabaseSyncCounts(
@@ -101,9 +133,12 @@ data class DatabaseSyncCounts(
     val modelDefaultsCount: Int,
     val savedImagesCount: Int,
     val activeJobsCount: Int,
+    val favoriteLorasCount: Int = 0,
+    val favoriteTisCount: Int = 0,
 ) {
     val totalCount: Int
-        get() = promptHistoryCount + modelDefaultsCount + savedImagesCount + activeJobsCount
+        get() = promptHistoryCount + modelDefaultsCount + savedImagesCount + activeJobsCount +
+            favoriteLorasCount + favoriteTisCount
 }
 
 object DatabaseBackupCodec {
@@ -119,6 +154,8 @@ object DatabaseBackupCodec {
         modelDefaults: List<ModelDefaultsEntity>,
         savedImages: List<SavedImageEntity>,
         activeJobs: List<ActiveJobEntity>,
+        favoriteLoras: List<FavoriteLoraEntity> = emptyList(),
+        favoriteTis: List<FavoriteTiEntity> = emptyList(),
         exportedAtMillis: Long = System.currentTimeMillis(),
     ): DatabaseBackupBundle = DatabaseBackupBundle(
         exportedAtMillis = exportedAtMillis,
@@ -200,6 +237,36 @@ object DatabaseBackupCodec {
                 dismissedAtFinishedCount = it.dismissedAtFinishedCount,
             )
         },
+        favoriteLoras = favoriteLoras.map {
+            FavoriteLoraBackupDto(
+                modelVersionId = it.modelVersionId,
+                modelId = it.modelId,
+                name = it.name,
+                versionName = it.versionName,
+                strengthModel = it.strengthModel,
+                strengthClip = it.strengthClip,
+                baseModel = it.baseModel,
+                trainedWordsJson = it.trainedWordsJson,
+                useApiTrigger = it.useApiTrigger,
+                triggerTarget = it.triggerTarget,
+                triggerMode = it.triggerMode,
+                selectedTriggersJson = it.selectedTriggersJson,
+                createdAtMillis = it.createdAtMillis,
+            )
+        },
+        favoriteTis = favoriteTis.map {
+            FavoriteTiBackupDto(
+                modelVersionId = it.modelVersionId,
+                modelId = it.modelId,
+                name = it.name,
+                versionLabel = it.versionLabel,
+                strength = it.strength,
+                injectTi = it.injectTi,
+                lastTarget = it.lastTarget,
+                baseModel = it.baseModel,
+                createdAtMillis = it.createdAtMillis,
+            )
+        },
     )
 
     fun encodeJson(bundle: DatabaseBackupBundle): String = backupJson.encodeToString(bundle)
@@ -227,7 +294,14 @@ object DatabaseBackupCodec {
                     tables += c.getString(0)
                 }
             }
-            val expectedAny = listOf("prompt_history", "model_defaults", "saved_images", "active_jobs")
+            val expectedAny = listOf(
+                "prompt_history",
+                "model_defaults",
+                "saved_images",
+                "active_jobs",
+                "favorite_loras",
+                "favorite_tis",
+            )
             require(expectedAny.any { it in tables }) { "SQLite file is not a HordeSlop Studio database" }
 
             val promptHistory = if ("prompt_history" in tables) {
@@ -352,11 +426,65 @@ object DatabaseBackupCodec {
                 emptyList()
             }
 
+            val favoriteLoras = if ("favorite_loras" in tables) {
+                buildList {
+                    sqlite.rawQuery("SELECT * FROM favorite_loras", null).use { c ->
+                        while (c.moveToNext()) {
+                            add(
+                                FavoriteLoraBackupDto(
+                                    modelVersionId = c.lng("modelVersionId"),
+                                    modelId = c.lng("modelId"),
+                                    name = c.str("name"),
+                                    versionName = c.str("versionName"),
+                                    strengthModel = c.flt("strengthModel", 0.75f),
+                                    strengthClip = c.flt("strengthClip", 0.75f),
+                                    baseModel = c.str("baseModel", "SDXL 1.0"),
+                                    trainedWordsJson = c.str("trainedWordsJson", "[]"),
+                                    useApiTrigger = c.bool("useApiTrigger", false),
+                                    triggerTarget = c.str("triggerTarget", "PROMPT"),
+                                    triggerMode = c.str("triggerMode", "CUSTOM"),
+                                    selectedTriggersJson = c.str("selectedTriggersJson", "[]"),
+                                    createdAtMillis = c.lng("createdAtMillis", 0L),
+                                ),
+                            )
+                        }
+                    }
+                }
+            } else {
+                emptyList()
+            }
+
+            val favoriteTis = if ("favorite_tis" in tables) {
+                buildList {
+                    sqlite.rawQuery("SELECT * FROM favorite_tis", null).use { c ->
+                        while (c.moveToNext()) {
+                            add(
+                                FavoriteTiBackupDto(
+                                    modelVersionId = c.lng("modelVersionId"),
+                                    modelId = c.lng("modelId"),
+                                    name = c.str("name"),
+                                    versionLabel = c.str("versionLabel"),
+                                    strength = c.flt("strength", 1.0f),
+                                    injectTi = c.str("injectTi", "NEGPROMPT"),
+                                    lastTarget = c.str("lastTarget", "NEGPROMPT"),
+                                    baseModel = c.str("baseModel", "SD 1.5"),
+                                    createdAtMillis = c.lng("createdAtMillis", 0L),
+                                ),
+                            )
+                        }
+                    }
+                }
+            } else {
+                emptyList()
+            }
+
             return DatabaseBackupBundle(
                 promptHistory = promptHistory,
                 modelDefaults = modelDefaults,
                 savedImages = savedImages,
                 activeJobs = activeJobs,
+                favoriteLoras = favoriteLoras,
+                favoriteTis = favoriteTis,
             )
         }
     }
@@ -433,6 +561,34 @@ object DatabaseBackupCodec {
         createdAtMillis = createdAtMillis,
         dismissed = dismissed,
         dismissedAtFinishedCount = dismissedAtFinishedCount,
+    )
+
+    fun FavoriteLoraBackupDto.toEntity() = FavoriteLoraEntity(
+        modelVersionId = modelVersionId,
+        modelId = modelId,
+        name = name,
+        versionName = versionName,
+        strengthModel = strengthModel,
+        strengthClip = strengthClip,
+        baseModel = baseModel,
+        trainedWordsJson = trainedWordsJson,
+        useApiTrigger = useApiTrigger,
+        triggerTarget = triggerTarget,
+        triggerMode = triggerMode,
+        selectedTriggersJson = selectedTriggersJson,
+        createdAtMillis = createdAtMillis,
+    )
+
+    fun FavoriteTiBackupDto.toEntity() = FavoriteTiEntity(
+        modelVersionId = modelVersionId,
+        modelId = modelId,
+        name = name,
+        versionLabel = versionLabel,
+        strength = strength,
+        injectTi = injectTi,
+        lastTarget = lastTarget,
+        baseModel = baseModel,
+        createdAtMillis = createdAtMillis,
     )
 
     private fun Cursor.str(col: String, fallback: String = ""): String {

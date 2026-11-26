@@ -71,6 +71,7 @@ import androidx.compose.ui.window.DialogProperties
 import coil.compose.AsyncImage
 import net.hordeslop.studio.domain.AttachedLora
 import net.hordeslop.studio.domain.AttachedTi
+import net.hordeslop.studio.domain.CivitaiImageMetadata
 import net.hordeslop.studio.domain.HordeConstants
 import net.hordeslop.studio.domain.HordeModel
 import net.hordeslop.studio.domain.HordeStyle
@@ -354,21 +355,44 @@ fun SizePickerDialog(
                 color = HordeColors.TealSoft,
             )
 
+            val activeAspectPresets = if (targetMp == 0.589824) {
+                listOf(
+                    AspectRatioPreset("1:1 (768x768)", 1, 1),
+                    AspectRatioPreset("2:3 (512x768)", 2, 3),
+                    AspectRatioPreset("3:4 (512x640)", 3, 4),
+                )
+            } else {
+                SizeMathEngine.ASPECT_RATIO_PRESETS
+            }
+
             Text("Aspect Ratio", fontSize = 11.sp, color = HordeColors.TextMuted)
             FlowRow(
                 horizontalArrangement = Arrangement.spacedBy(6.dp),
                 verticalArrangement = Arrangement.spacedBy(6.dp),
             ) {
-                SizeMathEngine.ASPECT_RATIO_PRESETS.forEach { preset ->
+                activeAspectPresets.forEach { preset ->
                     ToggleChipButton(
                         text = preset.label,
                         selected = wRatio == preset.wRatio && hRatio == preset.hRatio,
                         onClick = {
                             wRatio = preset.wRatio
                             hRatio = preset.hRatio
-                            val (w, h) = SizeMathEngine.computeNearestSizeForRatioAndMp(wRatio, hRatio, targetMp)
-                            draftW = w.toString()
-                            draftH = h.toString()
+                            if (targetMp == 0.589824) {
+                                when (preset.label) {
+                                    "1:1 (768x768)" -> { draftW = "768"; draftH = "768" }
+                                    "2:3 (512x768)" -> { draftW = "512"; draftH = "768" }
+                                    "3:4 (512x640)" -> { draftW = "512"; draftH = "640" }
+                                    else -> {
+                                        val (w, h) = SizeMathEngine.computeNearestSizeForRatioAndMp(wRatio, hRatio, targetMp)
+                                        draftW = w.toString()
+                                        draftH = h.toString()
+                                    }
+                                }
+                            } else {
+                                val (w, h) = SizeMathEngine.computeNearestSizeForRatioAndMp(wRatio, hRatio, targetMp)
+                                draftW = w.toString()
+                                draftH = h.toString()
+                            }
                         },
                     )
                 }
@@ -820,19 +844,26 @@ fun CivitaiSearchDialog(
     tab: String,
     loras: List<AttachedLora>,
     tis: List<AttachedTi>,
+    favoriteLoras: List<AttachedLora>,
+    favoriteTis: List<AttachedTi>,
     loading: Boolean,
     onSearchLoras: (String, Boolean, Set<String>) -> Unit,
     onSearchTis: (String, Boolean, Set<String>) -> Unit,
     onSelectLora: (AttachedLora) -> Unit,
     onSelectTi: (AttachedTi) -> Unit,
+    onQuickApplyFavoriteLora: (AttachedLora) -> Unit,
+    onToggleFavoriteLora: (AttachedLora) -> Unit,
+    onToggleFavoriteTi: (AttachedTi) -> Unit,
     onDismiss: () -> Unit,
 ) {
     var query by remember { mutableStateOf("") }
+    var showFavoritesOnly by remember { mutableStateOf(false) }
     var allModels by remember { mutableStateOf(true) }
     var selectedGroupIds by remember { mutableStateOf<Set<String>>(emptySet()) }
     var dropdownOpen by remember { mutableStateOf(false) }
 
     val groups = if (tab == "lora") HordeConstants.CIVITAI_LORA_GROUPS else HordeConstants.CIVITAI_TI_GROUPS
+    val favCount = if (tab == "lora") favoriteLoras.size else favoriteTis.size
 
     LaunchedEffect(tab) {
         if (tab == "lora") onSearchLoras(query, allModels, selectedGroupIds)
@@ -842,155 +873,302 @@ fun CivitaiSearchDialog(
     HordeModalDialog(
         onDismiss = onDismiss,
         header = {
-            Text(
-                text = if (tab == "lora") "Find LoRA" else "Find Embedding",
-                color = HordeColors.TextPrimary,
-                fontSize = 16.sp,
-                fontWeight = FontWeight.SemiBold,
-            )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    text = if (tab == "lora") "Find LoRA" else "Find Embedding",
+                    color = HordeColors.TextPrimary,
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.SemiBold,
+                )
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    ToggleChipButton(
+                        text = "Search",
+                        selected = !showFavoritesOnly,
+                        onClick = { showFavoritesOnly = false },
+                    )
+                    ToggleChipButton(
+                        text = "Favorites ($favCount)",
+                        selected = showFavoritesOnly,
+                        onClick = { showFavoritesOnly = true },
+                    )
+                }
+            }
         },
         footer = {
             TextButton(onClick = onDismiss) { Text("Close") }
         },
     ) {
-        Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
-            OutlinedTextField(
-                value = query,
-                onValueChange = { query = it },
-                singleLine = true,
-                placeholder = { Text("Name or ID...") },
-                modifier = Modifier.weight(1f),
-            )
-            Button(
-                onClick = {
-                    if (tab == "lora") onSearchLoras(query, allModels, selectedGroupIds)
-                    else onSearchTis(query, allModels, selectedGroupIds)
-                },
-                colors = ButtonDefaults.buttonColors(containerColor = HordeColors.TealPrimary),
-            ) {
-                Text("Go", color = Color(0xFF020617), fontWeight = FontWeight.SemiBold)
-            }
-        }
-
-        // Multi-select base model filter dropdown with "All models" bypass checkbox
-        Box {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(10.dp))
-                    .background(HordeColors.SubCardSurface)
-                    .border(1.dp, HordeColors.BorderSubtle, RoundedCornerShape(10.dp))
-                    .clickable { dropdownOpen = true }
-                    .padding(horizontal = 10.dp, vertical = 8.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
+        if (showFavoritesOnly) {
+            if (favCount == 0) {
                 Text(
-                    text = if (allModels) "All models" else "${selectedGroupIds.size} model filter(s)",
+                    text = if (tab == "lora") "No favorite LoRAs saved yet." else "No favorite embeddings saved yet.",
                     fontSize = 12.sp,
-                    color = HordeColors.TextSecondary,
+                    color = HordeColors.TextMuted,
+                    modifier = Modifier.padding(vertical = 12.dp),
                 )
-                Icon(Icons.Outlined.ArrowDropDown, null, tint = HordeColors.TextMuted)
-            }
-            DropdownMenu(expanded = dropdownOpen, onDismissRequest = { dropdownOpen = false }) {
-                DropdownMenuItem(
-                    text = {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Checkbox(
-                                checked = allModels,
-                                onCheckedChange = { checked ->
-                                    allModels = checked
-                                    if (checked) selectedGroupIds = emptySet()
-                                },
-                            )
-                            Text("All models (disable filter)")
+            } else {
+                LazyColumn(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .weight(1f, fill = false),
+                    verticalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
+                    if (tab == "lora") {
+                        items(favoriteLoras, key = { it.modelVersionId }) { item ->
+                            Surface(
+                                color = HordeColors.SubCardSurface,
+                                shape = RoundedCornerShape(10.dp),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .border(1.dp, HordeColors.BorderSubtle, RoundedCornerShape(10.dp))
+                                    .clickable { onQuickApplyFavoriteLora(item) },
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(10.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                ) {
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text(item.name, fontSize = 13.sp, fontWeight = FontWeight.Medium, color = HordeColors.TextPrimary)
+                                        Text(
+                                            "v${item.modelVersionId} · M ${String.format(java.util.Locale.US, "%.2f", item.strengthModel)} · C ${String.format(java.util.Locale.US, "%.2f", item.strengthClip)}",
+                                            fontSize = 11.sp,
+                                            fontFamily = FontFamily.Monospace,
+                                            color = HordeColors.TealSoft,
+                                        )
+                                    }
+                                    Text(
+                                        text = "Edit",
+                                        fontSize = 11.sp,
+                                        color = HordeColors.TextSecondary,
+                                        modifier = Modifier
+                                            .clip(RoundedCornerShape(6.dp))
+                                            .clickable { onSelectLora(item) }
+                                            .padding(horizontal = 6.dp, vertical = 4.dp),
+                                    )
+                                    IconButton(
+                                        onClick = { onToggleFavoriteLora(item) },
+                                        modifier = Modifier.size(28.dp),
+                                    ) {
+                                        Icon(Icons.Outlined.Star, "Remove favorite", tint = HordeColors.AmberZone)
+                                    }
+                                }
+                            }
                         }
-                    },
-                    onClick = {
-                        val next = !allModels
-                        allModels = next
-                        if (next) selectedGroupIds = emptySet()
-                    },
-                )
-                HorizontalDivider()
-                groups.forEach { g ->
-                    val checked = g.id in selectedGroupIds
-                    DropdownMenuItem(
-                        enabled = !allModels,
-                        text = {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Checkbox(
-                                    checked = checked && !allModels,
-                                    enabled = !allModels,
-                                    onCheckedChange = {
-                                        if (!allModels) {
-                                            selectedGroupIds = if (checked) selectedGroupIds - g.id else selectedGroupIds + g.id
-                                        }
-                                    },
-                                )
-                                Text(g.label, fontSize = 12.sp)
-                            }
-                        },
-                        onClick = {
-                            if (!allModels) {
-                                selectedGroupIds = if (checked) selectedGroupIds - g.id else selectedGroupIds + g.id
-                            }
-                        },
-                    )
-                }
-            }
-        }
-
-        if (loading) {
-            Box(modifier = Modifier.fillMaxWidth().padding(24.dp), contentAlignment = Alignment.Center) {
-                CircularProgressIndicator()
-            }
-        } else {
-            LazyColumn(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .weight(1f, fill = false),
-                verticalArrangement = Arrangement.spacedBy(6.dp),
-            ) {
-                if (tab == "lora") {
-                    items(loras, key = { it.modelId }) { item ->
-                        Surface(
-                            color = HordeColors.SubCardSurface,
-                            shape = RoundedCornerShape(10.dp),
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .border(1.dp, HordeColors.BorderSubtle, RoundedCornerShape(10.dp))
-                                .clickable { onSelectLora(item) },
-                        ) {
-                            Column(modifier = Modifier.padding(10.dp)) {
-                                Text(item.name, fontSize = 13.sp, fontWeight = FontWeight.Medium, color = HordeColors.TextPrimary)
-                                Text(
-                                    "${item.baseModel} · #${item.modelId} · v${item.modelVersionId}",
-                                    fontSize = 11.sp,
-                                    fontFamily = FontFamily.Monospace,
-                                    color = HordeColors.TextMuted,
-                                )
+                    } else {
+                        items(favoriteTis, key = { it.modelVersionId }) { item ->
+                            Surface(
+                                color = HordeColors.SubCardSurface,
+                                shape = RoundedCornerShape(10.dp),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .border(1.dp, HordeColors.BorderSubtle, RoundedCornerShape(10.dp))
+                                    .clickable { onSelectTi(item) },
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(10.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                ) {
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text(item.name, fontSize = 13.sp, fontWeight = FontWeight.Medium, color = HordeColors.TextPrimary)
+                                        Text(
+                                            "${item.baseModel} · #${item.modelId} · W ${String.format(java.util.Locale.US, "%.2f", item.strength)}",
+                                            fontSize = 11.sp,
+                                            fontFamily = FontFamily.Monospace,
+                                            color = HordeColors.TealSoft,
+                                        )
+                                    }
+                                    IconButton(
+                                        onClick = { onToggleFavoriteTi(item) },
+                                        modifier = Modifier.size(28.dp),
+                                    ) {
+                                        Icon(Icons.Outlined.Star, "Remove favorite", tint = HordeColors.AmberZone)
+                                    }
+                                }
                             }
                         }
                     }
-                } else {
-                    items(tis, key = { it.modelId }) { item ->
-                        Surface(
-                            color = HordeColors.SubCardSurface,
-                            shape = RoundedCornerShape(10.dp),
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .border(1.dp, HordeColors.BorderSubtle, RoundedCornerShape(10.dp))
-                                .clickable { onSelectTi(item) },
-                        ) {
-                            Column(modifier = Modifier.padding(10.dp)) {
-                                Text(item.name, fontSize = 13.sp, fontWeight = FontWeight.Medium, color = HordeColors.TextPrimary)
-                                Text(
-                                    "${item.baseModel} · #${item.modelId}",
-                                    fontSize = 11.sp,
-                                    fontFamily = FontFamily.Monospace,
-                                    color = HordeColors.TextMuted,
+                }
+            }
+        } else {
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+                OutlinedTextField(
+                    value = query,
+                    onValueChange = { query = it },
+                    singleLine = true,
+                    placeholder = { Text("Name or ID...") },
+                    modifier = Modifier.weight(1f),
+                )
+                Button(
+                    onClick = {
+                        if (tab == "lora") onSearchLoras(query, allModels, selectedGroupIds)
+                        else onSearchTis(query, allModels, selectedGroupIds)
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = HordeColors.TealPrimary),
+                ) {
+                    Text("Go", color = Color(0xFF020617), fontWeight = FontWeight.SemiBold)
+                }
+            }
+
+            // Multi-select base model filter dropdown with "All models" bypass checkbox
+            Box {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(HordeColors.SubCardSurface)
+                        .border(1.dp, HordeColors.BorderSubtle, RoundedCornerShape(10.dp))
+                        .clickable { dropdownOpen = true }
+                        .padding(horizontal = 10.dp, vertical = 8.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        text = if (allModels) "All models" else "${selectedGroupIds.size} model filter(s)",
+                        fontSize = 12.sp,
+                        color = HordeColors.TextSecondary,
+                    )
+                    Icon(Icons.Outlined.ArrowDropDown, null, tint = HordeColors.TextMuted)
+                }
+                DropdownMenu(expanded = dropdownOpen, onDismissRequest = { dropdownOpen = false }) {
+                    DropdownMenuItem(
+                        text = {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Checkbox(
+                                    checked = allModels,
+                                    onCheckedChange = { checked ->
+                                        allModels = checked
+                                        if (checked) selectedGroupIds = emptySet()
+                                    },
                                 )
+                                Text("All models (disable filter)")
+                            }
+                        },
+                        onClick = {
+                            val next = !allModels
+                            allModels = next
+                            if (next) selectedGroupIds = emptySet()
+                        },
+                    )
+                    HorizontalDivider()
+                    groups.forEach { g ->
+                        val checked = g.id in selectedGroupIds
+                        DropdownMenuItem(
+                            enabled = !allModels,
+                            text = {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Checkbox(
+                                        checked = checked && !allModels,
+                                        enabled = !allModels,
+                                        onCheckedChange = {
+                                            if (!allModels) {
+                                                selectedGroupIds = if (checked) selectedGroupIds - g.id else selectedGroupIds + g.id
+                                            }
+                                        },
+                                    )
+                                    Text(g.label, fontSize = 12.sp)
+                                }
+                            },
+                            onClick = {
+                                if (!allModels) {
+                                    selectedGroupIds = if (checked) selectedGroupIds - g.id else selectedGroupIds + g.id
+                                }
+                            },
+                        )
+                    }
+                }
+            }
+
+            if (loading) {
+                Box(modifier = Modifier.fillMaxWidth().padding(24.dp), contentAlignment = Alignment.Center) {
+                    CircularProgressIndicator()
+                }
+            } else {
+                LazyColumn(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .weight(1f, fill = false),
+                    verticalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
+                    if (tab == "lora") {
+                        items(loras, key = { it.modelId }) { item ->
+                            val isFav = favoriteLoras.any { it.modelVersionId == item.modelVersionId }
+                            Surface(
+                                color = HordeColors.SubCardSurface,
+                                shape = RoundedCornerShape(10.dp),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .border(1.dp, HordeColors.BorderSubtle, RoundedCornerShape(10.dp))
+                                    .clickable { onSelectLora(item) },
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(10.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                ) {
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text(item.name, fontSize = 13.sp, fontWeight = FontWeight.Medium, color = HordeColors.TextPrimary)
+                                        Text(
+                                            "${item.baseModel} · #${item.modelId} · v${item.modelVersionId}",
+                                            fontSize = 11.sp,
+                                            fontFamily = FontFamily.Monospace,
+                                            color = HordeColors.TextMuted,
+                                        )
+                                    }
+                                    IconButton(
+                                        onClick = { onToggleFavoriteLora(item) },
+                                        modifier = Modifier.size(28.dp),
+                                    ) {
+                                        Icon(
+                                            if (isFav) Icons.Outlined.Star else Icons.Outlined.StarBorder,
+                                            contentDescription = "Favorite LoRA",
+                                            tint = if (isFav) HordeColors.AmberZone else HordeColors.TextMuted,
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    } else {
+                        items(tis, key = { it.modelId }) { item ->
+                            val isFav = favoriteTis.any { it.modelVersionId == item.modelVersionId }
+                            Surface(
+                                color = HordeColors.SubCardSurface,
+                                shape = RoundedCornerShape(10.dp),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .border(1.dp, HordeColors.BorderSubtle, RoundedCornerShape(10.dp))
+                                    .clickable { onSelectTi(item) },
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(10.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                ) {
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text(item.name, fontSize = 13.sp, fontWeight = FontWeight.Medium, color = HordeColors.TextPrimary)
+                                        Text(
+                                            "${item.baseModel} · #${item.modelId}",
+                                            fontSize = 11.sp,
+                                            fontFamily = FontFamily.Monospace,
+                                            color = HordeColors.TextMuted,
+                                        )
+                                    }
+                                    IconButton(
+                                        onClick = { onToggleFavoriteTi(item) },
+                                        modifier = Modifier.size(28.dp),
+                                    ) {
+                                        Icon(
+                                            if (isFav) Icons.Outlined.Star else Icons.Outlined.StarBorder,
+                                            contentDescription = "Favorite embedding",
+                                            tint = if (isFav) HordeColors.AmberZone else HordeColors.TextMuted,
+                                        )
+                                    }
+                                }
                             }
                         }
                     }
@@ -1004,6 +1182,8 @@ fun CivitaiSearchDialog(
 fun LoraDetailDialog(
     lora: AttachedLora,
     selectedModels: List<String>,
+    favoriteVersionIds: Set<Long>,
+    onToggleFavorite: (AttachedLora) -> Unit,
     onAttachOrSave: (AttachedLora) -> Unit,
     onInsertPrompt: (List<String>) -> Unit,
     onInsertNegative: (List<String>) -> Unit,
@@ -1012,6 +1192,7 @@ fun LoraDetailDialog(
     var draft by remember(lora) { mutableStateOf(lora) }
     var includeMaturePreviews by remember { mutableStateOf(false) }
     var versionMenuOpen by remember { mutableStateOf(false) }
+    val isFavorite = draft.modelVersionId in favoriteVersionIds
 
     val visiblePreviews = draft.previews.filter { includeMaturePreviews || !it.isMature }
 
@@ -1032,6 +1213,13 @@ fun LoraDetailDialog(
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
                 )
+                IconButton(onClick = { onToggleFavorite(draft) }) {
+                    Icon(
+                        if (isFavorite) Icons.Outlined.Star else Icons.Outlined.StarBorder,
+                        contentDescription = "Favorite LoRA",
+                        tint = if (isFavorite) HordeColors.AmberZone else HordeColors.TextMuted,
+                    )
+                }
                 IconButton(onClick = onDismiss) { Icon(Icons.Outlined.Close, null) }
             }
         },
@@ -1141,6 +1329,137 @@ fun LoraDetailDialog(
                     onInsertPrompt = onInsertPrompt,
                     onInsertNegative = onInsertNegative,
                 )
+            }
+        }
+    }
+}
+
+@Composable
+fun CivitaiImageFetchDialog(
+    loading: Boolean,
+    fetched: CivitaiImageMetadata?,
+    errorMessage: String?,
+    onFetch: (String) -> Unit,
+    onApply: (CivitaiImageMetadata) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    var input by remember { mutableStateOf("") }
+
+    HordeModalDialog(
+        onDismiss = onDismiss,
+        header = {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    text = "Fetch Civitai Image Prompt",
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = HordeColors.TextPrimary,
+                )
+                IconButton(onClick = onDismiss) { Icon(Icons.Outlined.Close, null) }
+            }
+        },
+        footer = {
+            OutlinedButton(onClick = onDismiss) { Text("Close") }
+            if (fetched != null) {
+                Spacer(Modifier.width(8.dp))
+                Button(
+                    colors = ButtonDefaults.buttonColors(containerColor = HordeColors.TealPrimary),
+                    onClick = { onApply(fetched) },
+                ) {
+                    Text("Apply", color = Color(0xFF020617), fontWeight = FontWeight.SemiBold)
+                }
+            }
+        },
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            OutlinedTextField(
+                value = input,
+                onValueChange = { input = it },
+                singleLine = true,
+                placeholder = { Text("Image ID or civitai.com/images/...") },
+                modifier = Modifier.weight(1f),
+            )
+            Button(
+                enabled = !loading && input.isNotBlank(),
+                colors = ButtonDefaults.buttonColors(containerColor = HordeColors.TealPrimary),
+                onClick = { onFetch(input) },
+            ) {
+                Text("Fetch", color = Color(0xFF020617), fontWeight = FontWeight.SemiBold)
+            }
+        }
+
+        if (loading) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 18.dp),
+                contentAlignment = Alignment.Center,
+            ) {
+                CircularProgressIndicator()
+            }
+        }
+
+        errorMessage?.let { err ->
+            Text(err, fontSize = 12.sp, color = HordeColors.RoseText)
+        }
+
+        fetched?.let { meta ->
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(1f, fill = false)
+                    .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                if (meta.imageUrl.isNotBlank()) {
+                    AsyncImage(
+                        model = meta.imageUrl,
+                        contentDescription = "Civitai #${meta.imageId}",
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(140.dp)
+                            .clip(RoundedCornerShape(10.dp)),
+                    )
+                }
+                Text(
+                    text = meta.prompt.ifBlank { "(No positive prompt metadata)" },
+                    fontSize = 12.sp,
+                    color = HordeColors.TextPrimary,
+                )
+                if (meta.negativePrompt.isNotBlank()) {
+                    Text(
+                        text = "Negative: ${meta.negativePrompt}",
+                        fontSize = 11.sp,
+                        color = HordeColors.TextMuted,
+                    )
+                }
+                val summaryParts = buildList {
+                    meta.modelName?.let { add("Model: $it") } ?: meta.rawModelLabel?.let { add("Source model: $it") }
+                    meta.steps?.let { add("Steps $it") }
+                    meta.cfg?.let { add("CFG $it") }
+                    meta.sampler?.let { add(it) }
+                    meta.scheduler?.let { add(it) }
+                    meta.clipSkip?.let { add("Clip $it") }
+                    if (meta.width != null && meta.height != null) add("${meta.width}×${meta.height}")
+                    meta.seed?.let { add("Seed $it") }
+                }
+                if (summaryParts.isNotEmpty()) {
+                    Text(
+                        text = summaryParts.joinToString(" · "),
+                        fontSize = 11.sp,
+                        fontFamily = FontFamily.Monospace,
+                        color = HordeColors.TealSoft,
+                    )
+                }
             }
         }
     }

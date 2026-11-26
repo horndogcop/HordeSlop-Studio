@@ -43,6 +43,8 @@ abstract class BaseHordeActivity : ComponentActivity() {
             val history by vm.history.collectAsStateWithLifecycle()
             val savedImages by vm.savedImages.collectAsStateWithLifecycle()
             val activeJobs by vm.activeJobs.collectAsStateWithLifecycle()
+            val favoriteLoras by vm.favoriteLoras.collectAsStateWithLifecycle()
+            val favoriteTis by vm.favoriteTis.collectAsStateWithLifecycle()
             val pendingGalleryQuery by vm.pendingGallerySearchQuery.collectAsStateWithLifecycle()
             val singleActivityDest by vm.singleActivityDestination.collectAsStateWithLifecycle()
 
@@ -111,6 +113,8 @@ abstract class BaseHordeActivity : ComponentActivity() {
                             settings = settings,
                             history = history,
                             jobs = activeJobs,
+                            favoriteLoras = favoriteLoras,
+                            favoriteTis = favoriteTis,
                         )
                         ActivityDestination.GALLERY -> GalleryScreen(
                             vm = vm,

@@ -30,6 +30,7 @@ data class StudioSubmissionSpec(
     val imageCount: Int,
     val loras: List<AttachedLora>,
     val tis: List<AttachedTi>,
+    val hiresFix: Boolean = false,
 )
 
 data class GenerationChunk(
@@ -127,6 +128,10 @@ object StyleContractEngine {
 
             if (spec.seed.isNotBlank()) {
                 put("seed", spec.seed.trim())
+            }
+
+            if (spec.hiresFix) {
+                put("hires_fix", true)
             }
 
             if (spec.loras.isNotEmpty()) {

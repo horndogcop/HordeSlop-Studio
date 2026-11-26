@@ -1,4 +1,4 @@
-package net.hordeslop.studio.domain
+package net.hordecraft.android.domain
 
 import org.junit.Assert.assertEquals
 import org.junit.Test

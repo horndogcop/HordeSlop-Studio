@@ -1,4 +1,4 @@
-package net.hordeslop.studio.data.remote
+package net.hordecraft.android.data.remote
 
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -13,11 +13,11 @@ import kotlinx.serialization.json.intOrNull
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
-import net.hordeslop.studio.data.local.ModelDefaultsEntity
-import net.hordeslop.studio.domain.HordeConstants
-import net.hordeslop.studio.domain.HordeModel
-import net.hordeslop.studio.domain.HordeStyle
-import net.hordeslop.studio.domain.StyleFieldLock
+import net.hordecraft.android.data.local.ModelDefaultsEntity
+import net.hordecraft.android.domain.HordeConstants
+import net.hordecraft.android.domain.HordeModel
+import net.hordecraft.android.domain.HordeStyle
+import net.hordecraft.android.domain.StyleFieldLock
 import okhttp3.OkHttpClient
 import okhttp3.Request
 

@@ -1,4 +1,4 @@
-package net.hordeslop.studio.data.remote
+package net.hordecraft.android.data.remote
 
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable

@@ -80,6 +80,7 @@ data class StudioUiState(
     val loadingModels: Boolean = false,
     val toastMessage: String? = null,
     val clipSkipInAdvanced: Boolean = false,
+    val hiresFix: Boolean = false,
 ) {
     val activeStyles: List<HordeStyle>
         get() = selectedStyleIds
@@ -96,13 +97,12 @@ data class StudioUiState(
         activeStyles.any { it.id != "none" && lock in it.lockedFields }
 
     fun withRecomputedClipSkipLocation(): StudioUiState =
-        copy(clipSkipInAdvanced = shouldMoveClipSkipToAdvanced(primaryModel, clipSkip))
+        copy(clipSkipInAdvanced = shouldMoveClipSkipToAdvanced(primaryModel, clipSkip, activeStyle))
 
     companion object {
-        fun shouldMoveClipSkipToAdvanced(model: HordeModel, clipSkip: Int): Boolean {
-            val isPony = model.name.contains("pony", ignoreCase = true) ||
-                model.baseline.contains("pony", ignoreCase = true)
-            return !isPony && clipSkip != model.defaultClipSkip
+        fun shouldMoveClipSkipToAdvanced(model: HordeModel, clipSkip: Int, activeStyle: HordeStyle?): Boolean {
+            val defaultSkip = activeStyle?.clipSkip ?: model.defaultClipSkip
+            return clipSkip == defaultSkip
         }
     }
 }
@@ -212,6 +212,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun toggleAllSamplers() = _studio.update { it.copy(showAllSamplers = !it.showAllSamplers) }
     fun updateNsfw(value: Boolean) = _studio.update { it.copy(nsfw = value) }
     fun updateCensorNsfw(value: Boolean) = _studio.update { it.copy(censorNsfw = value) }
+    fun updateHiresFix(value: Boolean) = _studio.update { it.copy(hiresFix = value) }
     fun updateImageCount(value: Int) = _studio.update { it.copy(imageCount = value.coerceIn(1, 100)) }
     fun updateDispatchMode(mode: MultiModelDispatchMode) = _studio.update { it.copy(dispatchMode = mode) }
 
@@ -301,10 +302,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 return@update applySingleStyleToState(state, style)
             }
             if (style.id == "none") {
-                return@update state.copy(
-                    selectedStyleId = "none",
-                    selectedStyleIds = listOf("none"),
-                ).withRecomputedClipSkipLocation()
+                return@update applyRawPromptStyleToState(state)
             }
             val currentIds = state.selectedStyleIds.filter { it != "none" }
             val adding = style.id !in currentIds
@@ -327,12 +325,45 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    private fun applyRawPromptStyleToState(state: StudioUiState): StudioUiState {
+        val sdName = state.models.firstOrNull { it.name.equals("stable_diffusion", ignoreCase = true) || it.name.equals("Stable Diffusion", ignoreCase = true) }?.name
+            ?: "stable_diffusion"
+        val targetModel = state.models.firstOrNull { it.name == sdName }
+            ?: HordeModel(
+                name = "stable_diffusion",
+                baseline = "SD 1.5",
+                workers = 0,
+                queued = 0,
+                etaSeconds = 0,
+                defaultSteps = 28,
+                defaultSampler = "k_euler",
+                defaultScheduler = "normal",
+                defaultClipSkip = 1,
+                suggestedMinSteps = 20,
+                suggestedMaxSteps = 40,
+                suggestedMinCfg = 4f,
+                suggestedMaxCfg = 10f,
+                suggestedWidth = 512,
+                suggestedHeight = 512,
+            )
+        val updatedModels = if (targetModel.name !in state.models.map { it.name }) state.models + targetModel else state.models
+        return state.copy(
+            models = updatedModels,
+            selectedStyleId = "none",
+            selectedStyleIds = listOf("none"),
+            selectedModels = listOf(targetModel.name),
+            width = 512,
+            height = 512,
+            steps = targetModel.defaultSteps,
+            clipSkip = targetModel.defaultClipSkip,
+            sampler = targetModel.defaultSampler,
+            scheduler = targetModel.defaultScheduler,
+        ).withRecomputedClipSkipLocation()
+    }
+
     private fun applySingleStyleToState(state: StudioUiState, style: HordeStyle): StudioUiState {
         if (style.id == "none") {
-            return state.copy(
-                selectedStyleId = "none",
-                selectedStyleIds = listOf("none"),
-            ).withRecomputedClipSkipLocation()
+            return applyRawPromptStyleToState(state)
         }
         val nextModels = style.model?.let { m ->
             state.models.firstOrNull { it.name.equals(m, ignoreCase = true) }?.name?.let(::listOf)
@@ -358,27 +389,18 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun resetAllParametersToDefaults() {
         _studio.update { state ->
-            val base = state.primaryModel
-            state.copy(
-                selectedStyleId = "none",
-                selectedStyleIds = listOf("none"),
+            val updated = applyRawPromptStyleToState(state)
+            updated.copy(
                 prompt = TemplatePrompts.pickRandomTemplatePrompt(exclude = state.prompt),
                 negativePrompt = "",
                 seed = "",
-                steps = base.defaultSteps,
-                cfg = 7.0f,
-                clipSkip = base.defaultClipSkip,
-                width = base.suggestedWidth,
-                height = base.suggestedHeight,
-                sampler = base.defaultSampler,
-                scheduler = base.defaultScheduler,
                 nsfw = false,
                 censorNsfw = true,
                 imageCount = 1,
                 loras = emptyList(),
                 tis = emptyList(),
                 toastMessage = "Reset all fields",
-            ).withRecomputedClipSkipLocation()
+            )
         }
     }
 
@@ -510,6 +532,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             imageCount = st.imageCount,
             loras = st.loras,
             tis = st.tis,
+            hiresFix = st.hiresFix,
         )
 
     fun copyCurrentRequestAsCurl() {
