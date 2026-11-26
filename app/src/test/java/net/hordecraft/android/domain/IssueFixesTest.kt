@@ -425,7 +425,7 @@ class IssueFixesTest {
             hiresFix = true,
         )
         val chunks = StyleContractEngine.buildSubmissionChunks(spec)
-        val payload = chunks.first().payload
-        assertTrue(payload["hires_fix"]?.jsonPrimitive?.booleanOrNull == true)
+        val params = chunks.first().payload["params"]?.jsonObject
+        assertTrue(params?.get("hires_fix")?.jsonPrimitive?.booleanOrNull == true)
     }
 }
