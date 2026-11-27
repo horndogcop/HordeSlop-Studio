@@ -4,8 +4,12 @@ import android.app.WallpaperManager
 import android.content.Intent
 import android.net.Uri
 import android.os.Build
+import android.view.WindowManager
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.WindowInsetsControllerCompat
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -23,6 +27,9 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.displayCutoutPadding
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
@@ -67,6 +74,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -81,6 +89,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -88,6 +97,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import androidx.compose.ui.window.DialogWindowProvider
 import coil.compose.AsyncImage
 import kotlinx.coroutines.launch
 import net.hordeslop.studio.data.local.AppSettings
@@ -657,8 +667,39 @@ private fun GalleryViewerModal(
 
     Dialog(
         onDismissRequest = onDismiss,
-        properties = DialogProperties(usePlatformDefaultWidth = false),
+        properties = DialogProperties(
+            usePlatformDefaultWidth = false,
+            decorFitsSystemWindows = false,
+        ),
     ) {
+        val view = LocalView.current
+        val dialogWindow = (view.parent as? DialogWindowProvider)?.window
+        DisposableEffect(dialogWindow, view, isFullscreen) {
+            if (dialogWindow != null) {
+                WindowCompat.setDecorFitsSystemWindows(dialogWindow, false)
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                    val lp = dialogWindow.attributes
+                    if (lp.layoutInDisplayCutoutMode != WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES) {
+                        lp.layoutInDisplayCutoutMode = WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES
+                        dialogWindow.attributes = lp
+                    }
+                }
+                val controller = WindowInsetsControllerCompat(dialogWindow, view)
+                controller.systemBarsBehavior =
+                    WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+                if (isFullscreen) {
+                    controller.hide(WindowInsetsCompat.Type.systemBars())
+                } else {
+                    controller.show(WindowInsetsCompat.Type.systemBars())
+                }
+                onDispose {
+                    controller.show(WindowInsetsCompat.Type.systemBars())
+                }
+            } else {
+                onDispose {}
+            }
+        }
+
         if (isFullscreen) {
             Box(
                 modifier = Modifier
@@ -690,8 +731,9 @@ private fun GalleryViewerModal(
                         fullscreenMode = true,
                         modifier = Modifier
                             .align(Alignment.TopCenter)
-                            .systemBarsPadding()
                             .background(Brush.verticalGradient(listOf(Color.Black.copy(alpha = 0.85f), Color.Transparent)))
+                            .statusBarsPadding()
+                            .displayCutoutPadding()
                             .padding(horizontal = 8.dp, vertical = 10.dp),
                     )
 
@@ -731,8 +773,9 @@ private fun GalleryViewerModal(
                     BottomMetadataSection(
                         modifier = Modifier
                             .align(Alignment.BottomCenter)
-                            .systemBarsPadding()
                             .background(Brush.verticalGradient(listOf(Color.Transparent, Color.Black.copy(alpha = 0.92f))))
+                            .navigationBarsPadding()
+                            .displayCutoutPadding()
                             .padding(12.dp),
                     )
                 }
@@ -744,6 +787,7 @@ private fun GalleryViewerModal(
                 modifier = Modifier
                     .fillMaxSize()
                     .background(Color.Black.copy(alpha = 0.72f))
+                    .systemBarsPadding()
                     .clickable(onClick = onDismiss)
                     .padding(16.dp),
                 contentAlignment = Alignment.Center,
