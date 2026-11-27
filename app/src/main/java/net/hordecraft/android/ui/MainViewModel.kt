@@ -19,6 +19,7 @@ import net.hordeslop.studio.data.local.AppSettings
 import net.hordeslop.studio.domain.ActivityDestination
 import net.hordeslop.studio.domain.AttachedLora
 import net.hordeslop.studio.domain.AttachedTi
+import net.hordeslop.studio.domain.AuthMode
 import net.hordeslop.studio.domain.GenerateButtonPlacement
 import net.hordeslop.studio.domain.HordeConstants
 import net.hordeslop.studio.domain.HordeJob
@@ -27,6 +28,7 @@ import net.hordeslop.studio.domain.HordePerformanceSummary
 import net.hordeslop.studio.domain.HordeStyle
 import net.hordeslop.studio.domain.LauncherIconChoice
 import net.hordeslop.studio.domain.LauncherIconManager
+import net.hordeslop.studio.domain.LiveRemoteGeneration
 import net.hordeslop.studio.domain.LoraTriggerMode
 import net.hordeslop.studio.domain.MultiModelDispatchMode
 import net.hordeslop.studio.domain.NavLayoutMode
@@ -82,6 +84,13 @@ data class StudioUiState(
     val toastMessage: String? = null,
     val clipSkipInAdvanced: Boolean = true,
     val hiresFix: Boolean = false,
+    val liveRemoteGenerations: List<LiveRemoteGeneration> = emptyList(),
+    val liveRemoteTextIds: List<String> = emptyList(),
+    val liveRemoteAlchemyIds: List<String> = emptyList(),
+    val liveRemoteAuthMode: AuthMode = AuthMode.ANONYMOUS,
+    val liveRemoteLoading: Boolean = false,
+    val liveRemoteError: String? = null,
+    val liveRemoteLastUpdatedMillis: Long = 0L,
 ) {
     val activeStyles: List<HordeStyle>
         get() = selectedStyleIds
@@ -210,6 +219,87 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     )
                 }
             }
+        }
+    }
+
+    fun refreshLiveRemoteGenerations() {
+        viewModelScope.launch {
+            _studio.update { it.copy(liveRemoteLoading = true, liveRemoteError = null) }
+            val res = repo.fetchLiveRemoteGenerations()
+            _studio.update {
+                it.copy(
+                    liveRemoteGenerations = res.items,
+                    liveRemoteTextIds = res.textRequestIds,
+                    liveRemoteAlchemyIds = res.alchemyRequestIds,
+                    liveRemoteAuthMode = res.authMode,
+                    liveRemoteLoading = false,
+                    liveRemoteError = res.errorMessage,
+                    liveRemoteLastUpdatedMillis = System.currentTimeMillis(),
+                )
+            }
+        }
+    }
+
+    fun adoptRemoteGeneration(live: LiveRemoteGeneration) {
+        viewModelScope.launch {
+            runCatching { repo.adoptRemoteGeneration(live) }
+                .onSuccess {
+                    HordeJobService.startPolling(app)
+                    _studio.update { state ->
+                        state.copy(
+                            liveRemoteGenerations = state.liveRemoteGenerations.map {
+                                if (it.requestId == live.requestId) it.copy(isTrackedLocally = true) else it
+                            },
+                            toastMessage = "Tracking request in local Queue",
+                        )
+                    }
+                }
+                .onFailure { err ->
+                    showToast("Track failed: ${err.message ?: "Unable to track request"}")
+                }
+        }
+    }
+
+    fun cancelRemoteGeneration(requestId: String) {
+        viewModelScope.launch {
+            val ok = repo.cancelRemoteGeneration(requestId)
+            showToast(if (ok) "Cancelled request $requestId" else "Failed to cancel request")
+            refreshLiveRemoteGenerations()
+        }
+    }
+
+    fun applyLiveGenerationParameters(live: LiveRemoteGeneration) {
+        _studio.update { state ->
+            val resolvedModels = live.models.map { m ->
+                state.models.firstOrNull { it.name.equals(m, ignoreCase = true) }?.name ?: m
+            }.ifEmpty { state.selectedModels }
+            val resolvedSampler = live.sampler?.let { s ->
+                state.allSamplers.firstOrNull { it.equals(s, ignoreCase = true) } ?: s
+            } ?: state.sampler
+            val resolvedScheduler = live.scheduler?.let { sc ->
+                HordeConstants.OFFICIAL_SCHEDULERS.firstOrNull { it.equals(sc, ignoreCase = true) } ?: sc
+            } ?: state.scheduler
+            state.copy(
+                prompt = live.prompt.ifBlank { state.prompt },
+                negativePrompt = live.negativePrompt,
+                selectedModels = resolvedModels,
+                multiModelEnabled = resolvedModels.size > 1,
+                seed = live.seed ?: state.seed,
+                steps = live.steps?.coerceIn(1, 100) ?: state.steps,
+                cfg = live.cfg?.coerceIn(1f, 30f) ?: state.cfg,
+                clipSkip = live.clipSkip?.coerceIn(1, 12) ?: state.clipSkip,
+                sampler = resolvedSampler,
+                scheduler = resolvedScheduler,
+                width = live.width?.let(SizeMathEngine::snapTo64) ?: state.width,
+                height = live.height?.let(SizeMathEngine::snapTo64) ?: state.height,
+                imageCount = live.imageCount.coerceIn(1, 100),
+                hiresFix = live.hiresFix ?: state.hiresFix,
+                nsfw = live.nsfw ?: state.nsfw,
+                censorNsfw = live.censorNsfw ?: state.censorNsfw,
+                selectedStyleId = "none",
+                selectedStyleIds = listOf("none"),
+                toastMessage = "Applied live request parameters to Studio",
+            ).withRecomputedClipSkipLocation()
         }
     }
 

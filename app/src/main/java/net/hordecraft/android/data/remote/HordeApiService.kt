@@ -151,6 +151,13 @@ data class HordePerformanceDto(
 )
 
 @Serializable
+data class UserActiveGenerationsDto(
+    val image: List<String> = emptyList(),
+    val text: List<String> = emptyList(),
+    val alchemy: List<String> = emptyList(),
+)
+
+@Serializable
 data class HordeUserDto(
     val id: Long = 0,
     val username: String = "",
@@ -158,6 +165,7 @@ data class HordeUserDto(
     val trusted: Boolean = false,
     @SerialName("worker_count") val workerCount: Int = 0,
     val records: UserRecordsDto? = null,
+    @SerialName("active_generations") val activeGenerations: UserActiveGenerationsDto? = null,
 )
 
 @Serializable
@@ -198,6 +206,9 @@ interface HordeApiService {
 
     @GET("generate/status/{id}")
     suspend fun getGenerationStatus(@Path("id") id: String): GenerationStatusDto
+
+    @GET("generate/request/{id}")
+    suspend fun getImageRequestParameters(@Path("id") id: String): JsonObject
 
     @DELETE("generate/status/{id}")
     suspend fun cancelGeneration(@Path("id") id: String): GenerationStatusDto
