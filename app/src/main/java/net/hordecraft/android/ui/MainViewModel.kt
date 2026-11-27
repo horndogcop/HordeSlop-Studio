@@ -459,7 +459,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    fun applyParsedImageMetadata(meta: ParsedImageMetadata) {
+    fun applyParsedImageMetadata(meta: ParsedImageMetadata, toastOverride: String? = null) {
+        val message = toastOverride ?: "Applied metadata from image to Studio"
         _studio.update { state ->
             val nextModels = if (!meta.model.isNullOrBlank()) {
                 val matched = state.models.firstOrNull { it.name.equals(meta.model, ignoreCase = true) }?.name
@@ -485,10 +486,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 height = meta.height ?: state.height,
                 selectedStyleId = "none",
                 selectedStyleIds = listOf("none"),
-                toastMessage = "Applied metadata from image to Studio",
+                toastMessage = message,
             ).withRecomputedClipSkipLocation()
         }
-        showToast("Applied metadata from image to Studio")
+        showToast(message)
     }
 
     fun importExternalImage(uri: Uri, meta: ParsedImageMetadata) {

@@ -10,6 +10,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import net.hordeslop.studio.domain.ActivityDestination
+import net.hordeslop.studio.domain.GenerationUrlParser
 import net.hordeslop.studio.ui.MainViewModel
 import net.hordeslop.studio.ui.components.EXTRA_SINGLE_ACTIVITY_DEST
 import net.hordeslop.studio.ui.components.HordeModeScaffold
@@ -34,9 +35,33 @@ abstract class BaseHordeActivity : ComponentActivity() {
         vm.setSingleActivityDestination(target)
     }
 
+    protected fun handleIncomingIntent(incoming: Intent?) {
+        val action = incoming?.action
+        val data = incoming?.data
+        if (action == Intent.ACTION_VIEW && data != null) {
+            val parsed = GenerationUrlParser.parse(data)
+            if (parsed.hasMetadata) {
+                vm.applyParsedImageMetadata(
+                    parsed.metadata,
+                    toastOverride = "Applied settings from ${parsed.metadata.generatorSource} link",
+                )
+                vm.setSingleActivityDestination(ActivityDestination.IMAGE_GEN)
+            } else {
+                val forwarded = GenerationUrlParser.forwardToBrowser(this, data.toString())
+                if (!forwarded) {
+                    vm.showToast("No external browser available for link")
+                }
+                if (this is ImageGenActivity && (incoming.flags and Intent.FLAG_ACTIVITY_LAUNCHED_FROM_HISTORY == 0)) {
+                    finish()
+                }
+            }
+        }
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         applySingleActivityIntent(intent)
+        handleIncomingIntent(intent)
         if (intent?.action == Intent.ACTION_SET_WALLPAPER) {
             vm.showToast("Open an image → More → Set as wallpaper")
         }
@@ -50,6 +75,7 @@ abstract class BaseHordeActivity : ComponentActivity() {
             val singleActivityDest by vm.singleActivityDestination.collectAsStateWithLifecycle()
 
             LaunchedEffect(settings.useSeparateActivities) {
+                if (isFinishing || isDestroyed) return@LaunchedEffect
                 if (this@BaseHordeActivity !is MainActivity && !settings.useSeparateActivities) {
                     vm.setSingleActivityDestination(destination)
                     startActivity(
@@ -159,11 +185,18 @@ class MainActivity : BaseHordeActivity() {
         super.onNewIntent(intent)
         setIntent(intent)
         applySingleActivityIntent(intent)
+        handleIncomingIntent(intent)
     }
 }
 
 class ImageGenActivity : BaseHordeActivity() {
     override val destination = ActivityDestination.IMAGE_GEN
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        handleIncomingIntent(intent)
+    }
 }
 
 class GalleryActivity : BaseHordeActivity() {

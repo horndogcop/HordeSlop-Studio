@@ -61,6 +61,7 @@ import androidx.compose.material.icons.outlined.FolderOpen
 import androidx.compose.material.icons.outlined.Fullscreen
 import androidx.compose.material.icons.outlined.FullscreenExit
 import androidx.compose.material.icons.outlined.ImageSearch
+import androidx.compose.material.icons.outlined.Link
 import androidx.compose.material.icons.outlined.MoreHoriz
 import androidx.compose.material.icons.outlined.PauseCircleOutline
 import androidx.compose.material.icons.outlined.Refresh
@@ -124,6 +125,7 @@ import net.hordeslop.studio.domain.JobStatus
 import net.hordeslop.studio.domain.ParsedImageMetadata
 import net.hordeslop.studio.domain.SavedImage
 import net.hordeslop.studio.ui.MainViewModel
+import net.hordeslop.studio.ui.components.PasteGenerationUrlDialog
 import net.hordeslop.studio.ui.components.launchActivityForDestination
 import net.hordeslop.studio.ui.theme.HordeColors
 
@@ -169,6 +171,7 @@ fun GalleryScreen(
     var inspectedImageUri by remember { mutableStateOf<Uri?>(null) }
     var inspectedMetadata by remember { mutableStateOf<ParsedImageMetadata?>(null) }
     var isExtractingMetadata by remember { mutableStateOf(false) }
+    var showPasteUrlDialog by remember { mutableStateOf(false) }
 
     val inspectPickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.PickVisualMedia(),
@@ -377,6 +380,21 @@ fun GalleryScreen(
                 Icon(
                     Icons.Outlined.ImageSearch,
                     contentDescription = "Inspect image metadata",
+                    tint = HordeColors.TealSoft,
+                )
+            }
+            IconButton(
+                onClick = { showPasteUrlDialog = true },
+                modifier = Modifier
+                    .testTag("gallery_inspect_url_button")
+                    .size(42.dp)
+                    .clip(RoundedCornerShape(10.dp))
+                    .background(HordeColors.CardSurface)
+                    .border(1.dp, HordeColors.BorderSubtle, RoundedCornerShape(10.dp)),
+            ) {
+                Icon(
+                    Icons.Outlined.Link,
+                    contentDescription = "Parse generation link",
                     tint = HordeColors.TealSoft,
                 )
             }
@@ -729,6 +747,20 @@ fun GalleryScreen(
                 inspectedImageUri = null
                 isExtractingMetadata = false
             },
+        )
+    }
+
+    if (showPasteUrlDialog) {
+        PasteGenerationUrlDialog(
+            onApplyMetadata = { meta ->
+                vm.applyParsedImageMetadata(
+                    meta,
+                    toastOverride = "Applied settings from ${meta.generatorSource} link",
+                )
+                showPasteUrlDialog = false
+                launchActivityForDestination(context, ActivityDestination.IMAGE_GEN)
+            },
+            onDismiss = { showPasteUrlDialog = false },
         )
     }
 }

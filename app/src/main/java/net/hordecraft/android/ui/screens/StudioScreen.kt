@@ -41,6 +41,7 @@ import androidx.compose.material.icons.outlined.ExpandLess
 import androidx.compose.material.icons.outlined.ExpandMore
 import androidx.compose.material.icons.outlined.Fullscreen
 import androidx.compose.material.icons.outlined.History
+import androidx.compose.material.icons.outlined.Link
 import androidx.compose.material.icons.outlined.Pause
 import androidx.compose.material.icons.outlined.PlayArrow
 import androidx.compose.material.icons.outlined.RestartAlt
@@ -78,6 +79,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -92,6 +94,7 @@ import net.hordeslop.studio.domain.ActivityDestination
 import net.hordeslop.studio.domain.AttachedLora
 import net.hordeslop.studio.domain.GenerateButtonPlacement
 import net.hordeslop.studio.domain.GenerationLifecycleClassifier
+import net.hordeslop.studio.domain.GenerationUrlParser
 import net.hordeslop.studio.domain.HordeConstants
 import net.hordeslop.studio.domain.HordeJob
 import net.hordeslop.studio.domain.LoraTriggerMode
@@ -105,6 +108,7 @@ import net.hordeslop.studio.domain.TemplatePrompts
 import net.hordeslop.studio.domain.TiInjectMode
 import net.hordeslop.studio.ui.MainViewModel
 import net.hordeslop.studio.ui.StudioUiState
+import net.hordeslop.studio.ui.components.PasteGenerationUrlDialog
 import net.hordeslop.studio.ui.components.launchActivityForDestination
 import net.hordeslop.studio.ui.theme.HordeColors
 import net.hordeslop.studio.ui.theme.sliderZoneColor
@@ -133,6 +137,9 @@ fun StudioScreen(
 
     var showHistoryModalMode by remember { mutableStateOf<String?>(null) } // "history" | "favorites" | null
     var showFullscreenPrompt by remember { mutableStateOf(false) }
+    var showPasteUrlDialog by remember { mutableStateOf(false) }
+    var pasteUrlInitialText by remember { mutableStateOf("") }
+    var pasteUrlAllowRawText by remember { mutableStateOf(false) }
     var showModelModal by remember { mutableStateOf(false) }
     var showStylesModal by remember { mutableStateOf(false) }
     var showSizeModal by remember { mutableStateOf(false) }
@@ -215,7 +222,20 @@ fun StudioScreen(
                     collapsed = promptCollapsed,
                     onToggle = { promptCollapsed = !promptCollapsed },
                     trailing = {
-                        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        FlowRow(
+                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                            verticalArrangement = Arrangement.spacedBy(4.dp),
+                        ) {
+                            SmallHeaderChip(
+                                label = "Link",
+                                icon = { Icon(Icons.Outlined.Link, null, modifier = Modifier.size(14.dp), tint = HordeColors.TealSoft) },
+                                modifier = Modifier.testTag("studio_paste_url_button"),
+                                onClick = {
+                                    pasteUrlInitialText = ""
+                                    pasteUrlAllowRawText = false
+                                    showPasteUrlDialog = true
+                                },
+                            )
                             SmallHeaderChip(
                                 label = "Reset",
                                 icon = { Icon(Icons.Outlined.RestartAlt, null, modifier = Modifier.size(14.dp), tint = HordeColors.TextSecondary) },
@@ -254,7 +274,15 @@ fun StudioScreen(
                                 vm.copyText("prompt", studio.prompt)
                             }
                             TinySquareAction(Icons.Outlined.ContentPaste, "Paste") {
-                                pasteClipboardText(context)?.let(vm::updatePrompt)
+                                val pasted = pasteClipboardText(context) ?: return@TinySquareAction
+                                val parsedLink = GenerationUrlParser.parseString(pasted)
+                                if (parsedLink?.hasMetadata == true) {
+                                    pasteUrlInitialText = parsedLink.originalUrl
+                                    pasteUrlAllowRawText = true
+                                    showPasteUrlDialog = true
+                                } else {
+                                    vm.updatePrompt(pasted)
+                                }
                             }
                             TinySquareAction(Icons.Outlined.Clear, "Clear") { vm.updatePrompt("") }
                         }
@@ -976,6 +1004,25 @@ fun StudioScreen(
         )
     }
 
+    if (showPasteUrlDialog) {
+        PasteGenerationUrlDialog(
+            initialUrl = pasteUrlInitialText,
+            allowPasteAsRawText = pasteUrlAllowRawText,
+            onPasteAsRawText = { raw ->
+                vm.updatePrompt(raw)
+                showPasteUrlDialog = false
+            },
+            onApplyMetadata = { meta ->
+                vm.applyParsedImageMetadata(
+                    meta,
+                    toastOverride = "Applied settings from ${meta.generatorSource} link",
+                )
+                showPasteUrlDialog = false
+            },
+            onDismiss = { showPasteUrlDialog = false },
+        )
+    }
+
     if (showSizeModal) {
         SizePickerDialog(
             width = studio.width,
@@ -1494,10 +1541,11 @@ private fun CollapsibleSectionHeader(
 private fun SmallHeaderChip(
     label: String,
     icon: @Composable () -> Unit,
+    modifier: Modifier = Modifier,
     onClick: () -> Unit,
 ) {
     Row(
-        modifier = Modifier
+        modifier = modifier
             .clip(RoundedCornerShape(8.dp))
             .background(HordeColors.ElevatedButton)
             .clickable(onClick = onClick)
