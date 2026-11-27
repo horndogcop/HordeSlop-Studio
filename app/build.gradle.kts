@@ -20,7 +20,7 @@ android {
         minSdk = 23
         targetSdk = 35
         versionCode = overrideVersionCode ?: 1
-        versionName = overrideVersionName ?: "0.1.0"
+        versionName = overrideVersionName ?: "0.4.0-beta.2"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         buildConfigField("String", "AI_ATTRIBUTION_MODEL", "\"models/gemini-4-hydrogen, Gemini 3.5 flash lite, Gemini flash latest\"")

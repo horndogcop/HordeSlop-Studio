@@ -342,7 +342,7 @@ object HordeConstants {
     const val ANONYMOUS_KEY = "0000000000"
     const val HAIDRA_LOGO_URL = "https://haidra.net/content/images/2024/11/haidra-transparent.png"
     const val APP_REPO_URL = "https://github.com/horndogcop/hordeslop-studio"
-    const val CLIENT_AGENT = "HordeSlopStudio:0.1.0:horndogcop/hordeslop-studio"
+    const val CLIENT_AGENT = "HordeSlopStudio:0.4.0-beta.2:horndogcop/hordeslop-studio"
     const val MAX_IMAGES_PER_REQUEST = 20
     const val MAX_ATTACHED_LORAS = 5
     const val MAX_ATTACHED_TIS = 5
