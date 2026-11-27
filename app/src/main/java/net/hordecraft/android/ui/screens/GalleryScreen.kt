@@ -46,7 +46,6 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.outlined.FirstPage
 import androidx.compose.material.icons.automirrored.outlined.LastPage
 import androidx.compose.material.icons.automirrored.outlined.OpenInNew
 import androidx.compose.material.icons.automirrored.outlined.Send
@@ -60,6 +59,7 @@ import androidx.compose.material.icons.outlined.ErrorOutline
 import androidx.compose.material.icons.outlined.Favorite
 import androidx.compose.material.icons.outlined.FavoriteBorder
 import androidx.compose.material.icons.outlined.FilterList
+import androidx.compose.material.icons.outlined.FirstPage
 import androidx.compose.material.icons.outlined.FolderOpen
 import androidx.compose.material.icons.outlined.Fullscreen
 import androidx.compose.material.icons.outlined.FullscreenExit
@@ -592,7 +592,7 @@ fun GalleryScreen(
                                         .size(36.dp),
                                 ) {
                                     Icon(
-                                        Icons.AutoMirrored.Outlined.FirstPage,
+                                        Icons.Outlined.FirstPage,
                                         contentDescription = "First Page",
                                         tint = if (pageResult.hasPrevious) HordeColors.TextPrimary else HordeColors.TextMuted.copy(alpha = 0.35f),
                                         modifier = Modifier.size(20.dp),
