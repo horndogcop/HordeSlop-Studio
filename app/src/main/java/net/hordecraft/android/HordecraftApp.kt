@@ -121,6 +121,7 @@ class HordecraftApp : Application() {
 
     override fun onCreate() {
         super.onCreate()
+        net.hordeslop.studio.domain.TemplatePrompts.loadFromContext(this)
         NotificationChannels.createAll(this)
         container = AppContainer(this)
     }

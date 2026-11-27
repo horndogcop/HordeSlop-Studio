@@ -1,0 +1,67 @@
+# HordeSlop Studio Example Prompts
+# Format: Lines starting with '#' are section headers or comments; non-empty lines are prompt entries.
+
+[Architecture & Landmarks]
+brutalist cliffside observatory at dusk, weathered concrete, mist over ocean, 35mm architectural photography
+ancient stone library carved inside a mossy canyon cliff, shafts of golden afternoon sunlight
+solitary red lighthouse on jagged basalt rocks, crashing Atlantic spray under stormy silver sky
+abandoned Art Deco train station concourse, arched iron glass roof, dramatic dusty sunbeams on marble floor
+hilltop medieval stone windmill overlooking golden lavender fields in Provence during golden hour
+snowbound timber watchtower on a rocky mountain ridge under starlight, glowing hearth window
+terracotta rooftop terrace in Siena overlooking rolling Tuscan hills, warm late afternoon shadows
+quiet coastal tide-mill in Brittany at low tide, weathered granite walls, wooden boat resting on wet sand
+highland stone bothy surrounded by purple heather moorland under dramatic passing rain clouds
+grand spiral oak staircase inside a historic European university library, brass railings, soft lamps
+stone aqueduct spanning a cypress-lined Mediterranean gorge in warm late-evening light
+rooftop astronomical dome painted matte white on a desert plateau, Milky Way core rising overhead
+
+[Nature & Landscapes]
+minimalist Nordic wooden cabin beside a still fjord lake, low drifting fog, crisp autumn light
+desert wind-carved sandstone arch under the Milky Way, subtle campsite lantern on the horizon
+bioluminescent tide pools along volcanic black sand beach at twilight, long exposure water reflections
+geothermal hot springs steaming under northern lights in Iceland, basalt cliffs, frost-covered moss
+misty bamboo grove in Arashiyama at dawn, stone pathway wet from morning dew, filtered jade sunlight
+autumn birch forest beside a mirror-like glacial river in Patagonia, jagged snow-dusted peaks behind
+subterranean crystal cavern lit by bioluminescent fungi, calm underground emerald pool
+weathered bronze sundial in an overgrown walled English rose garden, dappled afternoon sunlight
+mountain tea pavilion perched over terraced misty green hills in Yunnan at early morning
+salt flat mirror desert in Bolivia under pastel twilight sky, crisp horizon reflection
+wooden fishing pier stretching into calm Baltic Sea fog at sunrise, muted slate and rose tones
+moss-draped ancient redwood cathedral grove, shafts of morning fog and golden light filtering down
+
+[Interiors & Workshops]
+sunlit botanical greenhouse interior, spiral iron staircase, morning condensation on glass panels
+vintage brass astronomical astrolabe resting on dark oak desk beside weathered star charts, studio chiaroscuro
+quiet Japanese pottery workshop, wet clay wheel, shelves of glazed ceramic bowls in soft window light
+cozy floating wooden bookshop moored on an Amsterdam canal in autumn, warm amber lamps inside, drizzle
+sun-drenched Moroccan courtyard riad, geometric zellige tilework, citrus trees around a quiet stone fountain
+craftsman copper and stained-glass lantern workshop at night, warm sparks, hanging amber filigree lamps
+candlelit medieval scriptorium desk, illuminated parchment manuscript, brass inkwells and quill pens
+traditional wooden boatbuilder workshop, curved cedar ribs, curled wood shavings, dusty skylight beams
+sunlit French bakery window at sunrise, crusty sourdough loaves, brass scales and marble counter
+clockmaker workbench covered in tiny brass gears, jewelers loupe, warm focused desk lamp
+sunlit ceramic courtyard kiln in Oaxaca, stacked clay pots, warm terracotta shadows and desert sky
+
+[Urban, Travel & Sci-Fi]
+rainy neon alleyway in Kyoto at midnight, wet cobblestone reflections, warm lantern glow, candid street photo
+high-altitude alpine train crossing a stone viaduct over pine valleys at sunrise, crisp mountain air
+deep sea research submersible illuminating a sunken wooden shipwreck surrounded by coral and drifting silt
+vintage yellow tram climbing a steep cobbled street in Lisbon at dawn, pastel facades, soft coastal haze
+retro-futuristic glass monorail gliding above a lush terraced eco-city at sunset, soft golden clouds
+narrow Venetian canal at blue hour, fog drifting past weathered stucco palazzi and stone bridges
+neon-lit retro diner in the Mojave desert after rain, wet asphalt reflections, crimson dusk sky
+orbital greenhouse dome overlooking Earth curvature, hydroponic greens illuminated by cool white LEDs
+intricate paper-lantern night market alley in Taipei, rising steam from street food stalls
+restored 1960s silver Airstream trailer parked beside pine-ringed alpine lake at dusk
+
+[Characters, Pop Culture & Ridiculous]
+Batman wearing Superman costume
+hello kitty eating a frog
+short hair, messy hair, black and white, round glasses, nose, lips, upper teeth, grin, closed eyes, slim, diamond pattern waistcoat, long sleeves, white shirt, bow tie, puffy pants, earrings, rating: safe, shirttail, waist pouch, waistband, tall shirtcollar, solo###tail, multiple, group, duo, clone, content rating, watermark, text
+:T, pout, cute, bulging cheeks, catgirl, portrait, dynamic, rating: safe, close-up
+a maid wearing a {WWI|WWII} gas mask
+a golden retriever wearing a powdered wig and judge robes presiding over a courtroom full of squirrels
+Darth Vader aggressively knitting a pastel rainbow scarf on a crowded subway train
+two Victorian gentlemen in top hats fiercely dueling with giant inflatable pool noodles
+a medieval knight riding a giant rubber duck into battle across a calm suburban swimming pool
+Shrek dressed as a 1920s jazz saxophonist performing under dramatic spotlight in a smoky basement club

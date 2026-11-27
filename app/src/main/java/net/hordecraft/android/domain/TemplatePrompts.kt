@@ -1,74 +1,71 @@
 package net.hordeslop.studio.domain
 
+import android.content.Context
+import java.io.File
 import java.util.Locale
 import kotlin.random.Random
 
 object TemplatePrompts {
-    val PRESETS: List<String> = listOf(
-        "brutalist cliffside observatory at dusk, weathered concrete, mist over ocean, 35mm architectural photography",
-        "sunlit botanical greenhouse interior, spiral iron staircase, morning condensation on glass panels",
-        "rainy neon alleyway in Kyoto at midnight, wet cobblestone reflections, warm lantern glow, candid street photo",
-        "ancient stone library carved inside a mossy canyon cliff, shafts of golden afternoon sunlight",
-        "minimalist Nordic wooden cabin beside a still fjord lake, low drifting fog, crisp autumn light",
-        "vintage brass astronomical astrolabe resting on dark oak desk beside weathered star charts, studio chiaroscuro",
-        "solitary red lighthouse on jagged basalt rocks, crashing Atlantic spray under stormy silver sky",
-        "desert wind-carved sandstone arch under the Milky Way, subtle campsite lantern on the horizon",
-        "quiet Japanese pottery workshop, wet clay wheel, shelves of glazed ceramic bowls in soft window light",
-        "high-altitude alpine train crossing a stone viaduct over pine valleys at sunrise, crisp mountain air",
-        "bioluminescent tide pools along volcanic black sand beach at twilight, long exposure water reflections",
-        "abandoned Art Deco train station concourse, arched iron glass roof, dramatic dusty sunbeams on marble floor",
-        "cozy floating wooden bookshop moored on an Amsterdam canal in autumn, warm amber lamps inside, drizzle",
-        "geothermal hot springs steaming under northern lights in Iceland, basalt cliffs, frost-covered moss",
-        "sun-drenched Moroccan courtyard riad, geometric zellige tilework, citrus trees around a quiet stone fountain",
-        "deep sea research submersible illuminating a sunken wooden shipwreck surrounded by coral and drifting silt",
-        "hilltop medieval stone windmill overlooking golden lavender fields in Provence during golden hour",
-        "vintage yellow tram climbing a steep cobbled street in Lisbon at dawn, pastel facades, soft coastal haze",
-        "snowbound timber watchtower on a rocky mountain ridge under starlight, glowing hearth window",
-        "craftsman copper and stained-glass lantern workshop at night, warm sparks, hanging amber filigree lamps",
-        "misty bamboo grove in Arashiyama at dawn, stone pathway wet from morning dew, filtered jade sunlight",
-        "terracotta rooftop terrace in Siena overlooking rolling Tuscan hills, warm late afternoon shadows",
-        "retro-futuristic glass monorail gliding above a lush terraced eco-city at sunset, soft golden clouds",
-        "quiet coastal tide-mill in Brittany at low tide, weathered granite walls, wooden boat resting on wet sand",
-        "candlelit medieval scriptorium desk, illuminated parchment manuscript, brass inkwells and quill pens",
-        "autumn birch forest beside a mirror-like glacial river in Patagonia, jagged snow-dusted peaks behind",
-        "narrow Venetian canal at blue hour, fog drifting past weathered stucco palazzi and stone bridges",
-        "subterranean crystal cavern lit by bioluminescent fungi, calm underground emerald pool",
-        "traditional wooden boatbuilder workshop, curved cedar ribs, curled wood shavings, dusty skylight beams",
-        "highland stone bothy surrounded by purple heather moorland under dramatic passing rain clouds",
-        "neon-lit retro diner in the Mojave desert after rain, wet asphalt reflections, crimson dusk sky",
-        "sunlit French bakery window at sunrise, crusty sourdough loaves, brass scales and marble counter",
-        "weathered bronze sundial in an overgrown walled English rose garden, dappled afternoon sunlight",
-        "orbital greenhouse dome overlooking Earth curvature, hydroponic greens illuminated by cool white LEDs",
-        "mountain tea pavilion perched over terraced misty green hills in Yunnan at early morning",
-        "grand spiral oak staircase inside a historic European university library, brass railings, soft lamps",
-        "salt flat mirror desert in Bolivia under pastel twilight sky, crisp horizon reflection",
-        "stone aqueduct spanning a cypress-lined Mediterranean gorge in warm late-evening light",
-        "clockmaker workbench covered in tiny brass gears, jewelers loupe, warm focused desk lamp",
-        "wooden fishing pier stretching into calm Baltic Sea fog at sunrise, muted slate and rose tones",
-        "rooftop astronomical dome painted matte white on a desert plateau, Milky Way core rising overhead",
-        "intricate paper-lantern night market alley in Taipei, rising steam from street food stalls",
-        "moss-draped ancient redwood cathedral grove, shafts of morning fog and golden light filtering down",
-        "restored 1960s silver Airstream trailer parked beside pine-ringed alpine lake at dusk",
-        "sunlit ceramic courtyard kiln in Oaxaca, stacked clay pots, warm terracotta shadows and desert sky",
-        "Batman wearing Superman costume",
-        "hello kitty eating a frog",
-        "short hair, messy hair, black and white, round glasses, nose, lips, upper teeth, grin, closed eyes, slim, diamond pattern waistcoat, long sleeves, white shirt, bow tie, puffy pants, earrings, rating: safe, shirttail, waist pouch, waistband, tall shirtcollar, solo###tail, multiple, group, duo, clone, content rating, watermark, text",
-        ":T, pout, cute, bulging cheeks, catgirl, portrait, dynamic, rating: safe, close-up",
-        "a maid wearing a {WWI|WWII} gas mask",
-        "a golden retriever wearing a powdered wig and judge robes presiding over a courtroom full of squirrels",
-        "Darth Vader aggressively knitting a pastel rainbow scarf on a crowded subway train",
-        "two Victorian gentlemen in top hats fiercely dueling with giant inflatable pool noodles",
-        "a medieval knight riding a giant rubber duck into battle across a calm suburban swimming pool",
-        "Shrek dressed as a 1920s jazz saxophonist performing under dramatic spotlight in a smoky basement club",
-    )
+    private const val ASSET_FILE_NAME = "example_prompts.txt"
+
+    @Volatile
+    private var cachedPresets: List<String>? = null
+
+    val PRESETS: List<String>
+        get() = cachedPresets ?: loadFromFallbackSources().also { cachedPresets = it }
+
+    fun loadFromContext(context: Context) {
+        val loaded = runCatching {
+            context.assets.open(ASSET_FILE_NAME).bufferedReader(Charsets.UTF_8).use { reader ->
+                parseStructuredPrompts(reader.readText())
+            }
+        }.getOrNull()
+        if (!loaded.isNullOrEmpty()) {
+            cachedPresets = loaded
+        }
+    }
+
+    fun parseStructuredPrompts(rawText: String): List<String> =
+        rawText.lineSequence()
+            .map { it.trim() }
+            .filter { line ->
+                line.isNotEmpty() &&
+                    !line.startsWith("#") &&
+                    !(line.startsWith("[") && line.endsWith("]"))
+            }
+            .toList()
+
+    private fun loadFromFallbackSources(): List<String> {
+        val candidatePaths = listOf(
+            "src/main/assets/$ASSET_FILE_NAME",
+            "app/src/main/assets/$ASSET_FILE_NAME",
+            ".repos/HordeSlop-Studio/app/src/main/assets/$ASSET_FILE_NAME",
+        )
+        for (path in candidatePaths) {
+            val file = File(path)
+            if (file.isFile) {
+                val parsed = runCatching { parseStructuredPrompts(file.readText(Charsets.UTF_8)) }.getOrNull()
+                if (!parsed.isNullOrEmpty()) return parsed
+            }
+        }
+        val stream = TemplatePrompts::class.java.classLoader?.getResourceAsStream(ASSET_FILE_NAME)
+        if (stream != null) {
+            val parsed = runCatching {
+                stream.bufferedReader(Charsets.UTF_8).use { parseStructuredPrompts(it.readText()) }
+            }.getOrNull()
+            if (!parsed.isNullOrEmpty()) return parsed
+        }
+        return listOf("brutalist cliffside observatory at dusk, weathered concrete, mist over ocean, 35mm architectural photography")
+    }
 
     private val PLAIN_TRIGGER_MODEL_REGEX = Regex("anima|krea|turbo", RegexOption.IGNORE_CASE)
 
     fun pickRandomTemplatePrompt(exclude: String? = null, random: Random = Random.Default): String {
-        val pool = if (exclude != null && PRESETS.size > 1) {
-            PRESETS.filter { it != exclude }
+        val all = PRESETS
+        val pool = if (exclude != null && all.size > 1) {
+            all.filter { it != exclude }
         } else {
-            PRESETS
+            all
         }
         return pool[random.nextInt(pool.size)]
     }

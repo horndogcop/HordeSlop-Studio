@@ -507,4 +507,19 @@ class IssueFixesTest {
         snapshot = null
         assertEquals(4, (snapshot ?: updatedImages).size)
     }
+
+    @Test
+    fun structuredExamplePromptsLoadFromTextFile() {
+        val parsed = TemplatePrompts.parseStructuredPrompts(
+            """
+            # Comment line
+            [Section]
+            first prompt
+            
+            second prompt
+            """.trimIndent(),
+        )
+        assertEquals(listOf("first prompt", "second prompt"), parsed)
+        assertTrue(TemplatePrompts.PRESETS.size >= 55)
+    }
 }
