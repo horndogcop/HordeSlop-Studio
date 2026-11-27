@@ -117,6 +117,7 @@ import net.hordeslop.studio.domain.GalleryFilterState
 import net.hordeslop.studio.domain.GallerySearchFilter
 import net.hordeslop.studio.domain.GalleryStatusCategory
 import net.hordeslop.studio.domain.GalleryTimestampFormatter
+import net.hordeslop.studio.domain.GenerationLifecycleClassifier
 import net.hordeslop.studio.domain.HordeJob
 import net.hordeslop.studio.domain.ImageMetadataExtractor
 import net.hordeslop.studio.domain.JobStatus
@@ -1370,28 +1371,20 @@ private fun GalleryJobGridCard(
     job: HordeJob,
     onClick: () -> Unit,
 ) {
-    val isError = job.status == JobStatus.FAILED
-    val isLocal = job.status == JobStatus.LOCAL_QUEUED ||
-        (job.status == JobStatus.PAUSED && job.requestId.isBlank())
-    val accentColor = when {
-        isError -> HordeColors.RoseZone
-        isLocal -> HordeColors.AmberText
-        job.status == JobStatus.PAUSED -> HordeColors.TextSecondary
+    val lifecycle = GenerationLifecycleClassifier.classifyUi(job)
+    val accentColor = when (lifecycle.status) {
+        JobStatus.FAILED, JobStatus.EXPIRED -> HordeColors.RoseZone
+        JobStatus.WAITING_IMPOSSIBLE, JobStatus.UNOBSERVABLE -> HordeColors.AmberZone
+        JobStatus.PAUSED -> if (lifecycle.isLocal) HordeColors.AmberText else HordeColors.TextSecondary
+        JobStatus.LOCAL_QUEUED -> HordeColors.AmberText
         else -> HordeColors.TealSoft
     }
-    val statusBadge = when (job.status) {
-        JobStatus.LOCAL_QUEUED -> "Local"
-        JobStatus.PAUSED -> if (job.requestId.isBlank()) "Paused (local)" else "Paused"
-        JobStatus.QUEUED -> "Sent"
-        JobStatus.PROCESSING -> if (job.waitTimeSeconds > 0) "~${job.waitTimeSeconds}s" else "Running"
-        JobStatus.FAILED -> "Error"
-        JobStatus.COMPLETED -> "Done"
-        JobStatus.CANCELLED_PARTIAL -> "Partial"
-    }
-    val statusIcon = when {
-        isError -> Icons.Outlined.ErrorOutline
-        job.status == JobStatus.PAUSED -> Icons.Outlined.PauseCircleOutline
-        isLocal -> Icons.Outlined.Schedule
+    val statusBadge = lifecycle.badgeLabel
+    val statusIcon = when (lifecycle.status) {
+        JobStatus.FAILED, JobStatus.EXPIRED -> Icons.Outlined.ErrorOutline
+        JobStatus.PAUSED -> Icons.Outlined.PauseCircleOutline
+        JobStatus.WAITING_IMPOSSIBLE, JobStatus.LOCAL_QUEUED -> Icons.Outlined.Schedule
+        JobStatus.UNOBSERVABLE -> Icons.Outlined.Refresh
         else -> Icons.Outlined.CloudQueue
     }
 
@@ -1448,11 +1441,16 @@ private fun GalleryJobGridCard(
                     maxLines = 3,
                     overflow = TextOverflow.Ellipsis,
                 )
-                if (isError && !job.errorMessage.isNullOrBlank()) {
+                val showNotice = !job.errorMessage.isNullOrBlank() && (
+                    lifecycle.isError ||
+                        lifecycle.status == JobStatus.WAITING_IMPOSSIBLE ||
+                        lifecycle.status == JobStatus.UNOBSERVABLE
+                    )
+                if (showNotice) {
                     Text(
-                        text = job.errorMessage,
+                        text = job.errorMessage.orEmpty(),
                         fontSize = 10.sp,
-                        color = HordeColors.RoseText,
+                        color = if (lifecycle.isError) HordeColors.RoseText else HordeColors.AmberText,
                         maxLines = 2,
                         overflow = TextOverflow.Ellipsis,
                     )
@@ -1460,10 +1458,7 @@ private fun GalleryJobGridCard(
             }
 
             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                if (job.status == JobStatus.LOCAL_QUEUED ||
-                    job.status == JobStatus.QUEUED ||
-                    job.status == JobStatus.PROCESSING
-                ) {
+                if (lifecycle.isRunnable) {
                     val progress = if (job.total > 0) job.finished.toFloat() / job.total else 0f
                     LinearProgressIndicator(
                         progress = { progress.coerceIn(0f, 1f) },
@@ -1509,19 +1504,9 @@ private fun GalleryJobDetailDialog(
     onCopyCurl: (String) -> Unit,
     onViewCompleted: (String) -> Unit,
 ) {
-    val isActive = job.status == JobStatus.LOCAL_QUEUED ||
-        job.status == JobStatus.QUEUED ||
-        job.status == JobStatus.PROCESSING ||
-        job.status == JobStatus.PAUSED
-    val statusLabel = when (job.status) {
-        JobStatus.LOCAL_QUEUED -> "Queued locally (awaiting dispatch)"
-        JobStatus.QUEUED -> "Sent to server (queued)"
-        JobStatus.PROCESSING -> "Processing (#${job.queuePosition}, ~${job.waitTimeSeconds}s)"
-        JobStatus.PAUSED -> if (job.requestId.isBlank()) "Paused (local)" else "Paused (server)"
-        JobStatus.COMPLETED -> "Completed"
-        JobStatus.CANCELLED_PARTIAL -> "Stopped early (${job.finished}/${job.total})"
-        JobStatus.FAILED -> "Error"
-    }
+    val lifecycle = GenerationLifecycleClassifier.classifyUi(job)
+    val isActive = lifecycle.isActive
+    val statusLabel = lifecycle.detailStatusText
     val detailsText = buildString {
         appendLine("Status: $statusLabel")
         appendLine("Request ID: ${job.requestId.ifBlank { "Pending local dispatch" }}")
@@ -1530,7 +1515,7 @@ private fun GalleryJobDetailDialog(
         appendLine("Queued at: ${GalleryTimestampFormatter.formatFull(job.createdAtMillis)}")
         if (!job.errorMessage.isNullOrBlank()) {
             appendLine()
-            appendLine("Error:")
+            appendLine(if (lifecycle.isError) "Error:" else "Notice:")
             appendLine(job.errorMessage)
         }
         appendLine()
@@ -1548,7 +1533,7 @@ private fun GalleryJobDetailDialog(
         containerColor = HordeColors.CardSurface,
         title = {
             Text(
-                text = if (job.status == JobStatus.FAILED) "Generation Error" else "Queued Generation",
+                text = lifecycle.dialogTitle,
                 color = HordeColors.TextPrimary,
             )
         },

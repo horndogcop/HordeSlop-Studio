@@ -4,6 +4,7 @@ import android.content.Context
 import android.net.Uri
 import android.util.Base64
 import androidx.room.withTransaction
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
@@ -48,14 +49,18 @@ import net.hordeslop.studio.domain.AttachedTi
 import net.hordeslop.studio.domain.AuthMode
 import net.hordeslop.studio.domain.CivitaiPreview
 import net.hordeslop.studio.domain.CivitaiVersion
+import net.hordeslop.studio.domain.ClassifiedJobTransition
 import net.hordeslop.studio.domain.GenerationChunk
+import net.hordeslop.studio.domain.GenerationLifecycleClassifier
 import net.hordeslop.studio.domain.HordeConstants
 import net.hordeslop.studio.domain.HordeJob
 import net.hordeslop.studio.domain.HordeModel
 import net.hordeslop.studio.domain.HordePerformanceSummary
 import net.hordeslop.studio.domain.HordeStyle
+import net.hordeslop.studio.domain.JobProgressState
 import net.hordeslop.studio.domain.JobStatus
 import net.hordeslop.studio.domain.ParsedImageMetadata
+import net.hordeslop.studio.domain.PollApiOutcome
 import net.hordeslop.studio.domain.PromptRecord
 import net.hordeslop.studio.domain.SavedImage
 import net.hordeslop.studio.domain.StudioSubmissionSpec
@@ -145,7 +150,7 @@ class HordecraftRepository(
                 prompt = e.prompt,
                 negativePrompt = e.negativePrompt,
                 models = e.modelsJoined.split("||").filter { it.isNotBlank() },
-                status = runCatching { JobStatus.valueOf(e.status) }.getOrDefault(JobStatus.QUEUED),
+                status = JobStatus.fromStorage(e.status),
                 waitTimeSeconds = e.waitTimeSeconds,
                 queuePosition = e.queuePosition,
                 finished = e.finished,
@@ -728,18 +733,23 @@ class HordecraftRepository(
             )
             return 0
         }
-        val statusResult = runCatching { hordeApi.cancelGeneration(jobId) }
-        val statusDto = statusResult.getOrNull()
-        val err = statusResult.exceptionOrNull()
-        if (err != null && isHttp404(err)) {
-            activeJobDao.deleteById(jobId)
+        val statusDto = try {
+            hordeApi.cancelGeneration(jobId)
+        } catch (t: Throwable) {
+            if (t is CancellationException) throw t
+            if (isHttp404(t)) {
+                val expiredTransition = GenerationLifecycleClassifier.classify(job.toProgressState(), PollApiOutcome.NotFound)
+                activeJobDao.upsert(job.applying(expiredTransition, dismissed = false))
+                return 0
+            }
+            val transient = GenerationLifecycleClassifier.classify(
+                job.toProgressState(),
+                PollApiOutcome.TransientFailure(formatPollingError(t), httpStatusCode(t)),
+            )
+            activeJobDao.upsert(job.applying(transient))
             return 0
         }
-        val savedCount = if (statusDto != null) {
-            persistGenerationsFromStatus(job, statusDto, partialFromCancel = true)
-        } else {
-            0
-        }
+        val savedCount = persistGenerationsFromStatus(job, statusDto, partialFromCancel = true)
         val finalFinished = maxOf(job.finished, savedCount)
         activeJobDao.upsert(
             job.copy(
@@ -754,106 +764,187 @@ class HordecraftRepository(
     }
 
     suspend fun pollVisibleRunnableJob(job: ActiveJobEntity): JobPollNotification? {
-        val checkResult = try {
-            hordeApi.checkGeneration(job.id)
-        } catch (t: Throwable) {
-            if (isHttp404(t)) {
-                activeJobDao.deleteById(job.id)
+        val currentStatus = JobStatus.fromStorage(job.status)
+        if (!currentStatus.isRunnable) return null
+
+        val checkOutcome = fetchCheckOutcome(job.id)
+        val checkTransition = GenerationLifecycleClassifier.classify(job.toProgressState(), checkOutcome)
+
+        if (!checkTransition.shouldFetchFullStatus) {
+            val updated = job.applying(
+                transition = checkTransition,
+                dismissed = if (checkTransition.nextStatus == JobStatus.EXPIRED) false else job.dismissed,
+            )
+            activeJobDao.upsert(updated)
+            return if (checkTransition.nextStatus == JobStatus.EXPIRED) {
+                JobPollNotification(
+                    title = "Generation expired",
+                    body = checkTransition.errorMessage ?: "Request expired from API",
+                )
+            } else {
+                null
             }
-            return null
         }
 
-        val updated = job.copy(
-            status = JobStatus.PROCESSING.name,
-            waitTimeSeconds = checkResult.waitTime,
-            queuePosition = checkResult.queuePosition,
-            finished = checkResult.finished,
-            processing = checkResult.processing,
-        )
-        activeJobDao.upsert(updated)
+        // Persist non-terminal progress guard? Do not overwrite with terminal before status endpoint confirms.
+        val statusResult = fetchStatusOutcome(job.id)
+        return when (statusResult) {
+            is StatusFetchOutcome.NotFound -> {
+                val expired = GenerationLifecycleClassifier.classify(job.toProgressState(), PollApiOutcome.NotFound)
+                activeJobDao.upsert(job.applying(expired, dismissed = false))
+                JobPollNotification(
+                    title = "Generation expired",
+                    body = expired.errorMessage ?: "Request expired from API",
+                )
+            }
 
-        if (checkResult.faulted || !checkResult.isPossible) {
-            val saved = runCatching {
-                fetchFullStatusAndSave(updated, partialFromCancel = true)
-            }.getOrDefault(0)
-            val totalFinished = maxOf(updated.finished, saved)
-            activeJobDao.upsert(
-                updated.copy(
-                    status = if (totalFinished > 0) JobStatus.CANCELLED_PARTIAL.name else JobStatus.FAILED.name,
-                    finished = totalFinished,
-                    processing = 0,
-                    waitTimeSeconds = 0,
-                    errorMessage = "Request could not be completed",
-                ),
-            )
-            return JobPollNotification(
-                title = if (totalFinished > 0) "Partial images saved" else "Generation failed",
-                body = if (totalFinished > 0) "Saved $totalFinished image(s) before stop." else "Workers could not process this request.",
-            )
-        }
+            is StatusFetchOutcome.TransientFailure -> {
+                val unobservable = GenerationLifecycleClassifier.classify(
+                    job.toProgressState(),
+                    PollApiOutcome.TransientFailure(statusResult.message, statusResult.httpCode),
+                )
+                activeJobDao.upsert(job.applying(unobservable))
+                null
+            }
 
-        if (checkResult.done) {
-            val saved = runCatching { fetchFullStatusAndSave(updated) }.getOrDefault(0)
-            val finalFinished = maxOf(saved, checkResult.finished)
-            val autoClear = settingsStore.settings.first().autoClearCompletedQueue
-            activeJobDao.upsert(
-                updated.copy(
-                    status = JobStatus.COMPLETED.name,
-                    finished = finalFinished,
-                    processing = 0,
-                    waitTimeSeconds = 0,
-                    dismissed = autoClear,
-                    dismissedAtFinishedCount = if (autoClear) finalFinished else 0,
-                ),
-            )
-            return JobPollNotification(
-                title = "Saved $saved WebP image(s)",
-                body = job.modelsJoined.replace("||", ", "),
-            )
+            is StatusFetchOutcome.Success -> {
+                val statusDto = statusResult.dto
+                val statusTransition = GenerationLifecycleClassifier.classify(
+                    job.toProgressState(),
+                    PollApiOutcome.Success(statusDto.toSnapshot()),
+                )
+                val saved = persistGenerationsFromStatus(
+                    job = job,
+                    statusDto = statusDto,
+                    partialFromCancel = statusTransition.nextStatus == JobStatus.FAILED ||
+                        statusTransition.nextStatus == JobStatus.CANCELLED_PARTIAL,
+                )
+                val finalFinished = maxOf(job.finished, checkTransition.finished, statusTransition.finished, saved)
+
+                if (!statusTransition.isTerminal) {
+                    // Contradictory check vs status: keep non-terminal classified state and preserve progress.
+                    activeJobDao.upsert(
+                        job.applying(statusTransition.copy(finished = finalFinished)),
+                    )
+                    return null
+                }
+
+                if (statusTransition.nextStatus == JobStatus.FAILED ||
+                    statusTransition.nextStatus == JobStatus.CANCELLED_PARTIAL
+                ) {
+                    val terminalStatus = if (finalFinished > 0) JobStatus.CANCELLED_PARTIAL else JobStatus.FAILED
+                    activeJobDao.upsert(
+                        job.applying(
+                            transition = statusTransition.copy(
+                                nextStatus = terminalStatus,
+                                finished = finalFinished,
+                            ),
+                            dismissed = false,
+                        ),
+                    )
+                    return JobPollNotification(
+                        title = if (finalFinished > 0) "Partial images saved" else "Generation failed",
+                        body = if (finalFinished > 0) {
+                            "Saved $finalFinished image(s) before stop."
+                        } else {
+                            statusTransition.errorMessage ?: "Workers could not process this request."
+                        },
+                    )
+                }
+
+                val autoClear = settingsStore.settings.first().autoClearCompletedQueue
+                activeJobDao.upsert(
+                    job.applying(
+                        transition = statusTransition.copy(finished = finalFinished),
+                        dismissed = autoClear,
+                        dismissedAtFinishedCount = if (autoClear) finalFinished else 0,
+                    ),
+                )
+                JobPollNotification(
+                    title = "Saved $saved WebP image(s)",
+                    body = job.modelsJoined.replace("||", ", "),
+                )
+            }
         }
-        return null
     }
 
     suspend fun syncDismissedJobs(): List<JobPollNotification> {
         val dismissedJobs = activeJobDao.getDismissed()
         val notifications = mutableListOf<JobPollNotification>()
         for (job in dismissedJobs) {
-            if (job.requestId.isBlank() || job.status == JobStatus.LOCAL_QUEUED.name) {
-                if (job.status == JobStatus.FAILED.name || job.status == JobStatus.CANCELLED_PARTIAL.name) {
-                    activeJobDao.deleteById(job.id)
-                }
-                continue
-            }
-            val checkResult = try {
-                hordeApi.checkGeneration(job.id)
-            } catch (t: Throwable) {
-                if (isHttp404(t)) {
+            val currentStatus = JobStatus.fromStorage(job.status)
+            if (job.requestId.isBlank() || currentStatus == JobStatus.LOCAL_QUEUED) {
+                if (currentStatus.isTerminal) {
                     activeJobDao.deleteById(job.id)
                 }
                 continue
             }
 
-            if (shouldResurfaceDismissedJob(job.dismissedAtFinishedCount, checkResult.finished)) {
-                val partial = job.status == JobStatus.CANCELLED_PARTIAL.name || job.status == JobStatus.FAILED.name
-                val saved = runCatching { fetchFullStatusAndSave(job, partialFromCancel = partial) }.getOrDefault(0)
-                val finalFinished = maxOf(checkResult.finished, saved)
-                val nextStatus = when {
-                    checkResult.done && !checkResult.faulted -> JobStatus.COMPLETED.name
-                    checkResult.processing > 0 || checkResult.waiting > 0 -> JobStatus.PROCESSING.name
-                    else -> job.status
+            val checkOutcome = fetchCheckOutcome(job.id)
+            if (checkOutcome is PollApiOutcome.NotFound) {
+                if (currentStatus.isTerminal) {
+                    activeJobDao.deleteById(job.id)
+                } else {
+                    val expired = GenerationLifecycleClassifier.classify(job.toProgressState(), PollApiOutcome.NotFound)
+                    activeJobDao.upsert(job.applying(expired, dismissed = false, dismissedAtFinishedCount = 0))
+                    notifications += JobPollNotification(
+                        title = "Generation expired",
+                        body = expired.errorMessage ?: "Request expired from API",
+                    )
                 }
-                activeJobDao.upsert(
-                    job.copy(
-                        status = nextStatus,
-                        finished = finalFinished,
-                        processing = checkResult.processing,
-                        waitTimeSeconds = checkResult.waitTime,
-                        queuePosition = checkResult.queuePosition,
-                        dismissed = false,
-                        dismissedAtFinishedCount = 0,
-                    ),
+                continue
+            }
+            if (checkOutcome !is PollApiOutcome.Success) {
+                continue
+            }
+
+            val checkTransition = GenerationLifecycleClassifier.classify(job.toProgressState(), checkOutcome)
+            val newFinishedArrived = shouldResurfaceDismissedJob(job.dismissedAtFinishedCount, checkOutcome.snapshot.finished)
+            val becameTerminal = !currentStatus.isTerminal && checkTransition.isTerminal
+            if (!newFinishedArrived && !becameTerminal) {
+                continue
+            }
+
+            val statusResult = fetchStatusOutcome(job.id)
+            if (statusResult !is StatusFetchOutcome.Success) {
+                continue
+            }
+            val statusDto = statusResult.dto
+            val statusTransition = GenerationLifecycleClassifier.classify(
+                job.toProgressState(),
+                PollApiOutcome.Success(statusDto.toSnapshot()),
+            )
+            val partial = currentStatus == JobStatus.CANCELLED_PARTIAL ||
+                currentStatus == JobStatus.FAILED ||
+                statusTransition.nextStatus == JobStatus.FAILED ||
+                statusTransition.nextStatus == JobStatus.CANCELLED_PARTIAL
+            val saved = persistGenerationsFromStatus(job, statusDto, partialFromCancel = partial)
+            val finalFinished = maxOf(job.finished, checkTransition.finished, statusTransition.finished, saved)
+            val resolvedTransition = if (statusTransition.nextStatus == JobStatus.FAILED ||
+                statusTransition.nextStatus == JobStatus.CANCELLED_PARTIAL
+            ) {
+                statusTransition.copy(
+                    nextStatus = if (finalFinished > 0) JobStatus.CANCELLED_PARTIAL else JobStatus.FAILED,
+                    finished = finalFinished,
                 )
-                notifications += JobPollNotification(
+            } else {
+                statusTransition.copy(finished = finalFinished)
+            }
+
+            activeJobDao.upsert(
+                job.applying(
+                    transition = resolvedTransition,
+                    dismissed = false,
+                    dismissedAtFinishedCount = 0,
+                ),
+            )
+            notifications += if (resolvedTransition.nextStatus == JobStatus.FAILED) {
+                JobPollNotification(
+                    title = "Generation failed",
+                    body = resolvedTransition.errorMessage ?: "Workers could not process this request.",
+                )
+            } else {
+                JobPollNotification(
                     title = "New result for request",
                     body = "${job.modelsJoined.replace("||", ", ")} · $finalFinished/${job.total}",
                 )
@@ -1145,8 +1236,76 @@ class HordecraftRepository(
         )
     }
 
+    private suspend fun fetchCheckOutcome(jobId: String): PollApiOutcome =
+        try {
+            PollApiOutcome.Success(hordeApi.checkGeneration(jobId).toSnapshot())
+        } catch (t: Throwable) {
+            if (t is CancellationException) throw t
+            if (isHttp404(t)) {
+                PollApiOutcome.NotFound
+            } else {
+                PollApiOutcome.TransientFailure(formatPollingError(t), httpStatusCode(t))
+            }
+        }
+
+    private suspend fun fetchStatusOutcome(jobId: String): StatusFetchOutcome =
+        try {
+            StatusFetchOutcome.Success(hordeApi.getGenerationStatus(jobId))
+        } catch (t: Throwable) {
+            if (t is CancellationException) throw t
+            if (isHttp404(t)) {
+                StatusFetchOutcome.NotFound
+            } else {
+                StatusFetchOutcome.TransientFailure(formatPollingError(t), httpStatusCode(t))
+            }
+        }
+
+    private fun ActiveJobEntity.toProgressState(): JobProgressState = JobProgressState(
+        status = JobStatus.fromStorage(status),
+        total = total,
+        finished = finished,
+        processing = processing,
+        waitTimeSeconds = waitTimeSeconds,
+        queuePosition = queuePosition,
+        hasRequestId = requestId.isNotBlank(),
+        errorMessage = errorMessage,
+    )
+
+    private fun ActiveJobEntity.applying(
+        transition: ClassifiedJobTransition,
+        dismissed: Boolean = this.dismissed,
+        dismissedAtFinishedCount: Int = this.dismissedAtFinishedCount,
+    ): ActiveJobEntity = copy(
+        status = transition.nextStatus.name,
+        finished = transition.finished,
+        processing = transition.processing,
+        waitTimeSeconds = transition.waitTimeSeconds,
+        queuePosition = transition.queuePosition,
+        errorMessage = transition.errorMessage,
+        dismissed = dismissed,
+        dismissedAtFinishedCount = dismissedAtFinishedCount,
+    )
+
+    private fun httpStatusCode(t: Throwable): Int? =
+        (t as? HttpException)?.code()
+
+    private fun formatPollingError(t: Throwable): String {
+        val code = httpStatusCode(t)
+        return if (code != null) {
+            "API HTTP $code (retrying)"
+        } else {
+            "Network unreachable (retrying)"
+        }
+    }
+
     private fun isHttp404(t: Throwable): Boolean =
         t is HttpException && t.code() == 404
+
+    private sealed interface StatusFetchOutcome {
+        data class Success(val dto: GenerationStatusDto) : StatusFetchOutcome
+        data object NotFound : StatusFetchOutcome
+        data class TransientFailure(val message: String, val httpCode: Int? = null) : StatusFetchOutcome
+    }
 
     data class JobPollNotification(
         val title: String,

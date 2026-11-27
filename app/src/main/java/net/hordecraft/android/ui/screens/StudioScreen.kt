@@ -91,9 +91,9 @@ import net.hordeslop.studio.data.local.AppSettings
 import net.hordeslop.studio.domain.ActivityDestination
 import net.hordeslop.studio.domain.AttachedLora
 import net.hordeslop.studio.domain.GenerateButtonPlacement
+import net.hordeslop.studio.domain.GenerationLifecycleClassifier
 import net.hordeslop.studio.domain.HordeConstants
 import net.hordeslop.studio.domain.HordeJob
-import net.hordeslop.studio.domain.JobStatus
 import net.hordeslop.studio.domain.LoraTriggerMode
 import net.hordeslop.studio.domain.PromptRecord
 import net.hordeslop.studio.domain.PromptTarget
@@ -829,15 +829,8 @@ fun StudioScreen(
 
             // 6. Active & Recent Jobs Queue
             if (jobs.isNotEmpty()) {
-                val hasActive = jobs.any {
-                    it.status == JobStatus.LOCAL_QUEUED ||
-                        it.status == JobStatus.QUEUED ||
-                        it.status == JobStatus.PROCESSING ||
-                        it.status == JobStatus.PAUSED
-                }
-                val hasClearable = jobs.any {
-                    it.status == JobStatus.COMPLETED || it.status == JobStatus.CANCELLED_PARTIAL || it.status == JobStatus.FAILED
-                }
+                val hasActive = jobs.any { it.status.isActiveInQueue }
+                val hasClearable = jobs.any { it.status.isTerminal }
                 var queueCollapsed by rememberSaveable { mutableStateOf(false) }
                 StudioCard {
                     CollapsibleSectionHeader(
@@ -867,19 +860,9 @@ fun StudioScreen(
                     )
                     if (!queueCollapsed) {
                         jobs.take(12).forEach { job ->
-                            val isActive = job.status == JobStatus.LOCAL_QUEUED ||
-                                job.status == JobStatus.QUEUED ||
-                                job.status == JobStatus.PROCESSING ||
-                                job.status == JobStatus.PAUSED
-                            val statusText = when (job.status) {
-                                JobStatus.LOCAL_QUEUED -> "Queued locally"
-                                JobStatus.QUEUED -> "Queued"
-                                JobStatus.PROCESSING -> if (job.waitTimeSeconds > 0) "Wait ~${job.waitTimeSeconds}s · #${job.queuePosition}" else "Processing"
-                                JobStatus.PAUSED -> "Paused"
-                                JobStatus.COMPLETED -> "Completed"
-                                JobStatus.CANCELLED_PARTIAL -> "Partial"
-                                JobStatus.FAILED -> job.errorMessage ?: "Failed"
-                            }
+                            val lifecycle = GenerationLifecycleClassifier.classifyUi(job)
+                            val isActive = lifecycle.isActive
+                            val statusText = lifecycle.shortStatusText
                             Surface(
                                 color = HordeColors.SubCardSurface,
                                 shape = RoundedCornerShape(10.dp),
@@ -943,10 +926,7 @@ fun StudioScreen(
                                             }
                                         }
                                     }
-                                    if (job.status == JobStatus.LOCAL_QUEUED ||
-                                        job.status == JobStatus.QUEUED ||
-                                        job.status == JobStatus.PROCESSING
-                                    ) {
+                                    if (lifecycle.isRunnable) {
                                         val progress = if (job.total > 0) job.finished.toFloat() / job.total else 0f
                                         LinearProgressIndicator(
                                             progress = { progress.coerceIn(0f, 1f) },

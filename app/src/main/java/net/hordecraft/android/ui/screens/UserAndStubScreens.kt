@@ -51,7 +51,6 @@ import net.hordeslop.studio.domain.ActivityDestination
 import net.hordeslop.studio.domain.AuthMode
 import net.hordeslop.studio.domain.HordeJob
 import net.hordeslop.studio.domain.HordePerformanceSummary
-import net.hordeslop.studio.domain.JobStatus
 import net.hordeslop.studio.domain.UserStatsSummary
 import net.hordeslop.studio.ui.components.launchActivityForDestination
 import net.hordeslop.studio.ui.theme.HordeColors
@@ -65,12 +64,7 @@ fun MainHubScreen(
     onOpenDestination: (ActivityDestination) -> Unit,
 ) {
     val isWide = LocalConfiguration.current.screenWidthDp >= 600
-    val pendingJobs = activeJobs.count {
-        it.status == JobStatus.LOCAL_QUEUED ||
-            it.status == JobStatus.QUEUED ||
-            it.status == JobStatus.PROCESSING ||
-            it.status == JobStatus.PAUSED
-    }
+    val pendingJobs = activeJobs.count { it.status.isActiveInQueue }
     val authSubtitle = when (userStats.authMode) {
         AuthMode.USER_KEY -> "${userStats.username ?: "Signed in"} · ${userStats.kudos.toInt()} kudos"
         AuthMode.SHARED_KEY -> "Shared key · ${userStats.sharedKeyRemainingKudos ?: 0} kudos"
