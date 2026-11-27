@@ -522,6 +522,14 @@ fun SettingsScreen(
                     },
                     {
                         SettingsToggleRow(
+                            title = "Paged gallery",
+                            subtitle = "Page through images instead of infinite scrolling",
+                            checked = settings.galleryPagedMode,
+                            onCheckedChange = vm::setGalleryPagedMode,
+                        )
+                    },
+                    {
+                        SettingsToggleRow(
                             title = "Auto-clear completed requests",
                             subtitle = "Automatically clear finished items from Queue",
                             checked = settings.autoClearCompletedQueue,

@@ -42,6 +42,7 @@ data class AppSettings(
     val globalRateLimitSeconds: Int = 3,
     val galleryColumns: Int = 2,
     val showGalleryPromptOverlay: Boolean = true,
+    val galleryPagedMode: Boolean = false,
 )
 
 class SettingsDataStore(private val context: Context) {
@@ -69,6 +70,7 @@ class SettingsDataStore(private val context: Context) {
         val GLOBAL_RATE_LIMIT_SECONDS = intPreferencesKey("global_rate_limit_seconds")
         val GALLERY_COLUMNS = intPreferencesKey("gallery_columns")
         val SHOW_GALLERY_PROMPT_OVERLAY = booleanPreferencesKey("show_gallery_prompt_overlay")
+        val GALLERY_PAGED_MODE = booleanPreferencesKey("gallery_paged_mode")
     }
 
     val settings: Flow<AppSettings> = context.dataStore.data.map { prefs ->
@@ -108,6 +110,7 @@ class SettingsDataStore(private val context: Context) {
             globalRateLimitSeconds = (prefs[Keys.GLOBAL_RATE_LIMIT_SECONDS] ?: 3).coerceIn(1, 30),
             galleryColumns = (prefs[Keys.GALLERY_COLUMNS] ?: 2).coerceIn(2, 6),
             showGalleryPromptOverlay = prefs[Keys.SHOW_GALLERY_PROMPT_OVERLAY] ?: true,
+            galleryPagedMode = prefs[Keys.GALLERY_PAGED_MODE] ?: false,
         )
     }
 
@@ -208,6 +211,10 @@ class SettingsDataStore(private val context: Context) {
 
     suspend fun setGalleryColumns(columns: Int) {
         context.dataStore.edit { it[Keys.GALLERY_COLUMNS] = columns.coerceIn(2, 6) }
+    }
+
+    suspend fun setGalleryPagedMode(enabled: Boolean) {
+        context.dataStore.edit { it[Keys.GALLERY_PAGED_MODE] = enabled }
     }
 
     suspend fun setGlobalRateLimitSeconds(seconds: Int) {
