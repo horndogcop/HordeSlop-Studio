@@ -6,6 +6,7 @@ import android.net.Uri
 import android.os.Build
 import android.view.WindowManager
 import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
@@ -59,6 +60,7 @@ import androidx.compose.material.icons.outlined.FilterList
 import androidx.compose.material.icons.outlined.FolderOpen
 import androidx.compose.material.icons.outlined.Fullscreen
 import androidx.compose.material.icons.outlined.FullscreenExit
+import androidx.compose.material.icons.outlined.ImageSearch
 import androidx.compose.material.icons.outlined.MoreHoriz
 import androidx.compose.material.icons.outlined.PauseCircleOutline
 import androidx.compose.material.icons.outlined.Refresh
@@ -116,7 +118,9 @@ import net.hordeslop.studio.domain.GallerySearchFilter
 import net.hordeslop.studio.domain.GalleryStatusCategory
 import net.hordeslop.studio.domain.GalleryTimestampFormatter
 import net.hordeslop.studio.domain.HordeJob
+import net.hordeslop.studio.domain.ImageMetadataExtractor
 import net.hordeslop.studio.domain.JobStatus
+import net.hordeslop.studio.domain.ParsedImageMetadata
 import net.hordeslop.studio.domain.SavedImage
 import net.hordeslop.studio.ui.MainViewModel
 import net.hordeslop.studio.ui.components.launchActivityForDestination
@@ -160,6 +164,36 @@ fun GalleryScreen(
     var isFullscreen by remember { mutableStateOf(false) }
     var fullscreenHudVisible by remember { mutableStateOf(false) }
     var columnsMenuExpanded by remember { mutableStateOf(false) }
+
+    var inspectedImageUri by remember { mutableStateOf<Uri?>(null) }
+    var inspectedMetadata by remember { mutableStateOf<ParsedImageMetadata?>(null) }
+    var isExtractingMetadata by remember { mutableStateOf(false) }
+
+    val inspectPickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.PickVisualMedia(),
+    ) { uri ->
+        if (uri != null) {
+            scope.launch {
+                isExtractingMetadata = true
+                inspectedImageUri = uri
+                inspectedMetadata = ImageMetadataExtractor.extractFromUri(context, uri)
+                isExtractingMetadata = false
+            }
+        }
+    }
+
+    val inspectDocLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocument(),
+    ) { uri ->
+        if (uri != null) {
+            scope.launch {
+                isExtractingMetadata = true
+                inspectedImageUri = uri
+                inspectedMetadata = ImageMetadataExtractor.extractFromUri(context, uri)
+                isExtractingMetadata = false
+            }
+        }
+    }
 
     val favoritesEnabled = filterState.includesCompleteGenerations
 
@@ -326,6 +360,25 @@ fun GalleryScreen(
                     tint = if (favoritesEnabled && favoritesOnly) HordeColors.RoseZone else HordeColors.TextSecondary,
                 )
             }
+            IconButton(
+                onClick = {
+                    inspectPickerLauncher.launch(
+                        PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly),
+                    )
+                },
+                modifier = Modifier
+                    .testTag("gallery_inspect_metadata_button")
+                    .size(42.dp)
+                    .clip(RoundedCornerShape(10.dp))
+                    .background(HordeColors.CardSurface)
+                    .border(1.dp, HordeColors.BorderSubtle, RoundedCornerShape(10.dp)),
+            ) {
+                Icon(
+                    Icons.Outlined.ImageSearch,
+                    contentDescription = "Inspect image metadata",
+                    tint = HordeColors.TealSoft,
+                )
+            }
         }
 
         Row(
@@ -336,7 +389,9 @@ fun GalleryScreen(
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(4.dp),
-                modifier = Modifier.weight(1f),
+                modifier = Modifier
+                    .weight(1f)
+                    .clickable { inspectDocLauncher.launch(arrayOf("image/*")) },
             ) {
                 Icon(Icons.Outlined.FolderOpen, null, tint = HordeColors.TealSoft, modifier = Modifier.size(14.dp))
                 Text(
@@ -619,6 +674,15 @@ fun GalleryScreen(
                 onMoveToExternal = { img ->
                     vm.moveImageToExternalStorage(img)
                 },
+                onInspectMetadata = { img ->
+                    scope.launch {
+                        isExtractingMetadata = true
+                        val u = Uri.parse(img.fileUri)
+                        inspectedImageUri = u
+                        inspectedMetadata = ImageMetadataExtractor.extractFromUri(context, u)
+                        isExtractingMetadata = false
+                    }
+                },
                 onDelete = { img, deleteFile ->
                     vm.deleteImage(img, deleteFile)
                     val remaining = viewerImagesSnapshot?.filter { it.id != img.id } ?: emptyList()
@@ -637,6 +701,34 @@ fun GalleryScreen(
                 },
             )
         }
+    }
+
+    if (inspectedMetadata != null || isExtractingMetadata) {
+        ImageMetadataViewerModal(
+            uri = inspectedImageUri,
+            metadata = inspectedMetadata,
+            isLoading = isExtractingMetadata,
+            onUseInStudio = { meta ->
+                vm.applyParsedImageMetadata(meta)
+                inspectedMetadata = null
+                inspectedImageUri = null
+                viewerStartIndex = null
+                viewerImagesSnapshot = null
+                isFullscreen = false
+                launchActivityForDestination(context, ActivityDestination.IMAGE_GEN)
+            },
+            onImportToGallery = { uri, meta ->
+                vm.importExternalImage(uri, meta)
+                inspectedMetadata = null
+                inspectedImageUri = null
+            },
+            onCopyText = vm::copyText,
+            onDismiss = {
+                inspectedMetadata = null
+                inspectedImageUri = null
+                isExtractingMetadata = false
+            },
+        )
     }
 }
 
@@ -660,6 +752,7 @@ private fun GalleryViewerModal(
     onOpenIn: (SavedImage) -> Unit,
     onSetWallpaper: (SavedImage, Int) -> Unit,
     onMoveToExternal: (SavedImage) -> Unit,
+    onInspectMetadata: (SavedImage) -> Unit,
     onDelete: (SavedImage, Boolean) -> Unit,
     onDismiss: () -> Unit,
 ) {
@@ -782,6 +875,14 @@ private fun GalleryViewerModal(
                                 }
                             },
                         )
+                        DropdownMenuItem(
+                            text = { Text("Inspect embedded metadata") },
+                            leadingIcon = { Icon(Icons.Outlined.ImageSearch, null) },
+                            onClick = {
+                                showMoreMenu = false
+                                onInspectMetadata(activeImage)
+                            },
+                        )
                         if (activeImage.destinationLabel == "App Storage/images") {
                             DropdownMenuItem(
                                 text = { Text("Move to external storage") },
@@ -844,6 +945,7 @@ private fun GalleryViewerModal(
             ) {
                 OverlayPill("Same request") { onSameRequest(activeImage.requestId) }
                 OverlayPill("Details") { metadataSubMode = "details" }
+                OverlayPill("Metadata") { onInspectMetadata(activeImage) }
                 OverlayPill("Copy") { onCopyImage(activeImage) }
                 OverlayPill("Share") { onShare(activeImage) }
                 if (activeImage.destinationLabel == "App Storage/images") {
@@ -1508,4 +1610,300 @@ private fun GalleryJobDetailDialog(
             }
         },
     )
+}
+
+@Composable
+fun ImageMetadataViewerModal(
+    uri: Uri?,
+    metadata: ParsedImageMetadata?,
+    isLoading: Boolean,
+    onUseInStudio: (ParsedImageMetadata) -> Unit,
+    onImportToGallery: (Uri, ParsedImageMetadata) -> Unit,
+    onCopyText: (String, String) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    var rawExpanded by remember { mutableStateOf(false) }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        containerColor = HordeColors.CardSurface,
+        title = {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    Icon(Icons.Outlined.ImageSearch, null, tint = HordeColors.TealSoft)
+                    Column {
+                        Text("Image Metadata", fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = HordeColors.TextPrimary)
+                        metadata?.let { m ->
+                            Text("${m.format} · ${m.generatorSource}", fontSize = 11.sp, color = HordeColors.TealSoft)
+                        }
+                    }
+                }
+                IconButton(onClick = onDismiss, modifier = Modifier.size(24.dp)) {
+                    Icon(Icons.Outlined.Close, "Close", tint = HordeColors.TextMuted, modifier = Modifier.size(18.dp))
+                }
+            }
+        },
+        text = {
+            if (isLoading) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(24.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    LinearProgressIndicator(modifier = Modifier.fillMaxWidth(), color = HordeColors.TealPrimary)
+                    Text("Reading embedded metadata chunks...", fontSize = 12.sp, color = HordeColors.TextSecondary)
+                }
+            } else if (metadata != null) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(max = 420.dp)
+                        .verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(10.dp),
+                ) {
+                    if (uri != null) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(160.dp)
+                                .clip(RoundedCornerShape(10.dp))
+                                .background(HordeColors.SubCardSurface)
+                                .border(1.dp, HordeColors.BorderSubtle, RoundedCornerShape(10.dp)),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            AsyncImage(
+                                model = uri,
+                                contentDescription = metadata.prompt.ifBlank { "Inspected Image" },
+                                contentScale = ContentScale.Fit,
+                                modifier = Modifier.fillMaxSize(),
+                            )
+                        }
+                    }
+
+                    if (metadata.hasMeaningfulMetadata) {
+                        if (metadata.prompt.isNotBlank()) {
+                            MetadataFieldBox(
+                                label = "Prompt",
+                                text = metadata.prompt,
+                                onCopy = { onCopyText("Prompt", metadata.prompt) },
+                            )
+                        }
+
+                        if (metadata.negativePrompt.isNotBlank()) {
+                            MetadataFieldBox(
+                                label = "Negative Prompt",
+                                text = metadata.negativePrompt,
+                                onCopy = { onCopyText("Negative Prompt", metadata.negativePrompt) },
+                            )
+                        }
+
+                        Surface(
+                            shape = RoundedCornerShape(10.dp),
+                            color = HordeColors.SubCardSurface,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .border(1.dp, HordeColors.BorderSubtle, RoundedCornerShape(10.dp)),
+                        ) {
+                            Column(modifier = Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                                Text("Parameters", fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = HordeColors.TextSecondary)
+                                metadata.model?.let { ParamRow("Model", it) }
+                                if (metadata.width != null && metadata.height != null) {
+                                    ParamRow("Size", "${metadata.width} × ${metadata.height}")
+                                }
+                                metadata.steps?.let { ParamRow("Steps", it.toString()) }
+                                metadata.cfg?.let { ParamRow("CFG Scale", it.toString()) }
+                                metadata.sampler?.let { ParamRow("Sampler", it) }
+                                metadata.scheduler?.let { ParamRow("Scheduler", it) }
+                                metadata.seed?.let { ParamRow("Seed", it) }
+                                metadata.clipSkip?.let { ParamRow("Clip Skip", it.toString()) }
+                            }
+                        }
+
+                        if (metadata.loras.isNotEmpty()) {
+                            Surface(
+                                shape = RoundedCornerShape(10.dp),
+                                color = HordeColors.SubCardSurface,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .border(1.dp, HordeColors.BorderSubtle, RoundedCornerShape(10.dp)),
+                            ) {
+                                Column(modifier = Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                    Text("LoRAs", fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = HordeColors.TextSecondary)
+                                    metadata.loras.forEach { lora ->
+                                        Text("• $lora", fontSize = 11.sp, fontFamily = FontFamily.Monospace, color = HordeColors.TealSoft)
+                                    }
+                                }
+                            }
+                        }
+
+                        if (metadata.rawMetadataText.isNotBlank()) {
+                            Surface(
+                                shape = RoundedCornerShape(10.dp),
+                                color = HordeColors.SubCardSurface,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .border(1.dp, HordeColors.BorderSubtle, RoundedCornerShape(10.dp))
+                                    .clickable { rawExpanded = !rawExpanded },
+                            ) {
+                                Column(modifier = Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically,
+                                    ) {
+                                        Text("Raw Embedded Chunks", fontSize = 11.sp, fontWeight = FontWeight.Medium, color = HordeColors.TextSecondary)
+                                        Text(if (rawExpanded) "Hide" else "Show", fontSize = 11.sp, color = HordeColors.TealSoft)
+                                    }
+                                    if (rawExpanded) {
+                                        Box(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .background(Color(0xFF0D1117), RoundedCornerShape(6.dp))
+                                                .padding(8.dp),
+                                        ) {
+                                            Text(
+                                                metadata.rawMetadataText,
+                                                fontSize = 10.sp,
+                                                fontFamily = FontFamily.Monospace,
+                                                color = HordeColors.TextSecondary,
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    } else {
+                        Surface(
+                            shape = RoundedCornerShape(10.dp),
+                            color = HordeColors.SubCardSurface,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .border(1.dp, HordeColors.BorderSubtle, RoundedCornerShape(10.dp))
+                                .padding(12.dp),
+                        ) {
+                            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                                Text(
+                                    "No AI generation metadata detected in this file's embedded chunks.",
+                                    fontSize = 12.sp,
+                                    color = HordeColors.TextSecondary,
+                                )
+                                if (metadata.rawMetadataText.isNotBlank()) {
+                                    Text(
+                                        metadata.rawMetadataText,
+                                        fontSize = 10.sp,
+                                        fontFamily = FontFamily.Monospace,
+                                        color = HordeColors.TextMuted,
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        dismissButton = {
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                if (metadata != null) {
+                    OutlinedButton(
+                        onClick = {
+                            val summary = buildString {
+                                appendLine("Format: ${metadata.format} (${metadata.generatorSource})")
+                                if (metadata.model != null) appendLine("Model: ${metadata.model}")
+                                if (metadata.seed != null) appendLine("Seed: ${metadata.seed}")
+                                if (metadata.steps != null) appendLine("Steps: ${metadata.steps}")
+                                if (metadata.cfg != null) appendLine("CFG: ${metadata.cfg}")
+                                if (metadata.sampler != null) appendLine("Sampler: ${metadata.sampler}")
+                                if (metadata.scheduler != null) appendLine("Scheduler: ${metadata.scheduler}")
+                                if (metadata.width != null && metadata.height != null) appendLine("Size: ${metadata.width}x${metadata.height}")
+                                appendLine()
+                                appendLine("Prompt:")
+                                appendLine(metadata.prompt)
+                                if (metadata.negativePrompt.isNotBlank()) {
+                                    appendLine()
+                                    appendLine("Negative:")
+                                    appendLine(metadata.negativePrompt)
+                                }
+                            }
+                            onCopyText("Metadata Summary", summary)
+                        },
+                    ) {
+                        Text("Copy", fontSize = 11.sp)
+                    }
+                }
+                if (uri != null && metadata != null) {
+                    OutlinedButton(
+                        onClick = { onImportToGallery(uri, metadata) },
+                    ) {
+                        Text("Add to Gallery", fontSize = 11.sp)
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            if (metadata != null && metadata.hasMeaningfulMetadata) {
+                Button(
+                    colors = ButtonDefaults.buttonColors(containerColor = HordeColors.TealPrimary),
+                    onClick = { onUseInStudio(metadata) },
+                ) {
+                    Text("Use in Studio", color = Color(0xFF020617), fontWeight = FontWeight.SemiBold, fontSize = 11.sp)
+                }
+            } else {
+                TextButton(onClick = onDismiss) { Text("Close") }
+            }
+        },
+    )
+}
+
+@Composable
+private fun MetadataFieldBox(label: String, text: String, onCopy: () -> Unit) {
+    Surface(
+        shape = RoundedCornerShape(10.dp),
+        color = HordeColors.SubCardSurface,
+        modifier = Modifier
+            .fillMaxWidth()
+            .border(1.dp, HordeColors.BorderSubtle, RoundedCornerShape(10.dp))
+            .padding(10.dp),
+    ) {
+        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(label, fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = HordeColors.TextSecondary)
+                Text(
+                    text = "Copy",
+                    fontSize = 11.sp,
+                    color = HordeColors.TealSoft,
+                    modifier = Modifier.clickable { onCopy() },
+                )
+            }
+            Text(
+                text = text,
+                fontSize = 12.sp,
+                color = HordeColors.TextPrimary,
+            )
+        }
+    }
+}
+
+@Composable
+private fun ParamRow(name: String, value: String) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(name, fontSize = 11.sp, color = HordeColors.TextMuted)
+        Text(value, fontSize = 11.sp, fontFamily = FontFamily.Monospace, color = HordeColors.TextPrimary)
+    }
 }

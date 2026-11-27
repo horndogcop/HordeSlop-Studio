@@ -55,6 +55,7 @@ import net.hordeslop.studio.domain.HordeModel
 import net.hordeslop.studio.domain.HordePerformanceSummary
 import net.hordeslop.studio.domain.HordeStyle
 import net.hordeslop.studio.domain.JobStatus
+import net.hordeslop.studio.domain.ParsedImageMetadata
 import net.hordeslop.studio.domain.PromptRecord
 import net.hordeslop.studio.domain.SavedImage
 import net.hordeslop.studio.domain.StudioSubmissionSpec
@@ -1071,6 +1072,78 @@ class HordecraftRepository(
                 activeJobsCount = jobEntities.size,
             )
         }
+
+    suspend fun importExternalImage(uri: Uri, meta: ParsedImageMetadata): SavedImage = withContext(Dispatchers.IO) {
+        val settings = settingsStore.settings.first()
+        val rawBytes = context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
+            ?: error("Unable to open image stream")
+        val genId = UUID.randomUUID().toString().replace("-", "").take(16)
+        val modelLabel = meta.model?.ifBlank { null } ?: "Imported (${meta.generatorSource})"
+        val stored = storageManager.saveGeneratedWebp(
+            rawBytes = rawBytes,
+            generationId = genId,
+            requestId = "imported_$genId",
+            prompt = meta.prompt,
+            negativePrompt = meta.negativePrompt,
+            model = modelLabel,
+            seed = meta.seed ?: "",
+            steps = meta.steps ?: 20,
+            cfg = meta.cfg ?: 7.0f,
+            clipSkip = meta.clipSkip ?: 1,
+            sampler = meta.sampler ?: "k_euler",
+            scheduler = meta.scheduler ?: "karras",
+            width = meta.width ?: 512,
+            height = meta.height ?: 512,
+            settings = settings,
+        )
+        val entity = SavedImageEntity(
+            id = "img_$genId",
+            requestId = "imported_$genId",
+            generationId = genId,
+            fileUri = stored.uriString,
+            prompt = meta.prompt,
+            negativePrompt = meta.negativePrompt,
+            model = modelLabel,
+            seed = meta.seed ?: "",
+            steps = meta.steps ?: 20,
+            cfg = meta.cfg ?: 7.0f,
+            clipSkip = meta.clipSkip ?: 1,
+            sampler = meta.sampler ?: "k_euler",
+            scheduler = meta.scheduler ?: "karras",
+            width = meta.width ?: 512,
+            height = meta.height ?: 512,
+            destinationLabel = stored.destinationLabel,
+            isFavorite = false,
+            partialFromCancel = false,
+            requestJson = meta.rawMetadataText,
+            statusMetadataJson = "{\"imported\":true,\"generator\":\"${meta.generatorSource}\",\"format\":\"${meta.format}\"}",
+            createdAtMillis = System.currentTimeMillis(),
+        )
+        savedImageDao.upsert(entity)
+        SavedImage(
+            id = entity.id,
+            requestId = entity.requestId,
+            generationId = entity.generationId,
+            fileUri = entity.fileUri,
+            prompt = entity.prompt,
+            negativePrompt = entity.negativePrompt,
+            model = entity.model,
+            seed = entity.seed,
+            steps = entity.steps,
+            cfg = entity.cfg,
+            clipSkip = entity.clipSkip,
+            sampler = entity.sampler,
+            scheduler = entity.scheduler,
+            width = entity.width,
+            height = entity.height,
+            destinationLabel = entity.destinationLabel,
+            isFavorite = entity.isFavorite,
+            partialFromCancel = entity.partialFromCancel,
+            requestJson = entity.requestJson,
+            statusMetadataJson = entity.statusMetadataJson,
+            createdAtMillis = entity.createdAtMillis,
+        )
+    }
 
     private fun isHttp404(t: Throwable): Boolean =
         t is HttpException && t.code() == 404
