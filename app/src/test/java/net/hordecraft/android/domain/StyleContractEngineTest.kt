@@ -199,7 +199,7 @@ class StyleContractEngineTest {
     }
 
     @Test
-    fun multiStyleCombinesMultiplePrompts() {
+    fun multiStyleQueuesSeparateRequestPerStyle() {
         val s1 = HordeStyle(
             id = "s1",
             name = "Style One",
@@ -216,7 +216,22 @@ class StyleContractEngineTest {
             negativeTemplate = "{np}, extra limbs",
             rawPromptTemplate = "{p}, cinematic lighting###{np}, extra limbs",
         )
-        val spec = StudioSubmissionSpec(
+        val api1 = HordeStyle(
+            id = "api-style-1",
+            name = "API One",
+            source = "Styles API",
+            inApi = true,
+            steps = 25,
+        )
+        val api2 = HordeStyle(
+            id = "api-style-2",
+            name = "API Two",
+            source = "Styles API",
+            inApi = true,
+            steps = 35,
+        )
+
+        val clientSpec = StudioSubmissionSpec(
             prompt = "fox in forest",
             negativePrompt = "blurry",
             selectedModels = listOf("Deliberate"),
@@ -237,8 +252,16 @@ class StyleContractEngineTest {
             loras = emptyList(),
             tis = emptyList(),
         )
-        val payload = StyleContractEngine.buildSinglePayload(spec, listOf("Deliberate"), 1)
-        val prompt = payload["prompt"]?.jsonPrimitive?.content
-        assertEquals("watercolor painting of fox in forest, cinematic lighting ### blurry, signature, extra limbs", prompt)
+        val clientChunks = StyleContractEngine.buildSubmissionChunks(clientSpec)
+        assertEquals(2, clientChunks.size)
+        assertEquals("watercolor painting of fox in forest ### blurry, signature", clientChunks[0].payload["prompt"]?.jsonPrimitive?.content)
+        assertEquals("fox in forest, cinematic lighting ### blurry, extra limbs", clientChunks[1].payload["prompt"]?.jsonPrimitive?.content)
+
+        val apiChunks = StyleContractEngine.buildSubmissionChunks(
+            clientSpec.copy(activeStyle = api1, activeStyles = listOf(api1, api2)),
+        )
+        assertEquals(2, apiChunks.size)
+        assertEquals("api-style-1", apiChunks[0].payload["style"]?.jsonPrimitive?.content)
+        assertEquals("api-style-2", apiChunks[1].payload["style"]?.jsonPrimitive?.content)
     }
 }

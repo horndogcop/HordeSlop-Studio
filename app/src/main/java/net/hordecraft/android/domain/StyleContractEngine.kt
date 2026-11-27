@@ -38,6 +38,14 @@ data class GenerationChunk(
     val count: Int,
     val payload: JsonObject,
     val payloadJsonString: String,
+    val styleName: String? = null,
+    val steps: Int? = null,
+    val cfg: Float? = null,
+    val clipSkip: Int? = null,
+    val sampler: String? = null,
+    val scheduler: String? = null,
+    val width: Int? = null,
+    val height: Int? = null,
 )
 
 object StyleContractEngine {
@@ -53,22 +61,63 @@ object StyleContractEngine {
             remaining -= next
         }
 
-        val modelGroups = if (spec.selectedModels.size > 1 && spec.dispatchMode == MultiModelDispatchMode.FAN_OUT) {
-            spec.selectedModels.map { listOf(it) }
-        } else {
-            listOf(spec.selectedModels)
-        }
+        val effectiveStyles = spec.activeStyles.filter { it.id != "none" }
+            .ifEmpty { listOfNotNull(spec.activeStyle?.takeIf { it.id != "none" }) }
+        val styleTargets: List<HordeStyle?> = if (effectiveStyles.isEmpty()) listOf(null) else effectiveStyles
 
         val chunks = mutableListOf<GenerationChunk>()
-        for (groupModels in modelGroups) {
-            for (chunkN in perGroupCounts) {
-                val payload = buildSinglePayload(spec, groupModels, chunkN)
-                chunks += GenerationChunk(
-                    models = groupModels,
-                    count = chunkN,
-                    payload = payload,
-                    payloadJsonString = prettyJson.encodeToString(JsonObject.serializer(), payload),
+        for (styleTarget in styleTargets) {
+            val perStyleSpec = if (styleTarget == null) {
+                spec.copy(activeStyle = null, activeStyles = emptyList())
+            } else if (effectiveStyles.size > 1) {
+                val resolvedModels = if (spec.selectedModels.size <= 1 && !styleTarget.model.isNullOrBlank()) {
+                    listOf(styleTarget.model)
+                } else {
+                    spec.selectedModels
+                }
+                spec.copy(
+                    activeStyle = styleTarget,
+                    activeStyles = listOf(styleTarget),
+                    selectedModels = resolvedModels,
+                    steps = styleTarget.steps ?: spec.steps,
+                    cfg = styleTarget.cfg ?: spec.cfg,
+                    clipSkip = styleTarget.clipSkip ?: spec.clipSkip,
+                    sampler = styleTarget.sampler ?: spec.sampler,
+                    scheduler = styleTarget.scheduler ?: spec.scheduler,
+                    width = styleTarget.width ?: spec.width,
+                    height = styleTarget.height ?: spec.height,
                 )
+            } else {
+                spec.copy(
+                    activeStyle = styleTarget,
+                    activeStyles = listOf(styleTarget),
+                )
+            }
+
+            val modelGroups = if (perStyleSpec.selectedModels.size > 1 && perStyleSpec.dispatchMode == MultiModelDispatchMode.FAN_OUT) {
+                perStyleSpec.selectedModels.map { listOf(it) }
+            } else {
+                listOf(perStyleSpec.selectedModels)
+            }
+
+            for (groupModels in modelGroups) {
+                for (chunkN in perGroupCounts) {
+                    val payload = buildSinglePayload(perStyleSpec, groupModels, chunkN)
+                    chunks += GenerationChunk(
+                        models = groupModels,
+                        count = chunkN,
+                        payload = payload,
+                        payloadJsonString = prettyJson.encodeToString(JsonObject.serializer(), payload),
+                        styleName = styleTarget?.name,
+                        steps = perStyleSpec.steps,
+                        cfg = perStyleSpec.cfg,
+                        clipSkip = perStyleSpec.clipSkip,
+                        sampler = perStyleSpec.sampler,
+                        scheduler = perStyleSpec.scheduler,
+                        width = SizeMathEngine.snapTo64(perStyleSpec.width),
+                        height = SizeMathEngine.snapTo64(perStyleSpec.height),
+                    )
+                }
             }
         }
         return chunks
