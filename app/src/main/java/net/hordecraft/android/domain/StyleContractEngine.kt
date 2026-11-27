@@ -5,8 +5,10 @@ import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
 import net.hordeslop.studio.domain.HordeConstants
 
@@ -266,10 +268,25 @@ object StyleContractEngine {
                     )
                 }
             }
-            put("nsfw", spec.nsfw)
+            put("nsfw", resolveEffectiveNsfw(spec.nsfw, spec.censorNsfw))
             put("censor_nsfw", spec.censorNsfw)
             put("params", params)
         }
+    }
+
+    fun resolveEffectiveNsfw(nsfw: Boolean, censorNsfw: Boolean): Boolean =
+        nsfw || !censorNsfw
+
+    fun normalizeCensorNsfwPayload(payload: JsonObject): JsonObject {
+        val censorDisabled = payload["censor_nsfw"]?.let { elem ->
+            runCatching { elem.jsonPrimitive.booleanOrNull }.getOrNull()
+        } == false
+        if (!censorDisabled) return payload
+        val currentNsfw = payload["nsfw"]?.let { elem ->
+            runCatching { elem.jsonPrimitive.booleanOrNull }.getOrNull()
+        }
+        if (currentNsfw == true) return payload
+        return JsonObject(payload + ("nsfw" to JsonPrimitive(true)))
     }
 
     fun expandClientStylePrompt(style: HordeStyle, positive: String, negative: String): String {

@@ -550,7 +550,7 @@ class HordecraftRepository(
     ): List<ActiveJobEntity> {
         val now = System.currentTimeMillis()
         val parsedPayloads = rawPayloadJsons.map { raw ->
-            json.parseToJsonElement(raw).jsonObject
+            StyleContractEngine.normalizeCensorNsfwPayload(json.parseToJsonElement(raw).jsonObject)
         }
         promptHistoryDao.upsert(
             PromptHistoryEntity(
@@ -616,7 +616,7 @@ class HordecraftRepository(
             }
             put("n", 1)
         }
-        val payload = buildJsonObject {
+        val rawPayload = buildJsonObject {
             if (parsedReq != null) {
                 parsedReq.forEach { (k, v) ->
                     if (k == "params") put("params", cleanedParams) else put(k, v)
@@ -629,6 +629,7 @@ class HordecraftRepository(
                 put("params", cleanedParams)
             }
         }
+        val payload = StyleContractEngine.normalizeCensorNsfwPayload(rawPayload)
         val payloadStr = prettyJson.encodeToString(JsonObject.serializer(), payload)
         val entity = ActiveJobEntity(
             id = "local_${UUID.randomUUID()}",
@@ -660,7 +661,9 @@ class HordecraftRepository(
 
     suspend fun dispatchLocalQueuedJob(job: ActiveJobEntity): JobPollNotification? {
         val payload = runCatching {
-            json.parseToJsonElement(job.submittedPayloadJson).jsonObject
+            StyleContractEngine.normalizeCensorNsfwPayload(
+                json.parseToJsonElement(job.submittedPayloadJson).jsonObject,
+            )
         }.getOrElse { err ->
             val msg = err.message ?: "Invalid request payload"
             activeJobDao.upsert(

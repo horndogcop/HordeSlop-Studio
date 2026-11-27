@@ -1,8 +1,11 @@
 package net.hordeslop.studio.domain
 
+import kotlinx.serialization.json.booleanOrNull
+import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.put
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -263,5 +266,63 @@ class StyleContractEngineTest {
         assertEquals(2, apiChunks.size)
         assertEquals("api-style-1", apiChunks[0].payload["style"]?.jsonPrimitive?.content)
         assertEquals("api-style-2", apiChunks[1].payload["style"]?.jsonPrimitive?.content)
+    }
+
+    @Test
+    fun requestsWithCensorDisabledAlwaysIncludeNsfwTrue() {
+        val baseSpec = StudioSubmissionSpec(
+            prompt = "sunset portrait",
+            negativePrompt = "",
+            selectedModels = listOf("Deliberate"),
+            dispatchMode = MultiModelDispatchMode.COMBINED,
+            activeStyle = null,
+            seed = "",
+            steps = 20,
+            cfg = 7f,
+            clipSkip = 1,
+            width = 512,
+            height = 512,
+            sampler = "k_euler",
+            scheduler = "normal",
+            nsfw = false,
+            censorNsfw = false,
+            imageCount = 1,
+            loras = emptyList(),
+            tis = emptyList(),
+        )
+        val uncensoredPayload = StyleContractEngine.buildSinglePayload(baseSpec, listOf("Deliberate"), 1)
+        assertEquals(true, uncensoredPayload["nsfw"]?.jsonPrimitive?.booleanOrNull)
+        assertEquals(false, uncensoredPayload["censor_nsfw"]?.jsonPrimitive?.booleanOrNull)
+
+        val censoredSfwPayload = StyleContractEngine.buildSinglePayload(
+            baseSpec.copy(nsfw = false, censorNsfw = true),
+            listOf("Deliberate"),
+            1,
+        )
+        assertEquals(false, censoredSfwPayload["nsfw"]?.jsonPrimitive?.booleanOrNull)
+        assertEquals(true, censoredSfwPayload["censor_nsfw"]?.jsonPrimitive?.booleanOrNull)
+
+        val rawOmittedNsfw = buildJsonObject {
+            put("prompt", "test")
+            put("censor_nsfw", false)
+        }
+        val normalizedOmitted = StyleContractEngine.normalizeCensorNsfwPayload(rawOmittedNsfw)
+        assertEquals(true, normalizedOmitted["nsfw"]?.jsonPrimitive?.booleanOrNull)
+
+        val rawFalseNsfw = buildJsonObject {
+            put("prompt", "test")
+            put("nsfw", false)
+            put("censor_nsfw", false)
+        }
+        val normalizedFalse = StyleContractEngine.normalizeCensorNsfwPayload(rawFalseNsfw)
+        assertEquals(true, normalizedFalse["nsfw"]?.jsonPrimitive?.booleanOrNull)
+
+        val rawCensored = buildJsonObject {
+            put("prompt", "test")
+            put("nsfw", false)
+            put("censor_nsfw", true)
+        }
+        val preservedCensored = StyleContractEngine.normalizeCensorNsfwPayload(rawCensored)
+        assertEquals(false, preservedCensored["nsfw"]?.jsonPrimitive?.booleanOrNull)
     }
 }
