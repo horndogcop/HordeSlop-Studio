@@ -248,11 +248,45 @@ data class HordeJob(
 enum class JobStatus {
     LOCAL_QUEUED,
     QUEUED,
+    WAITING_IMPOSSIBLE,
     PROCESSING,
     PAUSED,
+    UNOBSERVABLE,
     COMPLETED,
     CANCELLED_PARTIAL,
     FAILED,
+    EXPIRED,
+    ;
+
+    val isTerminal: Boolean
+        get() = this == COMPLETED || this == CANCELLED_PARTIAL || this == FAILED || this == EXPIRED
+
+    val isRunnable: Boolean
+        get() = this == LOCAL_QUEUED ||
+            this == QUEUED ||
+            this == WAITING_IMPOSSIBLE ||
+            this == PROCESSING ||
+            this == UNOBSERVABLE
+
+    val isActiveInQueue: Boolean
+        get() = isRunnable || this == PAUSED
+
+    val isError: Boolean
+        get() = this == FAILED || this == EXPIRED
+
+    fun galleryCategory(hasRequestId: Boolean): GalleryStatusCategory? =
+        when (this) {
+            LOCAL_QUEUED -> GalleryStatusCategory.LOCALLY_QUEUED
+            PAUSED -> if (!hasRequestId) GalleryStatusCategory.LOCALLY_QUEUED else GalleryStatusCategory.SENT_TO_SERVER
+            QUEUED, WAITING_IMPOSSIBLE, PROCESSING, UNOBSERVABLE -> GalleryStatusCategory.SENT_TO_SERVER
+            FAILED, EXPIRED -> GalleryStatusCategory.ERRORS
+            COMPLETED, CANCELLED_PARTIAL -> null
+        }
+
+    companion object {
+        fun fromStorage(raw: String?): JobStatus =
+            entries.firstOrNull { it.name == raw } ?: QUEUED
+    }
 }
 
 data class SavedImage(
@@ -616,15 +650,7 @@ data class GalleryFilterState(
     }
 
     fun jobCategory(job: HordeJob): GalleryStatusCategory? =
-        when (job.status) {
-            JobStatus.LOCAL_QUEUED -> GalleryStatusCategory.LOCALLY_QUEUED
-            JobStatus.PAUSED ->
-                if (job.requestId.isBlank()) GalleryStatusCategory.LOCALLY_QUEUED
-                else GalleryStatusCategory.SENT_TO_SERVER
-            JobStatus.QUEUED, JobStatus.PROCESSING -> GalleryStatusCategory.SENT_TO_SERVER
-            JobStatus.FAILED -> GalleryStatusCategory.ERRORS
-            JobStatus.COMPLETED, JobStatus.CANCELLED_PARTIAL -> null
-        }
+        job.status.galleryCategory(hasRequestId = job.requestId.isNotBlank())
 
     fun matchesJob(job: HordeJob): Boolean {
         val cat = jobCategory(job) ?: return false

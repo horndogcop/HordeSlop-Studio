@@ -83,9 +83,7 @@ class HordeJobService : Service() {
 
                 val visiblePending = repo.getTrackedJobsForPolling().filter { !it.dismissed }
                 val activeRunnable = visiblePending.filter {
-                    it.status == JobStatus.LOCAL_QUEUED.name ||
-                        it.status == JobStatus.QUEUED.name ||
-                        it.status == JobStatus.PROCESSING.name
+                    JobStatus.fromStorage(it.status).isRunnable
                 }
                 if (visiblePending.isEmpty()) {
                     ServiceCompat.stopForeground(this@HordeJobService, ServiceCompat.STOP_FOREGROUND_REMOVE)

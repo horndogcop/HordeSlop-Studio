@@ -4,6 +4,7 @@ import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
+import net.hordeslop.studio.domain.GenerationStatusSnapshot
 import retrofit2.http.Body
 import retrofit2.http.DELETE
 import retrofit2.http.GET
@@ -37,7 +38,26 @@ data class GenerationCheckDto(
     @SerialName("queue_position") val queuePosition: Int = 0,
     val kudos: Double = 0.0,
     @SerialName("is_possible") val isPossible: Boolean = true,
-)
+    @SerialName("eligible_workers") val eligibleWorkers: Int = 0,
+    @SerialName("eligible_worker_threads") val eligibleWorkerThreads: Int = 0,
+    @SerialName("might_stall") val mightStall: Boolean = false,
+) {
+    fun toSnapshot(): GenerationStatusSnapshot = GenerationStatusSnapshot(
+        finished = finished,
+        processing = processing,
+        restarted = restarted,
+        waiting = waiting,
+        done = done,
+        faulted = faulted,
+        isPossible = isPossible,
+        waitTimeSeconds = waitTime,
+        queuePosition = queuePosition,
+        kudos = kudos,
+        eligibleWorkers = eligibleWorkers,
+        eligibleWorkerThreads = eligibleWorkerThreads,
+        mightStall = mightStall,
+    )
+}
 
 @Serializable
 data class GenerationStatusDto(
@@ -51,8 +71,27 @@ data class GenerationStatusDto(
     @SerialName("queue_position") val queuePosition: Int = 0,
     val kudos: Double = 0.0,
     @SerialName("is_possible") val isPossible: Boolean = true,
+    @SerialName("eligible_workers") val eligibleWorkers: Int = 0,
+    @SerialName("eligible_worker_threads") val eligibleWorkerThreads: Int = 0,
+    @SerialName("might_stall") val mightStall: Boolean = false,
     val generations: List<GeneratedImageDto> = emptyList(),
-)
+) {
+    fun toSnapshot(): GenerationStatusSnapshot = GenerationStatusSnapshot(
+        finished = finished,
+        processing = processing,
+        restarted = restarted,
+        waiting = waiting,
+        done = done,
+        faulted = faulted,
+        isPossible = isPossible,
+        waitTimeSeconds = waitTime,
+        queuePosition = queuePosition,
+        kudos = kudos,
+        eligibleWorkers = eligibleWorkers,
+        eligibleWorkerThreads = eligibleWorkerThreads,
+        mightStall = mightStall,
+    )
+}
 
 @Serializable
 data class GeneratedImageDto(

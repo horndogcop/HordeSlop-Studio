@@ -695,11 +695,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             runCatching { repo.syncDismissedJobs() }
             val hasVisiblePending = repo.getTrackedJobsForPolling().any {
-                !it.dismissed && (
-                    it.status == net.hordeslop.studio.domain.JobStatus.LOCAL_QUEUED.name ||
-                        it.status == net.hordeslop.studio.domain.JobStatus.QUEUED.name ||
-                        it.status == net.hordeslop.studio.domain.JobStatus.PROCESSING.name
-                    )
+                !it.dismissed && net.hordeslop.studio.domain.JobStatus.fromStorage(it.status).isRunnable
             }
             if (hasVisiblePending) {
                 HordeJobService.startPolling(app)
