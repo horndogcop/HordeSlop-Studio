@@ -817,6 +817,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch { repo.settingsStore.setGalleryColumns(columns) }
     }
 
+    fun setGalleryPagedMode(enabled: Boolean) {
+        viewModelScope.launch { repo.settingsStore.setGalleryPagedMode(enabled) }
+    }
+
     fun setGlobalRateLimitSeconds(seconds: Int) {
         val clamped = seconds.coerceIn(1, 30)
         app.container.currentSettings.set(

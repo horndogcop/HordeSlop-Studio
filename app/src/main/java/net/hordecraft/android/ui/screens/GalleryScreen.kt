@@ -17,6 +17,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -45,6 +46,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.outlined.LastPage
 import androidx.compose.material.icons.automirrored.outlined.OpenInNew
 import androidx.compose.material.icons.automirrored.outlined.Send
 import androidx.compose.material.icons.outlined.ChevronLeft
@@ -57,6 +59,7 @@ import androidx.compose.material.icons.outlined.ErrorOutline
 import androidx.compose.material.icons.outlined.Favorite
 import androidx.compose.material.icons.outlined.FavoriteBorder
 import androidx.compose.material.icons.outlined.FilterList
+import androidx.compose.material.icons.outlined.FirstPage
 import androidx.compose.material.icons.outlined.FolderOpen
 import androidx.compose.material.icons.outlined.Fullscreen
 import androidx.compose.material.icons.outlined.FullscreenExit
@@ -118,6 +121,8 @@ import net.hordeslop.studio.domain.GalleryFilterState
 import net.hordeslop.studio.domain.GallerySearchFilter
 import net.hordeslop.studio.domain.GalleryStatusCategory
 import net.hordeslop.studio.domain.GalleryTimestampFormatter
+import net.hordeslop.studio.domain.GalleryGridEntry
+import net.hordeslop.studio.domain.GalleryPaginationEngine
 import net.hordeslop.studio.domain.GenerationLifecycleClassifier
 import net.hordeslop.studio.domain.HordeJob
 import net.hordeslop.studio.domain.ImageMetadataExtractor
@@ -128,21 +133,6 @@ import net.hordeslop.studio.ui.MainViewModel
 import net.hordeslop.studio.ui.components.PasteGenerationUrlDialog
 import net.hordeslop.studio.ui.components.launchActivityForDestination
 import net.hordeslop.studio.ui.theme.HordeColors
-
-private sealed interface GalleryGridEntry {
-    val stableKey: String
-    val createdAtMillis: Long
-
-    data class Completed(val image: SavedImage) : GalleryGridEntry {
-        override val stableKey: String = "img:${image.id}"
-        override val createdAtMillis: Long = image.createdAtMillis
-    }
-
-    data class JobItem(val job: HordeJob) : GalleryGridEntry {
-        override val stableKey: String = "job:${job.id}"
-        override val createdAtMillis: Long = job.createdAtMillis
-    }
-}
 
 @Composable
 fun GalleryScreen(
@@ -167,6 +157,8 @@ fun GalleryScreen(
     var isFullscreen by remember { mutableStateOf(false) }
     var fullscreenHudVisible by remember { mutableStateOf(false) }
     var columnsMenuExpanded by remember { mutableStateOf(false) }
+    var currentAnchorKey by remember { mutableStateOf<String?>(null) }
+    var currentStartIndex by remember { mutableStateOf(0) }
 
     var inspectedImageUri by remember { mutableStateOf<Uri?>(null) }
     var inspectedMetadata by remember { mutableStateOf<ParsedImageMetadata?>(null) }
@@ -201,6 +193,11 @@ fun GalleryScreen(
 
     val favoritesEnabled = filterState.includesCompleteGenerations
 
+    LaunchedEffect(searchQuery, favoritesOnly, filterState) {
+        currentAnchorKey = null
+        currentStartIndex = 0
+    }
+
     LaunchedEffect(pendingSearchQuery) {
         if (!pendingSearchQuery.isNullOrBlank()) {
             searchQuery = pendingSearchQuery
@@ -211,35 +208,34 @@ fun GalleryScreen(
             viewerImagesSnapshot = null
             inspectedJobId = null
             isFullscreen = false
+            currentAnchorKey = null
+            currentStartIndex = 0
             vm.clearPendingGallerySearchQuery()
         }
     }
 
     val filteredImages = remember(images, searchQuery, favoritesOnly, filterState) {
-        if (!filterState.includesCompleteGenerations) {
-            emptyList()
-        } else {
-            images.filter { img ->
-                if (favoritesOnly && !img.isFavorite) return@filter false
-                GallerySearchFilter.matches(img, searchQuery)
-            }
-        }
+        GalleryPaginationEngine.filterCompleted(
+            images = images,
+            searchQuery = searchQuery,
+            favoritesOnly = favoritesOnly,
+            filterState = filterState,
+        )
     }
 
-    val filteredJobs = remember(jobs, searchQuery, favoritesOnly, filterState, favoritesEnabled) {
-        if (favoritesEnabled && favoritesOnly) {
-            emptyList()
-        } else {
-            jobs.filter { job ->
-                filterState.matchesJob(job) && GallerySearchFilter.matchesJob(job, searchQuery)
-            }
-        }
+    val filteredJobs = remember(jobs, searchQuery, favoritesOnly, filterState) {
+        GalleryPaginationEngine.filterJobs(
+            jobs = jobs,
+            searchQuery = searchQuery,
+            favoritesOnly = favoritesOnly,
+            filterState = filterState,
+        )
     }
 
     val gridEntries = remember(filteredImages, filteredJobs) {
-        (filteredImages.map { GalleryGridEntry.Completed(it) } +
-            filteredJobs.map { GalleryGridEntry.JobItem(it) })
-            .sortedByDescending { it.createdAtMillis }
+        val completed = filteredImages.map { GalleryGridEntry.Completed(it) }
+        val jobItems = filteredJobs.map { GalleryGridEntry.JobItem(it) }
+        GalleryPaginationEngine.sortEntries(completed + jobItems)
     }
 
     val columns = settings.galleryColumns.coerceIn(2, 6)
@@ -425,6 +421,19 @@ fun GalleryScreen(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
+                Text(
+                    text = if (settings.galleryPagedMode) "Paged" else "Scroll",
+                    fontSize = 11.sp,
+                    fontFamily = FontFamily.Monospace,
+                    color = if (settings.galleryPagedMode) HordeColors.AmberText else HordeColors.TealSoft,
+                    modifier = Modifier
+                        .testTag("gallery_paged_toggle")
+                        .clip(RoundedCornerShape(6.dp))
+                        .background(HordeColors.CardSurface)
+                        .border(1.dp, if (settings.galleryPagedMode) HordeColors.AmberZone else HordeColors.BorderSubtle, RoundedCornerShape(6.dp))
+                        .clickable { vm.setGalleryPagedMode(!settings.galleryPagedMode) }
+                        .padding(horizontal = 8.dp, vertical = 3.dp),
+                )
                 Box {
                     Text(
                         text = "${columns} cols",
@@ -482,109 +491,196 @@ fun GalleryScreen(
                 )
             }
         } else {
-            LazyVerticalGrid(
-                columns = GridCells.Fixed(columns),
-                contentPadding = PaddingValues(bottom = 16.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
-                modifier = Modifier.fillMaxSize(),
-            ) {
-                itemsIndexed(gridEntries, key = { _, entry -> entry.stableKey }) { _, entry ->
-                    when (entry) {
-                        is GalleryGridEntry.Completed -> {
-                            val img = entry.image
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .aspectRatio(1f)
-                                    .clip(RoundedCornerShape(14.dp))
-                                    .background(HordeColors.CardSurface)
-                                    .border(1.dp, HordeColors.BorderSubtle, RoundedCornerShape(14.dp))
-                                    .clickable {
+            BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
+                val availableWidth = maxWidth
+                val availableHeight = maxHeight
+
+                if (!settings.galleryPagedMode) {
+                    LazyVerticalGrid(
+                        columns = GridCells.Fixed(columns),
+                        contentPadding = PaddingValues(bottom = 16.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                        modifier = Modifier.fillMaxSize(),
+                    ) {
+                        itemsIndexed(gridEntries, key = { _, entry -> entry.stableKey }) { _, entry ->
+                            GalleryGridCard(
+                                entry = entry,
+                                settings = settings,
+                                onImageClick = { img ->
+                                    val imgIdx = filteredImages.indexOfFirst { it.id == img.id }.coerceAtLeast(0)
+                                    viewerStartIndex = imgIdx
+                                    viewerImagesSnapshot = filteredImages
+                                    isFullscreen = settings.skipGalleryModalToFullscreen
+                                    fullscreenHudVisible = false
+                                },
+                                onToggleFavorite = { img -> vm.toggleImageFavorite(img.id, img.isFavorite) },
+                                onJobClick = { job -> inspectedJobId = job.id },
+                            )
+                        }
+                    }
+                } else {
+                    val itemsPerPage = GalleryPaginationEngine.calculateItemsPerPage(
+                        availableWidthDp = availableWidth.value,
+                        availableHeightDp = availableHeight.value,
+                        columns = columns,
+                    )
+
+                    val pageResult = remember(gridEntries, itemsPerPage, currentAnchorKey, currentStartIndex) {
+                        GalleryPaginationEngine.paginate(
+                            entries = gridEntries,
+                            pageSize = itemsPerPage,
+                            anchorKey = currentAnchorKey,
+                            fallbackIndex = currentStartIndex,
+                        )
+                    }
+
+                    LaunchedEffect(pageResult.anchorKey, pageResult.startIndex) {
+                        currentAnchorKey = pageResult.anchorKey
+                        currentStartIndex = pageResult.startIndex
+                    }
+
+                    Column(
+                        modifier = Modifier.fillMaxSize(),
+                        verticalArrangement = Arrangement.SpaceBetween,
+                    ) {
+                        LazyVerticalGrid(
+                            columns = GridCells.Fixed(columns),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp),
+                            modifier = Modifier
+                                .weight(1f, fill = false)
+                                .fillMaxWidth(),
+                            userScrollEnabled = false,
+                        ) {
+                            itemsIndexed(pageResult.items, key = { _, entry -> entry.stableKey }) { _, entry ->
+                                GalleryGridCard(
+                                    entry = entry,
+                                    settings = settings,
+                                    onImageClick = { img ->
                                         val imgIdx = filteredImages.indexOfFirst { it.id == img.id }.coerceAtLeast(0)
                                         viewerStartIndex = imgIdx
                                         viewerImagesSnapshot = filteredImages
                                         isFullscreen = settings.skipGalleryModalToFullscreen
                                         fullscreenHudVisible = false
                                     },
-                            ) {
-                                AsyncImage(
-                                    model = Uri.parse(img.fileUri),
-                                    contentDescription = img.model,
-                                    contentScale = ContentScale.Crop,
-                                    modifier = Modifier.fillMaxSize(),
+                                    onToggleFavorite = { img -> vm.toggleImageFavorite(img.id, img.isFavorite) },
+                                    onJobClick = { job -> inspectedJobId = job.id },
                                 )
-                                if (img.partialFromCancel) {
-                                    Text(
-                                        text = "Stopped early",
-                                        fontSize = 10.sp,
-                                        color = HordeColors.AmberText,
-                                        modifier = Modifier
-                                            .align(Alignment.TopStart)
-                                            .padding(6.dp)
-                                            .clip(RoundedCornerShape(6.dp))
-                                            .background(Color.Black.copy(alpha = 0.65f))
-                                            .padding(horizontal = 6.dp, vertical = 2.dp),
-                                    )
-                                }
-                                if (settings.showGalleryPromptOverlay && img.prompt.isNotBlank()) {
-                                    Box(
-                                        modifier = Modifier
-                                            .align(Alignment.BottomCenter)
-                                            .fillMaxWidth()
-                                            .background(
-                                                Brush.verticalGradient(
-                                                    listOf(Color.Transparent, Color.Black.copy(alpha = 0.80f)),
-                                                ),
-                                            )
-                                            .padding(horizontal = 8.dp, vertical = 6.dp),
-                                    ) {
-                                        Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                                            Text(
-                                                text = img.prompt.trim(),
-                                                color = Color.White,
-                                                fontSize = 10.sp,
-                                                lineHeight = 13.sp,
-                                                maxLines = 2,
-                                                overflow = TextOverflow.Ellipsis,
-                                            )
-                                            if (img.createdAtMillis > 0L) {
-                                                Text(
-                                                    text = GalleryTimestampFormatter.formatShort(img.createdAtMillis),
-                                                    color = Color.White.copy(alpha = 0.72f),
-                                                    fontSize = 9.sp,
-                                                    fontFamily = FontFamily.Monospace,
-                                                    maxLines = 1,
-                                                    overflow = TextOverflow.Ellipsis,
-                                                )
-                                            }
-                                        }
-                                    }
-                                }
-                                IconButton(
-                                    onClick = { vm.toggleImageFavorite(img.id, img.isFavorite) },
-                                    modifier = Modifier
-                                        .align(Alignment.TopEnd)
-                                        .padding(4.dp)
-                                        .size(32.dp)
-                                        .clip(CircleShape)
-                                        .background(Color.Black.copy(alpha = 0.45f)),
-                                ) {
-                                    Icon(
-                                        if (img.isFavorite) Icons.Outlined.Favorite else Icons.Outlined.FavoriteBorder,
-                                        contentDescription = "Favorite",
-                                        tint = if (img.isFavorite) HordeColors.RoseZone else Color.White,
-                                        modifier = Modifier.size(16.dp),
-                                    )
-                                }
                             }
                         }
 
-                        is GalleryGridEntry.JobItem -> {
-                            GalleryJobGridCard(
-                                job = entry.job,
-                                onClick = { inspectedJobId = entry.job.id },
-                            )
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                        ) {
+                            Row(
+                                horizontalArrangement = Arrangement.spacedBy(2.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                IconButton(
+                                    onClick = {
+                                        currentStartIndex = 0
+                                        currentAnchorKey = gridEntries.firstOrNull()?.stableKey
+                                    },
+                                    enabled = pageResult.hasPrevious,
+                                    modifier = Modifier
+                                        .testTag("gallery_page_first")
+                                        .size(36.dp),
+                                ) {
+                                    Icon(
+                                        Icons.Outlined.FirstPage,
+                                        contentDescription = "First Page",
+                                        tint = if (pageResult.hasPrevious) HordeColors.TextPrimary else HordeColors.TextMuted.copy(alpha = 0.35f),
+                                        modifier = Modifier.size(20.dp),
+                                    )
+                                }
+
+                                IconButton(
+                                    onClick = {
+                                        val prevIndex = (pageResult.startIndex - itemsPerPage).coerceAtLeast(0)
+                                        currentStartIndex = prevIndex
+                                        currentAnchorKey = gridEntries.getOrNull(prevIndex)?.stableKey
+                                    },
+                                    enabled = pageResult.hasPrevious,
+                                    modifier = Modifier
+                                        .testTag("gallery_page_prev")
+                                        .size(36.dp),
+                                ) {
+                                    Icon(
+                                        Icons.Outlined.ChevronLeft,
+                                        contentDescription = "Previous Page",
+                                        tint = if (pageResult.hasPrevious) HordeColors.TextPrimary else HordeColors.TextMuted.copy(alpha = 0.35f),
+                                        modifier = Modifier.size(20.dp),
+                                    )
+                                }
+                            }
+
+                            Column(
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                modifier = Modifier.testTag("gallery_page_indicator"),
+                            ) {
+                                Text(
+                                    text = "Page ${pageResult.pageNumber} of ${pageResult.totalPages}",
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Medium,
+                                    color = HordeColors.TextPrimary,
+                                )
+                                if (pageResult.totalItems > 0) {
+                                    Text(
+                                        text = "${pageResult.startIndex + 1}–${pageResult.endIndex} of ${pageResult.totalItems}",
+                                        fontSize = 10.sp,
+                                        fontFamily = FontFamily.Monospace,
+                                        color = HordeColors.TextMuted,
+                                    )
+                                }
+                            }
+
+                            Row(
+                                horizontalArrangement = Arrangement.spacedBy(2.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                IconButton(
+                                    onClick = {
+                                        val nextIndex = pageResult.endIndex.coerceIn(0, gridEntries.lastIndex)
+                                        currentStartIndex = nextIndex
+                                        currentAnchorKey = gridEntries.getOrNull(nextIndex)?.stableKey
+                                    },
+                                    enabled = pageResult.hasNext,
+                                    modifier = Modifier
+                                        .testTag("gallery_page_next")
+                                        .size(36.dp),
+                                ) {
+                                    Icon(
+                                        Icons.Outlined.ChevronRight,
+                                        contentDescription = "Next Page",
+                                        tint = if (pageResult.hasNext) HordeColors.TextPrimary else HordeColors.TextMuted.copy(alpha = 0.35f),
+                                        modifier = Modifier.size(20.dp),
+                                    )
+                                }
+
+                                IconButton(
+                                    onClick = {
+                                        val lastPageStartIndex = ((pageResult.totalPages - 1) * itemsPerPage).coerceIn(0, gridEntries.lastIndex)
+                                        currentStartIndex = lastPageStartIndex
+                                        currentAnchorKey = gridEntries.getOrNull(lastPageStartIndex)?.stableKey
+                                    },
+                                    enabled = pageResult.hasNext,
+                                    modifier = Modifier
+                                        .testTag("gallery_page_last")
+                                        .size(36.dp),
+                                ) {
+                                    Icon(
+                                        Icons.AutoMirrored.Outlined.LastPage,
+                                        contentDescription = "Last Page",
+                                        tint = if (pageResult.hasNext) HordeColors.TextPrimary else HordeColors.TextMuted.copy(alpha = 0.35f),
+                                        modifier = Modifier.size(20.dp),
+                                    )
+                                }
+                            }
                         }
                     }
                 }
@@ -1396,6 +1492,106 @@ private fun FilterCheckboxMenuItem(
         },
         onClick = onToggle,
     )
+}
+
+@Composable
+private fun GalleryGridCard(
+    entry: GalleryGridEntry,
+    settings: AppSettings,
+    onImageClick: (SavedImage) -> Unit,
+    onToggleFavorite: (SavedImage) -> Unit,
+    onJobClick: (HordeJob) -> Unit,
+) {
+    when (entry) {
+        is GalleryGridEntry.Completed -> {
+            val img = entry.image
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .aspectRatio(1f)
+                    .clip(RoundedCornerShape(14.dp))
+                    .background(HordeColors.CardSurface)
+                    .border(1.dp, HordeColors.BorderSubtle, RoundedCornerShape(14.dp))
+                    .clickable { onImageClick(img) },
+            ) {
+                AsyncImage(
+                    model = Uri.parse(img.fileUri),
+                    contentDescription = img.model,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.fillMaxSize(),
+                )
+                if (img.partialFromCancel) {
+                    Text(
+                        text = "Stopped early",
+                        fontSize = 10.sp,
+                        color = HordeColors.AmberText,
+                        modifier = Modifier
+                            .align(Alignment.TopStart)
+                            .padding(6.dp)
+                            .clip(RoundedCornerShape(6.dp))
+                            .background(Color.Black.copy(alpha = 0.65f))
+                            .padding(horizontal = 6.dp, vertical = 2.dp),
+                    )
+                }
+                if (settings.showGalleryPromptOverlay && img.prompt.isNotBlank()) {
+                    Box(
+                        modifier = Modifier
+                            .align(Alignment.BottomCenter)
+                            .fillMaxWidth()
+                            .background(
+                                Brush.verticalGradient(
+                                    listOf(Color.Transparent, Color.Black.copy(alpha = 0.80f)),
+                                ),
+                            )
+                            .padding(horizontal = 8.dp, vertical = 6.dp),
+                    ) {
+                        Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                            Text(
+                                text = img.prompt.trim(),
+                                color = Color.White,
+                                fontSize = 10.sp,
+                                lineHeight = 13.sp,
+                                maxLines = 2,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                            if (img.createdAtMillis > 0L) {
+                                Text(
+                                    text = GalleryTimestampFormatter.formatShort(img.createdAtMillis),
+                                    color = Color.White.copy(alpha = 0.72f),
+                                    fontSize = 9.sp,
+                                    fontFamily = FontFamily.Monospace,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                )
+                            }
+                        }
+                    }
+                }
+                IconButton(
+                    onClick = { onToggleFavorite(img) },
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(4.dp)
+                        .size(32.dp)
+                        .clip(CircleShape)
+                        .background(Color.Black.copy(alpha = 0.45f)),
+                ) {
+                    Icon(
+                        if (img.isFavorite) Icons.Outlined.Favorite else Icons.Outlined.FavoriteBorder,
+                        contentDescription = "Favorite",
+                        tint = if (img.isFavorite) HordeColors.RoseZone else Color.White,
+                        modifier = Modifier.size(16.dp),
+                    )
+                }
+            }
+        }
+        is GalleryGridEntry.JobItem -> {
+            GalleryJobGridCard(
+                job = entry.job,
+                onClick = { onJobClick(entry.job) },
+            )
+        }
+    }
 }
 
 @Composable
