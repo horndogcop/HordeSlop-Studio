@@ -66,7 +66,10 @@ fun MainHubScreen(
 ) {
     val isWide = LocalConfiguration.current.screenWidthDp >= 600
     val pendingJobs = activeJobs.count {
-        it.status == JobStatus.QUEUED || it.status == JobStatus.PROCESSING || it.status == JobStatus.PAUSED
+        it.status == JobStatus.LOCAL_QUEUED ||
+            it.status == JobStatus.QUEUED ||
+            it.status == JobStatus.PROCESSING ||
+            it.status == JobStatus.PAUSED
     }
     val authSubtitle = when (userStats.authMode) {
         AuthMode.USER_KEY -> "${userStats.username ?: "Signed in"} · ${userStats.kudos.toInt()} kudos"

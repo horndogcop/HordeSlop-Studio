@@ -238,9 +238,11 @@ data class HordeJob(
     val total: Int,
     val submittedPayloadJson: String,
     val errorMessage: String? = null,
+    val createdAtMillis: Long = 0L,
 )
 
 enum class JobStatus {
+    LOCAL_QUEUED,
     QUEUED,
     PROCESSING,
     PAUSED,

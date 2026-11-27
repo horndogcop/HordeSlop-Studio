@@ -523,4 +523,26 @@ class IssueFixesTest {
         assertEquals(100, TemplatePrompts.PRESETS.size)
         assertEquals(100, TemplatePrompts.PRESETS.distinct().size)
     }
+
+    @Test
+    fun localQueuedJobStatusExistsAndDefaultsCreatedAt() {
+        val job = HordeJob(
+            id = "local_123",
+            requestId = "",
+            prompt = "test prompt",
+            negativePrompt = "",
+            models = listOf("Deliberate"),
+            status = JobStatus.LOCAL_QUEUED,
+            waitTimeSeconds = 0,
+            queuePosition = 0,
+            finished = 0,
+            processing = 0,
+            total = 1,
+            submittedPayloadJson = "{}",
+            createdAtMillis = 42_000L,
+        )
+        assertEquals(JobStatus.LOCAL_QUEUED, job.status)
+        assertEquals("", job.requestId)
+        assertEquals(42_000L, job.createdAtMillis)
+    }
 }

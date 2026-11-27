@@ -152,6 +152,7 @@ class HordecraftRepository(
                 total = e.total,
                 submittedPayloadJson = e.submittedPayloadJson,
                 errorMessage = e.errorMessage,
+                createdAtMillis = e.createdAtMillis,
             )
         }
     }
@@ -487,9 +488,10 @@ class HordecraftRepository(
     }
 
     suspend fun submitGeneration(spec: StudioSubmissionSpec): List<ActiveJobEntity> {
+        val now = System.currentTimeMillis()
         promptHistoryDao.upsert(
             PromptHistoryEntity(
-                id = "h_${System.currentTimeMillis()}_${UUID.randomUUID().toString().take(6)}",
+                id = "h_${now}_${UUID.randomUUID().toString().take(6)}",
                 title = null,
                 prompt = spec.prompt,
                 negativePrompt = spec.negativePrompt,
@@ -499,42 +501,40 @@ class HordecraftRepository(
                 clipSkip = spec.clipSkip,
                 sampler = spec.sampler,
                 scheduler = spec.scheduler,
-                timestampMillis = System.currentTimeMillis(),
+                timestampMillis = now,
                 isFavorite = false,
             ),
         )
 
         val chunks: List<GenerationChunk> = StyleContractEngine.buildSubmissionChunks(spec)
-        val created = mutableListOf<ActiveJobEntity>()
-        for (chunk in chunks) {
-            val resp = hordeApi.submitAsync(chunk.payload)
-            val entity = ActiveJobEntity(
-                id = resp.id,
-                requestId = resp.id,
-                prompt = spec.prompt,
+        val created = chunks.mapIndexed { idx, chunk ->
+            val promptFromPayload = chunk.payload["prompt"]?.jsonPrimitive?.contentOrNull ?: spec.prompt
+            ActiveJobEntity(
+                id = "local_${UUID.randomUUID()}",
+                requestId = "",
+                prompt = promptFromPayload.substringBefore("###").trim().ifEmpty { spec.prompt },
                 negativePrompt = spec.negativePrompt,
                 modelsJoined = chunk.models.joinToString("||"),
-                status = JobStatus.QUEUED.name,
-                waitTimeSeconds = 15,
+                status = JobStatus.LOCAL_QUEUED.name,
+                waitTimeSeconds = 0,
                 queuePosition = 0,
                 finished = 0,
                 processing = 0,
                 total = chunk.count,
                 seed = spec.seed,
-                steps = spec.steps,
-                cfg = spec.cfg,
-                clipSkip = spec.clipSkip,
-                sampler = spec.sampler,
-                scheduler = spec.scheduler,
-                width = spec.width,
-                height = spec.height,
+                steps = chunk.steps ?: spec.steps,
+                cfg = chunk.cfg ?: spec.cfg,
+                clipSkip = chunk.clipSkip ?: spec.clipSkip,
+                sampler = chunk.sampler ?: spec.sampler,
+                scheduler = chunk.scheduler ?: spec.scheduler,
+                width = chunk.width ?: spec.width,
+                height = chunk.height ?: spec.height,
                 submittedPayloadJson = chunk.payloadJsonString,
                 errorMessage = null,
-                createdAtMillis = System.currentTimeMillis(),
+                createdAtMillis = now + idx,
             )
-            activeJobDao.upsert(entity)
-            created += entity
         }
+        activeJobDao.upsertAll(created)
         return created
     }
 
@@ -542,12 +542,13 @@ class HordecraftRepository(
         spec: StudioSubmissionSpec,
         rawPayloadJsons: List<String>,
     ): List<ActiveJobEntity> {
+        val now = System.currentTimeMillis()
         val parsedPayloads = rawPayloadJsons.map { raw ->
             json.parseToJsonElement(raw).jsonObject
         }
         promptHistoryDao.upsert(
             PromptHistoryEntity(
-                id = "h_${System.currentTimeMillis()}_${UUID.randomUUID().toString().take(6)}",
+                id = "h_${now}_${UUID.randomUUID().toString().take(6)}",
                 title = null,
                 prompt = spec.prompt,
                 negativePrompt = spec.negativePrompt,
@@ -557,27 +558,25 @@ class HordecraftRepository(
                 clipSkip = spec.clipSkip,
                 sampler = spec.sampler,
                 scheduler = spec.scheduler,
-                timestampMillis = System.currentTimeMillis(),
+                timestampMillis = now,
                 isFavorite = false,
             ),
         )
-        val created = mutableListOf<ActiveJobEntity>()
-        for (payload in parsedPayloads) {
-            val resp = hordeApi.submitAsync(payload)
+        val created = parsedPayloads.mapIndexed { idx, payload ->
             val modelsFromPayload = payload["models"]?.let { elem ->
                 runCatching { elem.jsonArray.mapNotNull { it.jsonPrimitive.contentOrNull } }.getOrNull()
             }?.takeIf { it.isNotEmpty() } ?: spec.selectedModels
             val paramsObj = payload["params"]?.let { runCatching { it.jsonObject }.getOrNull() }
             val countFromPayload = paramsObj?.get("n")?.jsonPrimitive?.intOrNull ?: 1
             val promptFromPayload = payload["prompt"]?.jsonPrimitive?.contentOrNull ?: spec.prompt
-            val entity = ActiveJobEntity(
-                id = resp.id,
-                requestId = resp.id,
-                prompt = promptFromPayload,
+            ActiveJobEntity(
+                id = "local_${UUID.randomUUID()}",
+                requestId = "",
+                prompt = promptFromPayload.substringBefore("###").trim().ifEmpty { spec.prompt },
                 negativePrompt = spec.negativePrompt,
                 modelsJoined = modelsFromPayload.joinToString("||"),
-                status = JobStatus.QUEUED.name,
-                waitTimeSeconds = 15,
+                status = JobStatus.LOCAL_QUEUED.name,
+                waitTimeSeconds = 0,
                 queuePosition = 0,
                 finished = 0,
                 processing = 0,
@@ -592,11 +591,10 @@ class HordecraftRepository(
                 height = paramsObj?.get("height")?.jsonPrimitive?.intOrNull ?: spec.height,
                 submittedPayloadJson = json.encodeToString(JsonObject.serializer(), payload),
                 errorMessage = null,
-                createdAtMillis = System.currentTimeMillis(),
+                createdAtMillis = now + idx,
             )
-            activeJobDao.upsert(entity)
-            created += entity
         }
+        activeJobDao.upsertAll(created)
         return created
     }
 
@@ -626,15 +624,14 @@ class HordecraftRepository(
             }
         }
         val payloadStr = prettyJson.encodeToString(JsonObject.serializer(), payload)
-        val resp = hordeApi.submitAsync(payload)
         val entity = ActiveJobEntity(
-            id = resp.id,
-            requestId = resp.id,
+            id = "local_${UUID.randomUUID()}",
+            requestId = "",
             prompt = image.prompt,
             negativePrompt = image.negativePrompt,
             modelsJoined = image.model,
-            status = JobStatus.QUEUED.name,
-            waitTimeSeconds = 12,
+            status = JobStatus.LOCAL_QUEUED.name,
+            waitTimeSeconds = 0,
             queuePosition = 0,
             finished = 0,
             processing = 0,
@@ -655,6 +652,61 @@ class HordecraftRepository(
         return entity
     }
 
+    suspend fun dispatchLocalQueuedJob(job: ActiveJobEntity): JobPollNotification? {
+        val payload = runCatching {
+            json.parseToJsonElement(job.submittedPayloadJson).jsonObject
+        }.getOrElse { err ->
+            val msg = err.message ?: "Invalid request payload"
+            activeJobDao.upsert(
+                job.copy(
+                    status = JobStatus.FAILED.name,
+                    processing = 0,
+                    waitTimeSeconds = 0,
+                    errorMessage = msg,
+                ),
+            )
+            return JobPollNotification(title = "Generation request failed", body = msg)
+        }
+
+        val submitResult = runCatching { hordeApi.submitAsync(payload) }
+        val resp = submitResult.getOrNull()
+        if (resp != null && resp.id.isNotBlank()) {
+            database.withTransaction {
+                val latest = activeJobDao.findById(job.id) ?: return@withTransaction
+                if (latest.status == JobStatus.FAILED.name || latest.dismissed) {
+                    return@withTransaction
+                }
+                activeJobDao.deleteById(job.id)
+                activeJobDao.upsert(
+                    latest.copy(
+                        id = resp.id,
+                        requestId = resp.id,
+                        status = if (latest.status == JobStatus.PAUSED.name) JobStatus.PAUSED.name else JobStatus.QUEUED.name,
+                        waitTimeSeconds = 15,
+                        queuePosition = 0,
+                        errorMessage = null,
+                    ),
+                )
+            }
+            return null
+        }
+
+        val err = submitResult.exceptionOrNull()
+        val message = formatSubmissionError(err)
+        activeJobDao.upsert(
+            job.copy(
+                status = JobStatus.FAILED.name,
+                processing = 0,
+                waitTimeSeconds = 0,
+                errorMessage = message,
+            ),
+        )
+        return JobPollNotification(
+            title = "Generation request failed",
+            body = message,
+        )
+    }
+
     suspend fun checkJobProgress(jobId: String): GenerationCheckDto = hordeApi.checkGeneration(jobId)
 
     suspend fun fetchFullStatusAndSave(job: ActiveJobEntity, partialFromCancel: Boolean = false): Int {
@@ -664,6 +716,17 @@ class HordecraftRepository(
 
     suspend fun cancelJobWithPartialRecovery(jobId: String): Int {
         val job = activeJobDao.findById(jobId) ?: return 0
+        if (job.status == JobStatus.LOCAL_QUEUED.name || job.requestId.isBlank()) {
+            activeJobDao.upsert(
+                job.copy(
+                    status = JobStatus.FAILED.name,
+                    processing = 0,
+                    waitTimeSeconds = 0,
+                    errorMessage = "Cancelled",
+                ),
+            )
+            return 0
+        }
         val statusResult = runCatching { hordeApi.cancelGeneration(jobId) }
         val statusDto = statusResult.getOrNull()
         val err = statusResult.exceptionOrNull()
@@ -754,6 +817,12 @@ class HordecraftRepository(
         val dismissedJobs = activeJobDao.getDismissed()
         val notifications = mutableListOf<JobPollNotification>()
         for (job in dismissedJobs) {
+            if (job.requestId.isBlank() || job.status == JobStatus.LOCAL_QUEUED.name) {
+                if (job.status == JobStatus.FAILED.name || job.status == JobStatus.CANCELLED_PARTIAL.name) {
+                    activeJobDao.deleteById(job.id)
+                }
+                continue
+            }
             val checkResult = try {
                 hordeApi.checkGeneration(job.id)
             } catch (t: Throwable) {
@@ -911,7 +980,26 @@ class HordecraftRepository(
     }
 
     suspend fun pauseQueue() = activeJobDao.pauseAllActive()
-    suspend fun resumeQueue() = activeJobDao.resumeAllPaused()
+    suspend fun resumeQueue() {
+        database.withTransaction {
+            activeJobDao.resumeAllLocalPaused()
+            activeJobDao.resumeAllServerPaused()
+        }
+    }
+
+    private fun formatSubmissionError(t: Throwable?): String {
+        if (t is HttpException) {
+            val body = runCatching { t.response()?.errorBody()?.string() }.getOrNull()
+            if (!body.isNullOrBlank()) {
+                val parsedMsg = runCatching {
+                    json.parseToJsonElement(body).jsonObject["message"]?.jsonPrimitive?.contentOrNull
+                }.getOrNull()
+                if (!parsedMsg.isNullOrBlank()) return "HTTP ${t.code()}: $parsedMsg"
+            }
+            return "HTTP ${t.code()} submission error"
+        }
+        return t?.message ?: "Network error"
+    }
 
     suspend fun getTrackedJobsForPolling(): List<ActiveJobEntity> = activeJobDao.getTrackedForPolling()
 

@@ -172,7 +172,7 @@ interface ActiveJobDao {
     @Query("SELECT * FROM active_jobs WHERE dismissed = 0 ORDER BY createdAtMillis DESC")
     fun observeVisible(): Flow<List<ActiveJobEntity>>
 
-    @Query("SELECT * FROM active_jobs WHERE (dismissed = 0 AND status IN ('QUEUED', 'PROCESSING', 'PAUSED')) OR dismissed = 1 ORDER BY createdAtMillis ASC")
+    @Query("SELECT * FROM active_jobs WHERE (dismissed = 0 AND status IN ('LOCAL_QUEUED', 'QUEUED', 'PROCESSING', 'PAUSED')) OR dismissed = 1 ORDER BY createdAtMillis ASC")
     suspend fun getTrackedForPolling(): List<ActiveJobEntity>
 
     @Query("SELECT * FROM active_jobs WHERE dismissed = 1")
@@ -193,11 +193,14 @@ interface ActiveJobDao {
     @Query("UPDATE active_jobs SET status = :status WHERE id = :id")
     suspend fun updateStatus(id: String, status: String)
 
-    @Query("UPDATE active_jobs SET status = 'PAUSED' WHERE status IN ('QUEUED', 'PROCESSING') AND dismissed = 0")
+    @Query("UPDATE active_jobs SET status = 'PAUSED' WHERE status IN ('LOCAL_QUEUED', 'QUEUED', 'PROCESSING') AND dismissed = 0")
     suspend fun pauseAllActive()
 
-    @Query("UPDATE active_jobs SET status = 'PROCESSING' WHERE status = 'PAUSED' AND dismissed = 0")
-    suspend fun resumeAllPaused()
+    @Query("UPDATE active_jobs SET status = 'LOCAL_QUEUED' WHERE status = 'PAUSED' AND requestId = '' AND dismissed = 0")
+    suspend fun resumeAllLocalPaused()
+
+    @Query("UPDATE active_jobs SET status = 'PROCESSING' WHERE status = 'PAUSED' AND requestId != '' AND dismissed = 0")
+    suspend fun resumeAllServerPaused()
 
     @Query("UPDATE active_jobs SET dismissed = 1, dismissedAtFinishedCount = :finishedAtDismiss WHERE id = :id")
     suspend fun dismissById(id: String, finishedAtDismiss: Int)

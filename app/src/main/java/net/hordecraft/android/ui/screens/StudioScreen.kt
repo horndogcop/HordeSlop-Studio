@@ -830,7 +830,10 @@ fun StudioScreen(
             // 6. Active & Recent Jobs Queue
             if (jobs.isNotEmpty()) {
                 val hasActive = jobs.any {
-                    it.status == JobStatus.QUEUED || it.status == JobStatus.PROCESSING || it.status == JobStatus.PAUSED
+                    it.status == JobStatus.LOCAL_QUEUED ||
+                        it.status == JobStatus.QUEUED ||
+                        it.status == JobStatus.PROCESSING ||
+                        it.status == JobStatus.PAUSED
                 }
                 val hasClearable = jobs.any {
                     it.status == JobStatus.COMPLETED || it.status == JobStatus.CANCELLED_PARTIAL || it.status == JobStatus.FAILED
@@ -864,10 +867,12 @@ fun StudioScreen(
                     )
                     if (!queueCollapsed) {
                         jobs.take(12).forEach { job ->
-                            val isActive = job.status == JobStatus.QUEUED ||
+                            val isActive = job.status == JobStatus.LOCAL_QUEUED ||
+                                job.status == JobStatus.QUEUED ||
                                 job.status == JobStatus.PROCESSING ||
                                 job.status == JobStatus.PAUSED
                             val statusText = when (job.status) {
+                                JobStatus.LOCAL_QUEUED -> "Queued locally"
                                 JobStatus.QUEUED -> "Queued"
                                 JobStatus.PROCESSING -> if (job.waitTimeSeconds > 0) "Wait ~${job.waitTimeSeconds}s · #${job.queuePosition}" else "Processing"
                                 JobStatus.PAUSED -> "Paused"
@@ -938,7 +943,10 @@ fun StudioScreen(
                                             }
                                         }
                                     }
-                                    if (job.status == JobStatus.QUEUED || job.status == JobStatus.PROCESSING) {
+                                    if (job.status == JobStatus.LOCAL_QUEUED ||
+                                        job.status == JobStatus.QUEUED ||
+                                        job.status == JobStatus.PROCESSING
+                                    ) {
                                         val progress = if (job.total > 0) job.finished.toFloat() / job.total else 0f
                                         LinearProgressIndicator(
                                             progress = { progress.coerceIn(0f, 1f) },

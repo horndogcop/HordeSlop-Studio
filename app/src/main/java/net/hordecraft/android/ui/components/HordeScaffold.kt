@@ -166,7 +166,10 @@ fun HordeModeScaffold(
 
     val mvpEntries = remember { NAV_ENTRIES.filter { it.isMvpTab } }
     val activeCount = activeJobs.count {
-        it.status == JobStatus.QUEUED || it.status == JobStatus.PROCESSING || it.status == JobStatus.PAUSED
+        it.status == JobStatus.LOCAL_QUEUED ||
+            it.status == JobStatus.QUEUED ||
+            it.status == JobStatus.PROCESSING ||
+            it.status == JobStatus.PAUSED
     }
 
     val authLabel = when (userStats.authMode) {

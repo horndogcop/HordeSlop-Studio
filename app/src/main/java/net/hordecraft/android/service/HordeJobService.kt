@@ -83,7 +83,9 @@ class HordeJobService : Service() {
 
                 val visiblePending = repo.getTrackedJobsForPolling().filter { !it.dismissed }
                 val activeRunnable = visiblePending.filter {
-                    it.status == JobStatus.QUEUED.name || it.status == JobStatus.PROCESSING.name
+                    it.status == JobStatus.LOCAL_QUEUED.name ||
+                        it.status == JobStatus.QUEUED.name ||
+                        it.status == JobStatus.PROCESSING.name
                 }
                 if (visiblePending.isEmpty()) {
                     ServiceCompat.stopForeground(this@HordeJobService, ServiceCompat.STOP_FOREGROUND_REMOVE)
@@ -100,7 +102,11 @@ class HordeJobService : Service() {
 
                 for (job in activeRunnable) {
                     if (!isActive) break
-                    val notif = runCatching { repo.pollVisibleRunnableJob(job) }.getOrNull()
+                    val notif = if (job.status == JobStatus.LOCAL_QUEUED.name) {
+                        runCatching { repo.dispatchLocalQueuedJob(job) }.getOrNull()
+                    } else {
+                        runCatching { repo.pollVisibleRunnableJob(job) }.getOrNull()
+                    }
                     if (notif != null) {
                         postResultNotification(notif.title, notif.body)
                     }

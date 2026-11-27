@@ -651,7 +651,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             runCatching { repo.syncDismissedJobs() }
             val hasVisiblePending = repo.getTrackedJobsForPolling().any {
                 !it.dismissed && (
-                    it.status == net.hordeslop.studio.domain.JobStatus.QUEUED.name ||
+                    it.status == net.hordeslop.studio.domain.JobStatus.LOCAL_QUEUED.name ||
+                        it.status == net.hordeslop.studio.domain.JobStatus.QUEUED.name ||
                         it.status == net.hordeslop.studio.domain.JobStatus.PROCESSING.name
                     )
             }
