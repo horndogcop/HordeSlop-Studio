@@ -562,4 +562,72 @@ class IssueFixesTest {
             GalleryTimestampFormatter.formatFull(sampleMillis, utc, java.util.Locale.US),
         )
     }
+
+    @Test
+    fun galleryFilterStateDefaultsToCompleteAndControlsFavoritesAndQueues() {
+        val defaultFilter = GalleryFilterState()
+        assertTrue(defaultFilter.isDefault)
+        assertTrue(defaultFilter.includesCompleteGenerations)
+        assertFalse(defaultFilter.isAllSelected)
+        assertFalse(defaultFilter.isAllQueuedSelected)
+
+        // Switching to "All queued images" excludes Complete -> favorites must disable
+        val queuedOnly = defaultFilter
+            .toggleCategory(GalleryStatusCategory.COMPLETE_GENERATIONS)
+            .toggleAllQueued()
+        assertFalse(queuedOnly.includesCompleteGenerations)
+        assertTrue(queuedOnly.isAllQueuedSelected)
+        assertFalse(queuedOnly.isAllSelected)
+
+        fun job(status: JobStatus, reqId: String = "req-1", err: String? = null) = HordeJob(
+            id = "${status.name}_$reqId",
+            requestId = reqId,
+            prompt = "cyberpunk skyline",
+            negativePrompt = "blurry",
+            models = listOf("Juggernaut XL"),
+            status = status,
+            waitTimeSeconds = 0,
+            queuePosition = 0,
+            finished = 0,
+            processing = 0,
+            total = 1,
+            submittedPayloadJson = "{}",
+            errorMessage = err,
+            createdAtMillis = 1234L,
+        )
+
+        val localJob = job(JobStatus.LOCAL_QUEUED, reqId = "")
+        val localPausedJob = job(JobStatus.PAUSED, reqId = "")
+        val serverQueuedJob = job(JobStatus.QUEUED, reqId = "srv-1")
+        val serverProcessingJob = job(JobStatus.PROCESSING, reqId = "srv-2")
+        val serverPausedJob = job(JobStatus.PAUSED, reqId = "srv-3")
+        val failedJob = job(JobStatus.FAILED, reqId = "", err = "HTTP 400: bad params")
+        val completedJob = job(JobStatus.COMPLETED, reqId = "srv-4")
+
+        assertTrue(queuedOnly.matchesJob(localJob))
+        assertTrue(queuedOnly.matchesJob(localPausedJob))
+        assertTrue(queuedOnly.matchesJob(serverQueuedJob))
+        assertTrue(queuedOnly.matchesJob(serverProcessingJob))
+        assertTrue(queuedOnly.matchesJob(serverPausedJob))
+        assertFalse(queuedOnly.matchesJob(failedJob))
+        assertFalse(queuedOnly.matchesJob(completedJob))
+
+        val errorsOnly = GalleryFilterState(setOf(GalleryStatusCategory.ERRORS))
+        assertFalse(errorsOnly.includesCompleteGenerations)
+        assertTrue(errorsOnly.matchesJob(failedJob))
+        assertFalse(errorsOnly.matchesJob(localJob))
+
+        val allImages = GalleryFilterState().toggleAll()
+        assertTrue(allImages.isAllSelected)
+        assertTrue(allImages.includesCompleteGenerations)
+        assertTrue(allImages.isAllQueuedSelected)
+        assertTrue(allImages.matchesJob(localJob))
+        assertTrue(allImages.matchesJob(serverProcessingJob))
+        assertTrue(allImages.matchesJob(failedJob))
+
+        // Search filter on jobs supports prompt, ### negative, model, and error text
+        assertTrue(GallerySearchFilter.matchesJob(failedJob, "cyberpunk ### blurry"))
+        assertFalse(GallerySearchFilter.matchesJob(failedJob, "cyberpunk ### sharp"))
+        assertTrue(GallerySearchFilter.matchesJob(failedJob, "bad params"))
+    }
 }

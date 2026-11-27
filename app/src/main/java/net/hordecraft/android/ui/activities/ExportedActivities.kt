@@ -115,6 +115,7 @@ abstract class BaseHordeActivity : ComponentActivity() {
                         ActivityDestination.GALLERY -> GalleryScreen(
                             vm = vm,
                             images = savedImages,
+                            jobs = activeJobs,
                             settings = settings,
                             toastMessage = studio.toastMessage,
                             pendingSearchQuery = pendingGalleryQuery,

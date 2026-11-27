@@ -50,14 +50,19 @@ import androidx.compose.material.icons.outlined.ChevronLeft
 import androidx.compose.material.icons.outlined.ChevronRight
 import androidx.compose.material.icons.outlined.Clear
 import androidx.compose.material.icons.outlined.Close
+import androidx.compose.material.icons.outlined.CloudQueue
 import androidx.compose.material.icons.outlined.DeleteOutline
+import androidx.compose.material.icons.outlined.ErrorOutline
 import androidx.compose.material.icons.outlined.Favorite
 import androidx.compose.material.icons.outlined.FavoriteBorder
+import androidx.compose.material.icons.outlined.FilterList
 import androidx.compose.material.icons.outlined.FolderOpen
 import androidx.compose.material.icons.outlined.Fullscreen
 import androidx.compose.material.icons.outlined.FullscreenExit
 import androidx.compose.material.icons.outlined.MoreHoriz
+import androidx.compose.material.icons.outlined.PauseCircleOutline
 import androidx.compose.material.icons.outlined.Refresh
+import androidx.compose.material.icons.outlined.Schedule
 import androidx.compose.material.icons.outlined.Share
 import androidx.compose.material.icons.outlined.Wallpaper
 import androidx.compose.material3.AlertDialog
@@ -66,8 +71,10 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
@@ -83,6 +90,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -90,6 +98,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -102,12 +111,31 @@ import coil.compose.AsyncImage
 import kotlinx.coroutines.launch
 import net.hordeslop.studio.data.local.AppSettings
 import net.hordeslop.studio.domain.ActivityDestination
+import net.hordeslop.studio.domain.GalleryFilterState
 import net.hordeslop.studio.domain.GallerySearchFilter
+import net.hordeslop.studio.domain.GalleryStatusCategory
 import net.hordeslop.studio.domain.GalleryTimestampFormatter
+import net.hordeslop.studio.domain.HordeJob
+import net.hordeslop.studio.domain.JobStatus
 import net.hordeslop.studio.domain.SavedImage
 import net.hordeslop.studio.ui.MainViewModel
 import net.hordeslop.studio.ui.components.launchActivityForDestination
 import net.hordeslop.studio.ui.theme.HordeColors
+
+private sealed interface GalleryGridEntry {
+    val stableKey: String
+    val createdAtMillis: Long
+
+    data class Completed(val image: SavedImage) : GalleryGridEntry {
+        override val stableKey: String = "img:${image.id}"
+        override val createdAtMillis: Long = image.createdAtMillis
+    }
+
+    data class JobItem(val job: HordeJob) : GalleryGridEntry {
+        override val stableKey: String = "job:${job.id}"
+        override val createdAtMillis: Long = job.createdAtMillis
+    }
+}
 
 @Composable
 fun GalleryScreen(
@@ -116,34 +144,64 @@ fun GalleryScreen(
     settings: AppSettings,
     toastMessage: String?,
     pendingSearchQuery: String? = null,
+    jobs: List<HordeJob> = emptyList(),
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
 
     var searchQuery by remember { mutableStateOf("") }
     var favoritesOnly by remember { mutableStateOf(false) }
+    var filterState by remember { mutableStateOf(GalleryFilterState()) }
+    var filterMenuExpanded by remember { mutableStateOf(false) }
 
     var viewerStartIndex by remember { mutableStateOf<Int?>(null) }
     var viewerImagesSnapshot by remember { mutableStateOf<List<SavedImage>?>(null) }
+    var inspectedJobId by remember { mutableStateOf<String?>(null) }
     var isFullscreen by remember { mutableStateOf(false) }
     var fullscreenHudVisible by remember { mutableStateOf(false) }
     var columnsMenuExpanded by remember { mutableStateOf(false) }
 
+    val favoritesEnabled = filterState.includesCompleteGenerations
+
     LaunchedEffect(pendingSearchQuery) {
         if (!pendingSearchQuery.isNullOrBlank()) {
             searchQuery = pendingSearchQuery
+            if (!filterState.includesCompleteGenerations) {
+                filterState = filterState.toggleCategory(GalleryStatusCategory.COMPLETE_GENERATIONS)
+            }
             viewerStartIndex = null
             viewerImagesSnapshot = null
+            inspectedJobId = null
             isFullscreen = false
             vm.clearPendingGallerySearchQuery()
         }
     }
 
-    val filtered = remember(images, searchQuery, favoritesOnly) {
-        images.filter { img ->
-            if (favoritesOnly && !img.isFavorite) return@filter false
-            GallerySearchFilter.matches(img, searchQuery)
+    val filteredImages = remember(images, searchQuery, favoritesOnly, filterState) {
+        if (!filterState.includesCompleteGenerations) {
+            emptyList()
+        } else {
+            images.filter { img ->
+                if (favoritesOnly && !img.isFavorite) return@filter false
+                GallerySearchFilter.matches(img, searchQuery)
+            }
         }
+    }
+
+    val filteredJobs = remember(jobs, searchQuery, favoritesOnly, filterState, favoritesEnabled) {
+        if (favoritesEnabled && favoritesOnly) {
+            emptyList()
+        } else {
+            jobs.filter { job ->
+                filterState.matchesJob(job) && GallerySearchFilter.matchesJob(job, searchQuery)
+            }
+        }
+    }
+
+    val gridEntries = remember(filteredImages, filteredJobs) {
+        (filteredImages.map { GalleryGridEntry.Completed(it) } +
+            filteredJobs.map { GalleryGridEntry.JobItem(it) })
+            .sortedByDescending { it.createdAtMillis }
     }
 
     val columns = settings.galleryColumns.coerceIn(2, 6)
@@ -189,22 +247,83 @@ fun GalleryScreen(
                 },
                 modifier = Modifier.weight(1f),
             )
+            Box {
+                val filterActive = !filterState.isDefault
+                IconButton(
+                    onClick = { filterMenuExpanded = true },
+                    modifier = Modifier
+                        .testTag("gallery_filter_button")
+                        .size(42.dp)
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(if (filterActive) HordeColors.TealContainer else HordeColors.CardSurface)
+                        .border(
+                            1.dp,
+                            if (filterActive) HordeColors.TealSoft else HordeColors.BorderSubtle,
+                            RoundedCornerShape(10.dp),
+                        ),
+                ) {
+                    Icon(
+                        Icons.Outlined.FilterList,
+                        contentDescription = "Filter generations",
+                        tint = if (filterActive) HordeColors.TealSoft else HordeColors.TextSecondary,
+                    )
+                }
+                DropdownMenu(
+                    expanded = filterMenuExpanded,
+                    onDismissRequest = { filterMenuExpanded = false },
+                ) {
+                    FilterCheckboxMenuItem(
+                        label = "All images",
+                        checked = filterState.isAllSelected,
+                        onToggle = { filterState = filterState.toggleAll() },
+                    )
+                    FilterCheckboxMenuItem(
+                        label = "All queued images",
+                        checked = filterState.isAllQueuedSelected,
+                        onToggle = { filterState = filterState.toggleAllQueued() },
+                    )
+                    HorizontalDivider(color = HordeColors.BorderSubtle)
+                    FilterCheckboxMenuItem(
+                        label = "Locally queued",
+                        checked = GalleryStatusCategory.LOCALLY_QUEUED in filterState.selectedCategories,
+                        onToggle = { filterState = filterState.toggleCategory(GalleryStatusCategory.LOCALLY_QUEUED) },
+                    )
+                    FilterCheckboxMenuItem(
+                        label = "Sent to server",
+                        checked = GalleryStatusCategory.SENT_TO_SERVER in filterState.selectedCategories,
+                        onToggle = { filterState = filterState.toggleCategory(GalleryStatusCategory.SENT_TO_SERVER) },
+                    )
+                    FilterCheckboxMenuItem(
+                        label = "Errors",
+                        checked = GalleryStatusCategory.ERRORS in filterState.selectedCategories,
+                        onToggle = { filterState = filterState.toggleCategory(GalleryStatusCategory.ERRORS) },
+                    )
+                    FilterCheckboxMenuItem(
+                        label = "Complete generations",
+                        checked = GalleryStatusCategory.COMPLETE_GENERATIONS in filterState.selectedCategories,
+                        onToggle = { filterState = filterState.toggleCategory(GalleryStatusCategory.COMPLETE_GENERATIONS) },
+                    )
+                }
+            }
             IconButton(
+                enabled = favoritesEnabled,
                 onClick = { favoritesOnly = !favoritesOnly },
                 modifier = Modifier
+                    .testTag("gallery_favorites_button")
                     .size(42.dp)
+                    .alpha(if (favoritesEnabled) 1f else 0.38f)
                     .clip(RoundedCornerShape(10.dp))
-                    .background(if (favoritesOnly) Color(0x26F43F5E) else HordeColors.CardSurface)
+                    .background(if (favoritesEnabled && favoritesOnly) Color(0x26F43F5E) else HordeColors.CardSurface)
                     .border(
                         1.dp,
-                        if (favoritesOnly) HordeColors.RoseZone else HordeColors.BorderSubtle,
+                        if (favoritesEnabled && favoritesOnly) HordeColors.RoseZone else HordeColors.BorderSubtle,
                         RoundedCornerShape(10.dp),
                     ),
             ) {
                 Icon(
-                    if (favoritesOnly) Icons.Outlined.Favorite else Icons.Outlined.FavoriteBorder,
+                    if (favoritesEnabled && favoritesOnly) Icons.Outlined.Favorite else Icons.Outlined.FavoriteBorder,
                     contentDescription = "Favorites",
-                    tint = if (favoritesOnly) HordeColors.RoseZone else HordeColors.TextSecondary,
+                    tint = if (favoritesEnabled && favoritesOnly) HordeColors.RoseZone else HordeColors.TextSecondary,
                 )
             }
         }
@@ -266,14 +385,24 @@ fun GalleryScreen(
                         }
                     }
                 }
-                Text("${filtered.size} images", fontSize = 11.sp, fontFamily = FontFamily.Monospace, color = HordeColors.TextMuted)
+                val countLabel = if (filterState.isDefault) {
+                    "${gridEntries.size} images"
+                } else {
+                    "${gridEntries.size} items"
+                }
+                Text(countLabel, fontSize = 11.sp, fontFamily = FontFamily.Monospace, color = HordeColors.TextMuted)
             }
         }
 
-        if (filtered.isEmpty()) {
+        if (gridEntries.isEmpty()) {
             Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                 Text(
-                    text = if (searchQuery.isNotBlank() || favoritesOnly) "No matching images" else "No saved WebP images yet",
+                    text = when {
+                        filterState.selectedCategories.isEmpty() -> "No filter categories selected"
+                        !filterState.isDefault || searchQuery.isNotBlank() || (favoritesEnabled && favoritesOnly) ->
+                            "No matching items"
+                        else -> "No saved WebP images yet"
+                    },
                     fontSize = 13.sp,
                     color = HordeColors.TextMuted,
                 )
@@ -286,93 +415,135 @@ fun GalleryScreen(
                 verticalArrangement = Arrangement.spacedBy(8.dp),
                 modifier = Modifier.fillMaxSize(),
             ) {
-                itemsIndexed(filtered, key = { _, item -> item.id }) { idx, img ->
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .aspectRatio(1f)
-                            .clip(RoundedCornerShape(14.dp))
-                            .background(HordeColors.CardSurface)
-                            .border(1.dp, HordeColors.BorderSubtle, RoundedCornerShape(14.dp))
-                            .clickable {
-                                viewerStartIndex = idx
-                                viewerImagesSnapshot = filtered
-                                isFullscreen = settings.skipGalleryModalToFullscreen
-                                fullscreenHudVisible = false
-                            },
-                    ) {
-                        AsyncImage(
-                            model = Uri.parse(img.fileUri),
-                            contentDescription = img.model,
-                            contentScale = ContentScale.Crop,
-                            modifier = Modifier.fillMaxSize(),
-                        )
-                        if (img.partialFromCancel) {
-                            Text(
-                                text = "Stopped early",
-                                fontSize = 10.sp,
-                                color = HordeColors.AmberText,
-                                modifier = Modifier
-                                    .align(Alignment.TopStart)
-                                    .padding(6.dp)
-                                    .clip(RoundedCornerShape(6.dp))
-                                    .background(Color.Black.copy(alpha = 0.65f))
-                                    .padding(horizontal = 6.dp, vertical = 2.dp),
-                            )
-                        }
-                        if (settings.showGalleryPromptOverlay && img.prompt.isNotBlank()) {
+                itemsIndexed(gridEntries, key = { _, entry -> entry.stableKey }) { _, entry ->
+                    when (entry) {
+                        is GalleryGridEntry.Completed -> {
+                            val img = entry.image
                             Box(
                                 modifier = Modifier
-                                    .align(Alignment.BottomCenter)
                                     .fillMaxWidth()
-                                    .background(
-                                        Brush.verticalGradient(
-                                            listOf(Color.Transparent, Color.Black.copy(alpha = 0.80f)),
-                                        ),
-                                    )
-                                    .padding(horizontal = 8.dp, vertical = 6.dp),
+                                    .aspectRatio(1f)
+                                    .clip(RoundedCornerShape(14.dp))
+                                    .background(HordeColors.CardSurface)
+                                    .border(1.dp, HordeColors.BorderSubtle, RoundedCornerShape(14.dp))
+                                    .clickable {
+                                        val imgIdx = filteredImages.indexOfFirst { it.id == img.id }.coerceAtLeast(0)
+                                        viewerStartIndex = imgIdx
+                                        viewerImagesSnapshot = filteredImages
+                                        isFullscreen = settings.skipGalleryModalToFullscreen
+                                        fullscreenHudVisible = false
+                                    },
                             ) {
-                                Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                                AsyncImage(
+                                    model = Uri.parse(img.fileUri),
+                                    contentDescription = img.model,
+                                    contentScale = ContentScale.Crop,
+                                    modifier = Modifier.fillMaxSize(),
+                                )
+                                if (img.partialFromCancel) {
                                     Text(
-                                        text = img.prompt.trim(),
-                                        color = Color.White,
+                                        text = "Stopped early",
                                         fontSize = 10.sp,
-                                        lineHeight = 13.sp,
-                                        maxLines = 2,
-                                        overflow = TextOverflow.Ellipsis,
+                                        color = HordeColors.AmberText,
+                                        modifier = Modifier
+                                            .align(Alignment.TopStart)
+                                            .padding(6.dp)
+                                            .clip(RoundedCornerShape(6.dp))
+                                            .background(Color.Black.copy(alpha = 0.65f))
+                                            .padding(horizontal = 6.dp, vertical = 2.dp),
                                     )
-                                    if (img.createdAtMillis > 0L) {
-                                        Text(
-                                            text = GalleryTimestampFormatter.formatShort(img.createdAtMillis),
-                                            color = Color.White.copy(alpha = 0.72f),
-                                            fontSize = 9.sp,
-                                            fontFamily = FontFamily.Monospace,
-                                            maxLines = 1,
-                                            overflow = TextOverflow.Ellipsis,
-                                        )
+                                }
+                                if (settings.showGalleryPromptOverlay && img.prompt.isNotBlank()) {
+                                    Box(
+                                        modifier = Modifier
+                                            .align(Alignment.BottomCenter)
+                                            .fillMaxWidth()
+                                            .background(
+                                                Brush.verticalGradient(
+                                                    listOf(Color.Transparent, Color.Black.copy(alpha = 0.80f)),
+                                                ),
+                                            )
+                                            .padding(horizontal = 8.dp, vertical = 6.dp),
+                                    ) {
+                                        Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                                            Text(
+                                                text = img.prompt.trim(),
+                                                color = Color.White,
+                                                fontSize = 10.sp,
+                                                lineHeight = 13.sp,
+                                                maxLines = 2,
+                                                overflow = TextOverflow.Ellipsis,
+                                            )
+                                            if (img.createdAtMillis > 0L) {
+                                                Text(
+                                                    text = GalleryTimestampFormatter.formatShort(img.createdAtMillis),
+                                                    color = Color.White.copy(alpha = 0.72f),
+                                                    fontSize = 9.sp,
+                                                    fontFamily = FontFamily.Monospace,
+                                                    maxLines = 1,
+                                                    overflow = TextOverflow.Ellipsis,
+                                                )
+                                            }
+                                        }
                                     }
+                                }
+                                IconButton(
+                                    onClick = { vm.toggleImageFavorite(img.id, img.isFavorite) },
+                                    modifier = Modifier
+                                        .align(Alignment.TopEnd)
+                                        .padding(4.dp)
+                                        .size(32.dp)
+                                        .clip(CircleShape)
+                                        .background(Color.Black.copy(alpha = 0.45f)),
+                                ) {
+                                    Icon(
+                                        if (img.isFavorite) Icons.Outlined.Favorite else Icons.Outlined.FavoriteBorder,
+                                        contentDescription = "Favorite",
+                                        tint = if (img.isFavorite) HordeColors.RoseZone else Color.White,
+                                        modifier = Modifier.size(16.dp),
+                                    )
                                 }
                             }
                         }
-                        IconButton(
-                            onClick = { vm.toggleImageFavorite(img.id, img.isFavorite) },
-                            modifier = Modifier
-                                .align(Alignment.TopEnd)
-                                .padding(4.dp)
-                                .size(32.dp)
-                                .clip(CircleShape)
-                                .background(Color.Black.copy(alpha = 0.45f)),
-                        ) {
-                            Icon(
-                                if (img.isFavorite) Icons.Outlined.Favorite else Icons.Outlined.FavoriteBorder,
-                                contentDescription = "Favorite",
-                                tint = if (img.isFavorite) HordeColors.RoseZone else Color.White,
-                                modifier = Modifier.size(16.dp),
+
+                        is GalleryGridEntry.JobItem -> {
+                            GalleryJobGridCard(
+                                job = entry.job,
+                                onClick = { inspectedJobId = entry.job.id },
                             )
                         }
                     }
                 }
             }
+        }
+    }
+
+    inspectedJobId?.let { targetJobId ->
+        val currentJob = jobs.firstOrNull { it.id == targetJobId }
+        if (currentJob == null) {
+            inspectedJobId = null
+        } else {
+            GalleryJobDetailDialog(
+                job = currentJob,
+                onDismiss = { inspectedJobId = null },
+                onCancel = {
+                    vm.cancelJob(currentJob.id)
+                    inspectedJobId = null
+                },
+                onRemoveJob = {
+                    vm.dismissJob(currentJob.id)
+                    inspectedJobId = null
+                },
+                onCopyText = vm::copyText,
+                onCopyCurl = vm::copyJsonRequestAsCurl,
+                onViewCompleted = { reqId ->
+                    inspectedJobId = null
+                    searchQuery = reqId
+                    if (!filterState.includesCompleteGenerations) {
+                        filterState = filterState.toggleCategory(GalleryStatusCategory.COMPLETE_GENERATIONS)
+                    }
+                },
+            )
         }
     }
 
@@ -386,7 +557,7 @@ fun GalleryScreen(
     }
 
     viewerStartIndex?.let { startIndex ->
-        val currentViewerList = activeViewerImages ?: filtered
+        val currentViewerList = activeViewerImages ?: filteredImages
         if (currentViewerList.isNotEmpty()) {
             val safeStart = startIndex.coerceIn(0, currentViewerList.lastIndex)
             GalleryViewerModal(
@@ -1063,4 +1234,278 @@ private fun OverlayPill(
     ) {
         Text(label, fontSize = 11.sp, color = if (isDanger) HordeColors.RoseText else Color.White)
     }
+}
+
+@Composable
+private fun FilterCheckboxMenuItem(
+    label: String,
+    checked: Boolean,
+    onToggle: () -> Unit,
+) {
+    DropdownMenuItem(
+        text = {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                Checkbox(
+                    checked = checked,
+                    onCheckedChange = null,
+                )
+                Text(
+                    text = label,
+                    fontSize = 13.sp,
+                    color = HordeColors.TextPrimary,
+                )
+            }
+        },
+        onClick = onToggle,
+    )
+}
+
+@Composable
+private fun GalleryJobGridCard(
+    job: HordeJob,
+    onClick: () -> Unit,
+) {
+    val isError = job.status == JobStatus.FAILED
+    val isLocal = job.status == JobStatus.LOCAL_QUEUED ||
+        (job.status == JobStatus.PAUSED && job.requestId.isBlank())
+    val accentColor = when {
+        isError -> HordeColors.RoseZone
+        isLocal -> HordeColors.AmberText
+        job.status == JobStatus.PAUSED -> HordeColors.TextSecondary
+        else -> HordeColors.TealSoft
+    }
+    val statusBadge = when (job.status) {
+        JobStatus.LOCAL_QUEUED -> "Local"
+        JobStatus.PAUSED -> if (job.requestId.isBlank()) "Paused (local)" else "Paused"
+        JobStatus.QUEUED -> "Sent"
+        JobStatus.PROCESSING -> if (job.waitTimeSeconds > 0) "~${job.waitTimeSeconds}s" else "Running"
+        JobStatus.FAILED -> "Error"
+        JobStatus.COMPLETED -> "Done"
+        JobStatus.CANCELLED_PARTIAL -> "Partial"
+    }
+    val statusIcon = when {
+        isError -> Icons.Outlined.ErrorOutline
+        job.status == JobStatus.PAUSED -> Icons.Outlined.PauseCircleOutline
+        isLocal -> Icons.Outlined.Schedule
+        else -> Icons.Outlined.CloudQueue
+    }
+
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .aspectRatio(1f)
+            .clip(RoundedCornerShape(14.dp))
+            .background(HordeColors.CardSurface)
+            .border(1.dp, accentColor.copy(alpha = 0.55f), RoundedCornerShape(14.dp))
+            .clickable(onClick = onClick)
+            .padding(8.dp),
+    ) {
+        Column(
+            modifier = Modifier.fillMaxSize(),
+            verticalArrangement = Arrangement.SpaceBetween,
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(6.dp))
+                        .background(accentColor.copy(alpha = 0.18f))
+                        .padding(horizontal = 6.dp, vertical = 2.dp),
+                ) {
+                    Icon(statusIcon, contentDescription = null, tint = accentColor, modifier = Modifier.size(12.dp))
+                    Text(
+                        text = statusBadge,
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = accentColor,
+                        maxLines = 1,
+                    )
+                }
+                Text(
+                    text = "${job.finished}/${job.total}",
+                    fontSize = 10.sp,
+                    fontFamily = FontFamily.Monospace,
+                    color = HordeColors.TextSecondary,
+                )
+            }
+
+            Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                Text(
+                    text = job.prompt.ifBlank { "(No prompt)" },
+                    fontSize = 11.sp,
+                    lineHeight = 14.sp,
+                    color = HordeColors.TextPrimary,
+                    maxLines = 3,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                if (isError && !job.errorMessage.isNullOrBlank()) {
+                    Text(
+                        text = job.errorMessage,
+                        fontSize = 10.sp,
+                        color = HordeColors.RoseText,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+            }
+
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                if (job.status == JobStatus.LOCAL_QUEUED ||
+                    job.status == JobStatus.QUEUED ||
+                    job.status == JobStatus.PROCESSING
+                ) {
+                    val progress = if (job.total > 0) job.finished.toFloat() / job.total else 0f
+                    LinearProgressIndicator(
+                        progress = { progress.coerceIn(0f, 1f) },
+                        color = accentColor,
+                        trackColor = HordeColors.SubCardSurface,
+                        modifier = Modifier.fillMaxWidth().height(3.dp),
+                    )
+                }
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                ) {
+                    Text(
+                        text = job.models.firstOrNull().orEmpty(),
+                        fontSize = 9.sp,
+                        fontFamily = FontFamily.Monospace,
+                        color = HordeColors.TealSoft,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f),
+                    )
+                    Spacer(Modifier.width(4.dp))
+                    Text(
+                        text = GalleryTimestampFormatter.formatShort(job.createdAtMillis),
+                        fontSize = 9.sp,
+                        fontFamily = FontFamily.Monospace,
+                        color = HordeColors.TextMuted,
+                        maxLines = 1,
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun GalleryJobDetailDialog(
+    job: HordeJob,
+    onDismiss: () -> Unit,
+    onCancel: () -> Unit,
+    onRemoveJob: () -> Unit,
+    onCopyText: (String, String) -> Unit,
+    onCopyCurl: (String) -> Unit,
+    onViewCompleted: (String) -> Unit,
+) {
+    val isActive = job.status == JobStatus.LOCAL_QUEUED ||
+        job.status == JobStatus.QUEUED ||
+        job.status == JobStatus.PROCESSING ||
+        job.status == JobStatus.PAUSED
+    val statusLabel = when (job.status) {
+        JobStatus.LOCAL_QUEUED -> "Queued locally (awaiting dispatch)"
+        JobStatus.QUEUED -> "Sent to server (queued)"
+        JobStatus.PROCESSING -> "Processing (#${job.queuePosition}, ~${job.waitTimeSeconds}s)"
+        JobStatus.PAUSED -> if (job.requestId.isBlank()) "Paused (local)" else "Paused (server)"
+        JobStatus.COMPLETED -> "Completed"
+        JobStatus.CANCELLED_PARTIAL -> "Stopped early (${job.finished}/${job.total})"
+        JobStatus.FAILED -> "Error"
+    }
+    val detailsText = buildString {
+        appendLine("Status: $statusLabel")
+        appendLine("Request ID: ${job.requestId.ifBlank { "Pending local dispatch" }}")
+        appendLine("Models: ${job.models.joinToString(", ")}")
+        appendLine("Progress: ${job.finished}/${job.total} finished (${job.processing} processing)")
+        appendLine("Queued at: ${GalleryTimestampFormatter.formatFull(job.createdAtMillis)}")
+        if (!job.errorMessage.isNullOrBlank()) {
+            appendLine()
+            appendLine("Error:")
+            appendLine(job.errorMessage)
+        }
+        appendLine()
+        appendLine("Prompt:")
+        appendLine(job.prompt)
+        if (job.negativePrompt.isNotBlank()) {
+            appendLine()
+            appendLine("Negative:")
+            appendLine(job.negativePrompt)
+        }
+    }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        containerColor = HordeColors.CardSurface,
+        title = {
+            Text(
+                text = if (job.status == JobStatus.FAILED) "Generation Error" else "Queued Generation",
+                color = HordeColors.TextPrimary,
+            )
+        },
+        text = {
+            Column(
+                modifier = Modifier
+                    .heightIn(max = 360.dp)
+                    .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(HordeColors.SubCardSurface, RoundedCornerShape(8.dp))
+                        .padding(10.dp),
+                ) {
+                    Text(
+                        text = detailsText,
+                        fontSize = 11.sp,
+                        fontFamily = FontFamily.Monospace,
+                        color = HordeColors.TextSecondary,
+                    )
+                }
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    modifier = Modifier.horizontalScroll(rememberScrollState()),
+                ) {
+                    OutlinedButton(onClick = { onCopyText("request JSON", job.submittedPayloadJson) }) {
+                        Text("Copy JSON", fontSize = 11.sp)
+                    }
+                    OutlinedButton(onClick = { onCopyCurl(job.submittedPayloadJson) }) {
+                        Text("curl", fontSize = 11.sp)
+                    }
+                    if (job.finished > 0 && job.requestId.isNotBlank()) {
+                        OutlinedButton(onClick = { onViewCompleted(job.requestId) }) {
+                            Text("View saved (${job.finished})", fontSize = 11.sp)
+                        }
+                    }
+                }
+            }
+        },
+        dismissButton = {
+            if (isActive) {
+                Button(
+                    colors = ButtonDefaults.buttonColors(containerColor = HordeColors.RoseZone),
+                    onClick = onCancel,
+                ) {
+                    Text("Cancel job", color = Color.White)
+                }
+            } else {
+                OutlinedButton(onClick = onRemoveJob) {
+                    Text("Dismiss")
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Close")
+            }
+        },
+    )
 }

@@ -535,12 +535,101 @@ object GallerySearchFilter {
         return matchesPositiveOrMeta(image, rawQuery.trim().lowercase())
     }
 
+    fun matchesJob(job: HordeJob, rawQuery: String): Boolean {
+        if (rawQuery.isBlank()) return true
+        val idx = rawQuery.indexOf("###")
+        if (idx >= 0) {
+            val posQuery = rawQuery.substring(0, idx).trim().lowercase()
+            val negQuery = rawQuery.substring(idx + 3).trim().lowercase()
+            val posMatches = if (posQuery.isEmpty()) true else matchesJobPositiveOrMeta(job, posQuery)
+            val negMatches = if (negQuery.isEmpty()) true else job.negativePrompt.lowercase().contains(negQuery)
+            return posMatches && negMatches
+        }
+        return matchesJobPositiveOrMeta(job, rawQuery.trim().lowercase())
+    }
+
     private fun matchesPositiveOrMeta(image: SavedImage, query: String): Boolean =
         image.prompt.lowercase().contains(query) ||
             image.model.lowercase().contains(query) ||
             image.requestId.lowercase().contains(query) ||
             image.generationId.lowercase().contains(query) ||
             image.seed.lowercase().contains(query)
+
+    private fun matchesJobPositiveOrMeta(job: HordeJob, query: String): Boolean =
+        job.prompt.lowercase().contains(query) ||
+            job.models.any { it.lowercase().contains(query) } ||
+            job.requestId.lowercase().contains(query) ||
+            job.id.lowercase().contains(query) ||
+            (job.errorMessage?.lowercase()?.contains(query) == true)
+}
+
+enum class GalleryStatusCategory {
+    LOCALLY_QUEUED,
+    SENT_TO_SERVER,
+    ERRORS,
+    COMPLETE_GENERATIONS,
+}
+
+data class GalleryFilterState(
+    val selectedCategories: Set<GalleryStatusCategory> = setOf(GalleryStatusCategory.COMPLETE_GENERATIONS),
+) {
+    val includesCompleteGenerations: Boolean
+        get() = GalleryStatusCategory.COMPLETE_GENERATIONS in selectedCategories
+
+    val isAllSelected: Boolean
+        get() = selectedCategories.containsAll(GalleryStatusCategory.entries)
+
+    val isAllQueuedSelected: Boolean
+        get() = GalleryStatusCategory.LOCALLY_QUEUED in selectedCategories &&
+            GalleryStatusCategory.SENT_TO_SERVER in selectedCategories
+
+    val isDefault: Boolean
+        get() = selectedCategories == setOf(GalleryStatusCategory.COMPLETE_GENERATIONS)
+
+    fun toggleCategory(category: GalleryStatusCategory): GalleryFilterState {
+        val next = if (category in selectedCategories) {
+            selectedCategories - category
+        } else {
+            selectedCategories + category
+        }
+        return copy(selectedCategories = next)
+    }
+
+    fun toggleAll(): GalleryFilterState =
+        if (isAllSelected) {
+            copy(selectedCategories = emptySet())
+        } else {
+            copy(selectedCategories = GalleryStatusCategory.entries.toSet())
+        }
+
+    fun toggleAllQueued(): GalleryFilterState {
+        val queuedSet = setOf(
+            GalleryStatusCategory.LOCALLY_QUEUED,
+            GalleryStatusCategory.SENT_TO_SERVER,
+        )
+        val next = if (isAllQueuedSelected) {
+            selectedCategories - queuedSet
+        } else {
+            selectedCategories + queuedSet
+        }
+        return copy(selectedCategories = next)
+    }
+
+    fun jobCategory(job: HordeJob): GalleryStatusCategory? =
+        when (job.status) {
+            JobStatus.LOCAL_QUEUED -> GalleryStatusCategory.LOCALLY_QUEUED
+            JobStatus.PAUSED ->
+                if (job.requestId.isBlank()) GalleryStatusCategory.LOCALLY_QUEUED
+                else GalleryStatusCategory.SENT_TO_SERVER
+            JobStatus.QUEUED, JobStatus.PROCESSING -> GalleryStatusCategory.SENT_TO_SERVER
+            JobStatus.FAILED -> GalleryStatusCategory.ERRORS
+            JobStatus.COMPLETED, JobStatus.CANCELLED_PARTIAL -> null
+        }
+
+    fun matchesJob(job: HordeJob): Boolean {
+        val cat = jobCategory(job) ?: return false
+        return cat in selectedCategories
+    }
 }
 
 object GalleryTimestampFormatter {
