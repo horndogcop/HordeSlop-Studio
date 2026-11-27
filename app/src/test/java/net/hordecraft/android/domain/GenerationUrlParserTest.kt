@@ -235,5 +235,99 @@ class GenerationUrlParserTest {
         assertTrue(encodedFragment!!.hasMetadata)
         assertEquals("encoded value", encodedFragment.metadata.prompt)
     }
+
+    private fun createPackedStudioLink(jsonPayload: String): String {
+        val deflater = java.util.zip.Deflater(java.util.zip.Deflater.DEFAULT_COMPRESSION, true)
+        val input = jsonPayload.toByteArray(Charsets.UTF_8)
+        deflater.setInput(input)
+        deflater.finish()
+        val buffer = ByteArray(1024)
+        val baos = java.io.ByteArrayOutputStream()
+        while (!deflater.finished()) {
+            val count = deflater.deflate(buffer)
+            baos.write(buffer, 0, count)
+        }
+        deflater.end()
+        return Base64.getUrlEncoder().withoutPadding().encodeToString(baos.toByteArray())
+    }
+
+    @Test
+    fun parsesAiHordeFrontpageStudioLinkWithPackedR() {
+        val payload = """
+            {
+              "v": 1,
+              "request": {
+                "prompt": "futuristic flying car ### cartoon, blurry",
+                "models": ["AlbedoBase XL (SDXL)"],
+                "params": {
+                  "steps": 30,
+                  "cfg_scale": 6.5,
+                  "sampler_name": "k_dpmpp_2m",
+                  "karras": true,
+                  "seed": "424242",
+                  "width": 1024,
+                  "height": 1024,
+                  "clip_skip": 1,
+                  "loras": [{"name": "cyberpunk_style", "model": 0.8}]
+                }
+              },
+              "style": "Sci-Fi",
+              "overridesStyleLoras": true
+            }
+        """.trimIndent()
+        val packedR = createPackedStudioLink(payload)
+        val url = "https://aihorde.net/generate/image?r=$packedR"
+
+        val result = GenerationUrlParser.parseString(url)
+        assertNotNull(result)
+        result!!
+        assertTrue(result.hasMetadata)
+        assertEquals("AI Horde", result.metadata.generatorSource)
+        assertEquals("futuristic flying car", result.metadata.prompt)
+        assertEquals("cartoon, blurry", result.metadata.negativePrompt)
+        assertEquals("AlbedoBase XL (SDXL)", result.metadata.model)
+        assertEquals(30, result.metadata.steps)
+        assertEquals(6.5f, result.metadata.cfg ?: 0f, 0.01f)
+        assertEquals("k_dpmpp_2m", result.metadata.sampler)
+        assertEquals("karras", result.metadata.scheduler)
+        assertEquals("424242", result.metadata.seed)
+        assertEquals(1024, result.metadata.width)
+        assertEquals(1024, result.metadata.height)
+        assertEquals(1, result.metadata.clipSkip)
+        assertEquals(listOf("cyberpunk_style (0.8)"), result.metadata.loras)
+        assertEquals("curated:Sci-Fi", result.metadata.rawFields["styleKey"])
+        assertEquals("Sci-Fi", result.metadata.rawFields["style"])
+        assertEquals("true", result.metadata.rawFields["overridesStyleLoras"])
+    }
+
+    @Test
+    fun parsesAiHordeFrontpageStudioLinkWithOpenOverridesAndTitle() {
+        val payload = """{"v":1,"request":{"prompt":"ancient ruins","models":["DefaultModel"]},"style":"Fantasy"}"""
+        val packedR = createPackedStudioLink(payload)
+        val url = "https://aihorde.net/generate/image?r=$packedR&model=OverriddenModel&styleId=12345&title=Ancient+Wonders"
+
+        val result = GenerationUrlParser.parseString(url)
+        assertNotNull(result)
+        result!!
+        assertTrue(result.hasMetadata)
+        assertEquals("ancient ruins", result.metadata.prompt)
+        assertEquals("OverriddenModel", result.metadata.model)
+        assertEquals("native:12345", result.metadata.rawFields["styleKey"])
+        assertEquals("Ancient Wonders", result.metadata.rawFields["title"])
+    }
+
+    @Test
+    fun parsesAiHordeSimpleModelAndStyleLinkWithoutR() {
+        val url = "https://aihorde.net/generate/image?model=Deliberate&style=Anime"
+        val result = GenerationUrlParser.parseString(url)
+        assertNotNull(result)
+        result!!
+        assertTrue(result.hasMetadata)
+        assertEquals("AI Horde", result.metadata.generatorSource)
+        assertEquals("Deliberate", result.metadata.model)
+        assertEquals("curated:Anime", result.metadata.rawFields["styleKey"])
+        assertEquals("Anime", result.metadata.rawFields["style"])
+    }
 }
+
 

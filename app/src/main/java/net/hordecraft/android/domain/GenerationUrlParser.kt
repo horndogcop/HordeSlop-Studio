@@ -10,6 +10,10 @@ import android.provider.Settings
 import java.io.ByteArrayOutputStream
 import java.net.URI
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.floatOrNull
 import kotlinx.serialization.json.intOrNull
@@ -69,7 +73,7 @@ object GenerationUrlParser {
             parseFragmentParameters(rawFragment, params)
         }
 
-        // 3. Inspect nested JSON payloads in `share`, `request`, `params`, `create`, `data`, `json`
+        // 3. Inspect AI Horde studio link parameters (readLink from AiHordeFrontpage studio-link.ts) or nested JSON payloads
         var jsonPrompt = ""
         var jsonNegPrompt = ""
         var jsonModel: String? = null
@@ -83,60 +87,75 @@ object GenerationUrlParser {
         var jsonClipSkip: Int? = null
         val jsonLoras = mutableListOf<String>()
 
-        val jsonCandidate = listOfNotNull(
-            params["share"],
-            params["request"],
-            params["params"],
-            params["create"],
-            params["data"],
-            params["json"],
-        ).firstOrNull()
+        val studioPayload = readLink { key -> params[key] }
+        val rootJson = if (studioPayload != null) {
+            studioPayload.styleKey?.let {
+                params["styleKey"] = it
+                params["style"] = it.substringAfter(':')
+            }
+            studioPayload.title?.let {
+                params["title"] = it
+            }
+            if (studioPayload.overridesStyleLoras) {
+                params["overridesStyleLoras"] = "true"
+            }
+            studioPayload.request
+        } else {
+            val jsonCandidate = listOfNotNull(
+                params["share"],
+                params["request"],
+                params["params"],
+                params["create"],
+                params["data"],
+                params["json"],
+            ).firstOrNull()
+            if (jsonCandidate != null) {
+                val decodedJson = decodeJsonOrBase64(jsonCandidate)
+                if (decodedJson != null && decodedJson.startsWith("{")) {
+                    runCatching { json.parseToJsonElement(decodedJson).jsonObject }.getOrNull()
+                } else null
+            } else null
+        }
 
-        if (jsonCandidate != null) {
-            val decodedJson = decodeJsonOrBase64(jsonCandidate)
-            if (decodedJson != null && decodedJson.startsWith("{")) {
+        if (rootJson != null) {
+            val rawPrompt = rootJson["prompt"]?.jsonPrimitive?.contentOrNull.orEmpty()
+            if (rawPrompt.contains("###")) {
+                jsonPrompt = rawPrompt.substringBefore("###").trim()
+                jsonNegPrompt = rawPrompt.substringAfter("###").trim()
+            } else {
+                jsonPrompt = rawPrompt
+                jsonNegPrompt = rootJson["negative_prompt"]?.jsonPrimitive?.contentOrNull
+                    ?: rootJson["negative"]?.jsonPrimitive?.contentOrNull
+                    ?: rootJson["uc"]?.jsonPrimitive?.contentOrNull.orEmpty()
+            }
+
+            jsonModel = runCatching {
+                rootJson["models"]?.jsonArray?.firstOrNull()?.jsonPrimitive?.contentOrNull
+            }.getOrNull() ?: rootJson["model"]?.jsonPrimitive?.contentOrNull
+
+            val pObj = runCatching { rootJson["params"]?.jsonObject }.getOrNull() ?: rootJson
+            jsonSteps = pObj["steps"]?.jsonPrimitive?.intOrNull
+            jsonCfg = pObj["cfg_scale"]?.jsonPrimitive?.floatOrNull ?: pObj["cfg"]?.jsonPrimitive?.floatOrNull
+            jsonSampler = pObj["sampler_name"]?.jsonPrimitive?.contentOrNull ?: pObj["sampler"]?.jsonPrimitive?.contentOrNull
+            jsonScheduler = pObj["scheduler"]?.jsonPrimitive?.contentOrNull
+            if (jsonScheduler == null && pObj["karras"]?.jsonPrimitive?.contentOrNull == "true") {
+                jsonScheduler = "karras"
+            }
+            jsonSeed = pObj["seed"]?.jsonPrimitive?.contentOrNull
+            jsonWidth = pObj["width"]?.jsonPrimitive?.intOrNull
+            jsonHeight = pObj["height"]?.jsonPrimitive?.intOrNull
+            jsonClipSkip = pObj["clip_skip"]?.jsonPrimitive?.intOrNull
+
+            val loraArray = runCatching { pObj["loras"]?.jsonArray ?: rootJson["loras"]?.jsonArray }.getOrNull()
+            loraArray?.forEach { elem ->
                 runCatching {
-                    val root = json.parseToJsonElement(decodedJson).jsonObject
-                    val rawPrompt = root["prompt"]?.jsonPrimitive?.contentOrNull.orEmpty()
-                    if (rawPrompt.contains("###")) {
-                        jsonPrompt = rawPrompt.substringBefore("###").trim()
-                        jsonNegPrompt = rawPrompt.substringAfter("###").trim()
-                    } else {
-                        jsonPrompt = rawPrompt
-                        jsonNegPrompt = root["negative_prompt"]?.jsonPrimitive?.contentOrNull
-                            ?: root["negative"]?.jsonPrimitive?.contentOrNull
-                            ?: root["uc"]?.jsonPrimitive?.contentOrNull.orEmpty()
-                    }
-
-                    jsonModel = runCatching {
-                        root["models"]?.jsonArray?.firstOrNull()?.jsonPrimitive?.contentOrNull
-                    }.getOrNull() ?: root["model"]?.jsonPrimitive?.contentOrNull
-
-                    val pObj = runCatching { root["params"]?.jsonObject }.getOrNull() ?: root
-                    jsonSteps = pObj["steps"]?.jsonPrimitive?.intOrNull
-                    jsonCfg = pObj["cfg_scale"]?.jsonPrimitive?.floatOrNull ?: pObj["cfg"]?.jsonPrimitive?.floatOrNull
-                    jsonSampler = pObj["sampler_name"]?.jsonPrimitive?.contentOrNull ?: pObj["sampler"]?.jsonPrimitive?.contentOrNull
-                    jsonScheduler = pObj["scheduler"]?.jsonPrimitive?.contentOrNull
-                    if (jsonScheduler == null && pObj["karras"]?.jsonPrimitive?.contentOrNull == "true") {
-                        jsonScheduler = "karras"
-                    }
-                    jsonSeed = pObj["seed"]?.jsonPrimitive?.contentOrNull
-                    jsonWidth = pObj["width"]?.jsonPrimitive?.intOrNull
-                    jsonHeight = pObj["height"]?.jsonPrimitive?.intOrNull
-                    jsonClipSkip = pObj["clip_skip"]?.jsonPrimitive?.intOrNull
-
-                    val loraArray = runCatching { pObj["loras"]?.jsonArray ?: root["loras"]?.jsonArray }.getOrNull()
-                    loraArray?.forEach { elem ->
-                        runCatching {
-                            val obj = elem.jsonObject
-                            val name = obj["name"]?.jsonPrimitive?.contentOrNull
-                            val strength = obj["model"]?.jsonPrimitive?.floatOrNull ?: 1.0f
-                            if (!name.isNullOrBlank()) jsonLoras += "$name ($strength)"
-                        }.onFailure {
-                            elem.jsonPrimitive.contentOrNull?.takeIf { s -> s.isNotBlank() }?.let { s ->
-                                jsonLoras += s
-                            }
-                        }
+                    val obj = elem.jsonObject
+                    val name = obj["name"]?.jsonPrimitive?.contentOrNull
+                    val strength = obj["model"]?.jsonPrimitive?.floatOrNull ?: 1.0f
+                    if (!name.isNullOrBlank()) jsonLoras += "$name ($strength)"
+                }.onFailure {
+                    elem.jsonPrimitive.contentOrNull?.takeIf { s -> s.isNotBlank() }?.let { s ->
+                        jsonLoras += s
                     }
                 }
             }
@@ -201,7 +220,8 @@ object GenerationUrlParser {
             seed != null ||
             (width != null && height != null) ||
             clipSkip != null ||
-            jsonLoras.isNotEmpty()
+            jsonLoras.isNotEmpty() ||
+            studioPayload != null
 
         val meta = ParsedImageMetadata(
             format = "URL",
@@ -442,7 +462,162 @@ object GenerationUrlParser {
         return String(out.toByteArray(), Charsets.UTF_8)
     }
 
-    private val BASE64_FRIENDLY_KEYS = setOf("share", "request", "params", "create", "data", "json")
+    private val BASE64_FRIENDLY_KEYS = setOf("share", "request", "params", "create", "data", "json", "r")
+
+    private const val STUDIO_LINK_VERSION = 1
+    const val STUDIO_LINK_MAX_PARAM_CHARS = 4096
+    private const val MAX_UNPACKED_BYTES = 32768
+
+    data class StudioLinkPayload(
+        val request: JsonObject,
+        val styleKey: String?,
+        val overridesStyleLoras: Boolean,
+        val kind: String, // "simple" | "full"
+        val title: String?,
+    )
+
+    fun readLink(get: (String) -> String?): StudioLinkPayload? {
+        val packed = get("r")
+        val unpacked = if (!packed.isNullOrBlank()) unpackStudioRequest(packed.trim()) else null
+        val model = get("model")?.trim().orEmpty()
+        val style = get("style")?.trim().orEmpty()
+        val styleId = (get("styleid") ?: get("styleId"))?.trim().orEmpty()
+        val givenTitle = get("title")?.trim().orEmpty()
+        val title = if (givenTitle.isNotEmpty() && givenTitle.length <= STUDIO_LINK_MAX_PARAM_CHARS) {
+            givenTitle
+        } else {
+            null
+        }
+
+        val named = when {
+            styleId.isNotEmpty() -> "native:$styleId"
+            style.isNotEmpty() -> "curated:$style"
+            else -> null
+        }
+
+        if (unpacked != null) {
+            val reqMap = unpacked.request.toMutableMap()
+            if (model.isNotEmpty()) {
+                reqMap["models"] = JsonArray(listOf(JsonPrimitive(model)))
+            }
+            val finalStyleKey = named ?: unpacked.styleKey
+            val overrides = unpacked.overridesStyleLoras &&
+                unpacked.styleKey != null &&
+                (named == null || named == unpacked.styleKey)
+            return StudioLinkPayload(
+                request = JsonObject(reqMap),
+                styleKey = finalStyleKey,
+                overridesStyleLoras = overrides,
+                kind = "full",
+                title = title,
+            )
+        }
+
+        if (model.isEmpty() && named == null) {
+            return null
+        }
+
+        val simpleReq = buildMap {
+            put("prompt", JsonPrimitive(""))
+            if (model.isNotEmpty()) {
+                put("models", JsonArray(listOf(JsonPrimitive(model))))
+            }
+        }
+        return StudioLinkPayload(
+            request = JsonObject(simpleReq),
+            styleKey = named,
+            overridesStyleLoras = false,
+            kind = "simple",
+            title = title,
+        )
+    }
+
+    private data class UnpackedStudioRequest(
+        val request: JsonObject,
+        val styleKey: String?,
+        val overridesStyleLoras: Boolean,
+    )
+
+    private fun unpackStudioRequest(packed: String): UnpackedStudioRequest? {
+        if (packed.isEmpty() || packed.length > STUDIO_LINK_MAX_PARAM_CHARS) return null
+        val bytes = fromBase64Url(packed) ?: return null
+        val inflated = inflateDeflateBytes(bytes) ?: return null
+        if (inflated.size > MAX_UNPACKED_BYTES) return null
+        val jsonString = runCatching { String(inflated, Charsets.UTF_8) }.getOrNull() ?: return null
+        val root = runCatching { json.parseToJsonElement(jsonString).jsonObject }.getOrNull() ?: return null
+        if (root["v"]?.jsonPrimitive?.intOrNull != STUDIO_LINK_VERSION) return null
+        val rawRequest = root["request"]?.jsonObject ?: return null
+        val styleId = (root["styleId"] ?: root["styleid"])?.jsonPrimitive?.contentOrNull?.trim().orEmpty()
+        val style = root["style"]?.jsonPrimitive?.contentOrNull?.trim().orEmpty()
+        val styleKey = when {
+            styleId.isNotEmpty() -> "native:$styleId"
+            style.isNotEmpty() -> "curated:$style"
+            else -> null
+        }
+        val overrides = root["overridesStyleLoras"]?.jsonPrimitive?.booleanOrNull == true
+        return UnpackedStudioRequest(
+            request = rawRequest,
+            styleKey = styleKey,
+            overridesStyleLoras = overrides,
+        )
+    }
+
+    private fun fromBase64Url(text: String): ByteArray? {
+        if (text.isEmpty() || text.length > STUDIO_LINK_MAX_PARAM_CHARS) return null
+        for (i in 0 until text.length) {
+            val c = text[i]
+            val valid = (c in 'A'..'Z') || (c in 'a'..'z') || (c in '0'..'9') || c == '-' || c == '_'
+            if (!valid) return null
+        }
+        val padded = when (text.length % 4) {
+            2 -> "$text=="
+            3 -> "$text="
+            1 -> return null
+            else -> text
+        }.replace('-', '+').replace('_', '/')
+        return decodeBase64Bytes(padded)
+    }
+
+    private fun inflateDeflateBytes(bytes: ByteArray, maxBytes: Int = MAX_UNPACKED_BYTES): ByteArray? {
+        val rawInflater = java.util.zip.Inflater(true)
+        val rawResult = runCatching {
+            rawInflater.setInput(bytes)
+            val buffer = ByteArray(1024)
+            val baos = ByteArrayOutputStream()
+            while (!rawInflater.finished()) {
+                val count = rawInflater.inflate(buffer)
+                if (count == 0) {
+                    if (rawInflater.needsInput() || rawInflater.needsDictionary()) break
+                }
+                baos.write(buffer, 0, count)
+                if (baos.size() > maxBytes) return null
+            }
+            baos.toByteArray()
+        }.getOrNull()
+        rawInflater.end()
+
+        if (rawResult != null && rawResult.isNotEmpty()) {
+            return rawResult
+        }
+
+        val zlibInflater = java.util.zip.Inflater(false)
+        val zlibResult = runCatching {
+            zlibInflater.setInput(bytes)
+            val buffer = ByteArray(1024)
+            val baos = ByteArrayOutputStream()
+            while (!zlibInflater.finished()) {
+                val count = zlibInflater.inflate(buffer)
+                if (count == 0) {
+                    if (zlibInflater.needsInput() || zlibInflater.needsDictionary()) break
+                }
+                baos.write(buffer, 0, count)
+                if (baos.size() > maxBytes) return null
+            }
+            baos.toByteArray()
+        }.getOrNull()
+        zlibInflater.end()
+        return zlibResult
+    }
 
     fun forwardToBrowser(context: Context, url: String): Boolean {
         val uri = runCatching { Uri.parse(url) }.getOrNull() ?: return false
