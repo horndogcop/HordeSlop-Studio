@@ -12,6 +12,19 @@
         android:name="android.permission.WRITE_EXTERNAL_STORAGE"
         android:maxSdkVersion="28" />
 
+    <queries>
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <category android:name="android.intent.category.BROWSABLE" />
+            <data android:scheme="https" />
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <category android:name="android.intent.category.BROWSABLE" />
+            <data android:scheme="http" />
+        </intent>
+    </queries>
+
     <application
         android:name=".HordecraftApp"
         android:allowBackup="true"
@@ -41,7 +54,38 @@
             android:label="@string/title_activity_image"
             android:launchMode="singleTask"
             android:taskAffinity="net.hordeslop.studio.task.studio"
-            android:windowSoftInputMode="adjustResize" />
+            android:windowSoftInputMode="adjustResize">
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="http" />
+                <data android:scheme="https" />
+                <data android:host="aihorde.net" />
+                <data android:host="www.aihorde.net" />
+                <data android:host="stableui.org" />
+                <data android:host="www.stableui.org" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="http" />
+                <data android:scheme="https" />
+                <data android:host="tinybots.net" />
+                <data android:host="www.tinybots.net" />
+                <data android:pathPrefix="/artbot" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="http" />
+                <data android:scheme="https" />
+                <data android:host="aqualxx.github.io" />
+                <data android:pathPrefix="/stable-ui" />
+            </intent-filter>
+        </activity>
 
         <!-- Switchable Launcher Icons -->
         <activity-alias

@@ -374,6 +374,26 @@ fun SettingsScreen(
                     valueRange = 1f..30f,
                     steps = 28,
                 )
+
+                HorizontalDivider(color = HordeColors.BorderSubtle)
+
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(HordeColors.SubCardSurface)
+                        .border(1.dp, HordeColors.BorderSubtle, RoundedCornerShape(10.dp))
+                        .clickable { net.hordeslop.studio.domain.GenerationUrlParser.openByDefaultSettings(context) }
+                        .padding(10.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Column(Modifier.weight(1f)) {
+                        Text("Open Supported Links", fontSize = 13.sp, color = HordeColors.TextPrimary)
+                        Text("Associate aihorde.net, ArtBot & StableUI links in Open by Default", fontSize = 11.sp, color = HordeColors.TextMuted)
+                    }
+                    Text("Configure", fontSize = 12.sp, color = HordeColors.TealSoft)
+                }
             }
         }
 
