@@ -545,4 +545,21 @@ class IssueFixesTest {
         assertEquals("", job.requestId)
         assertEquals(42_000L, job.createdAtMillis)
     }
+
+    @Test
+    fun galleryTimestampFormatterFormatsUtcAndHandlesUnknown() {
+        val utc = java.util.TimeZone.getTimeZone("UTC")
+        assertEquals("Unknown", GalleryTimestampFormatter.formatShort(0L, utc, java.util.Locale.US))
+        assertEquals("Unknown", GalleryTimestampFormatter.formatFull(-5L, utc, java.util.Locale.US))
+        // 2026-04-12 14:32:10 UTC
+        val sampleMillis = 1_776_004_330_000L
+        assertEquals(
+            "Apr 12, 2026 · 14:32",
+            GalleryTimestampFormatter.formatShort(sampleMillis, utc, java.util.Locale.US),
+        )
+        assertEquals(
+            "2026-04-12 14:32:10 UTC",
+            GalleryTimestampFormatter.formatFull(sampleMillis, utc, java.util.Locale.US),
+        )
+    }
 }

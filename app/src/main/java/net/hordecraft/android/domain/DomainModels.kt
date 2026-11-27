@@ -1,5 +1,9 @@
 package net.hordeslop.studio.domain
 
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
+import java.util.TimeZone
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonObject
 
@@ -537,4 +541,28 @@ object GallerySearchFilter {
             image.requestId.lowercase().contains(query) ||
             image.generationId.lowercase().contains(query) ||
             image.seed.lowercase().contains(query)
+}
+
+object GalleryTimestampFormatter {
+    fun formatShort(
+        epochMillis: Long,
+        timeZone: TimeZone = TimeZone.getDefault(),
+        locale: Locale = Locale.getDefault(),
+    ): String {
+        if (epochMillis <= 0L) return "Unknown"
+        val fmt = SimpleDateFormat("MMM d, yyyy · HH:mm", locale)
+        fmt.timeZone = timeZone
+        return fmt.format(Date(epochMillis))
+    }
+
+    fun formatFull(
+        epochMillis: Long,
+        timeZone: TimeZone = TimeZone.getDefault(),
+        locale: Locale = Locale.getDefault(),
+    ): String {
+        if (epochMillis <= 0L) return "Unknown"
+        val fmt = SimpleDateFormat("yyyy-MM-dd HH:mm:ss z", locale)
+        fmt.timeZone = timeZone
+        return fmt.format(Date(epochMillis))
+    }
 }

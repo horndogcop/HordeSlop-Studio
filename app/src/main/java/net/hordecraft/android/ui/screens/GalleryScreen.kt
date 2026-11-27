@@ -103,6 +103,7 @@ import kotlinx.coroutines.launch
 import net.hordeslop.studio.data.local.AppSettings
 import net.hordeslop.studio.domain.ActivityDestination
 import net.hordeslop.studio.domain.GallerySearchFilter
+import net.hordeslop.studio.domain.GalleryTimestampFormatter
 import net.hordeslop.studio.domain.SavedImage
 import net.hordeslop.studio.ui.MainViewModel
 import net.hordeslop.studio.ui.components.launchActivityForDestination
@@ -331,14 +332,26 @@ fun GalleryScreen(
                                     )
                                     .padding(horizontal = 8.dp, vertical = 6.dp),
                             ) {
-                                Text(
-                                    text = img.prompt.trim(),
-                                    color = Color.White,
-                                    fontSize = 10.sp,
-                                    lineHeight = 13.sp,
-                                    maxLines = 2,
-                                    overflow = TextOverflow.Ellipsis,
-                                )
+                                Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                                    Text(
+                                        text = img.prompt.trim(),
+                                        color = Color.White,
+                                        fontSize = 10.sp,
+                                        lineHeight = 13.sp,
+                                        maxLines = 2,
+                                        overflow = TextOverflow.Ellipsis,
+                                    )
+                                    if (img.createdAtMillis > 0L) {
+                                        Text(
+                                            text = GalleryTimestampFormatter.formatShort(img.createdAtMillis),
+                                            color = Color.White.copy(alpha = 0.72f),
+                                            fontSize = 9.sp,
+                                            fontFamily = FontFamily.Monospace,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis,
+                                        )
+                                    }
+                                }
                             }
                         }
                         IconButton(
@@ -640,6 +653,14 @@ private fun GalleryViewerModal(
                 )
             }
             Text(
+                text = "Generated: ${GalleryTimestampFormatter.formatShort(activeImage.createdAtMillis)}",
+                fontSize = 10.sp,
+                fontFamily = FontFamily.Monospace,
+                color = HordeColors.TextMuted,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            Text(
                 text = activeImage.prompt,
                 fontSize = 12.sp,
                 color = HordeColors.TextPrimary,
@@ -893,6 +914,7 @@ private fun GalleryViewerModal(
                 appendLine("Size: ${activeImage.width}x${activeImage.height}")
                 appendLine("Steps: ${activeImage.steps} · CFG: ${activeImage.cfg} · Clip Skip: ${activeImage.clipSkip}")
                 appendLine("Sampler: ${activeImage.sampler} · Scheduler: ${activeImage.scheduler}")
+                appendLine("Generated: ${GalleryTimestampFormatter.formatFull(activeImage.createdAtMillis)}")
                 appendLine("Saved: ${activeImage.destinationLabel}")
                 appendLine()
                 appendLine("Prompt:")
