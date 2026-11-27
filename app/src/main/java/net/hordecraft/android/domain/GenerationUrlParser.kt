@@ -1,5 +1,6 @@
 package net.hordeslop.studio.domain
 
+import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
@@ -465,19 +466,23 @@ object GenerationUrlParser {
         }
 
         val externalHandlers = resolveList.filter { it.activityInfo.packageName != context.packageName }
-        val preferred = externalHandlers.firstOrNull()
-        if (preferred != null) {
-            val intent = Intent(Intent.ACTION_VIEW, uri).apply {
-                addCategory(Intent.CATEGORY_BROWSABLE)
-                setClassName(preferred.activityInfo.packageName, preferred.activityInfo.name)
-                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        if (externalHandlers.isEmpty()) return false
+
+        val ownComponents = resolveList
+            .filter { it.activityInfo.packageName == context.packageName }
+            .map { ComponentName(it.activityInfo.packageName, it.activityInfo.name) }
+            .toTypedArray()
+
+        val chooser = Intent.createChooser(browserIntent, "Open with").apply {
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N && ownComponents.isNotEmpty()) {
+                putExtra(Intent.EXTRA_EXCLUDE_COMPONENTS, ownComponents)
             }
-            return runCatching {
-                context.startActivity(intent)
-                true
-            }.getOrDefault(false)
         }
-        return false
+        return runCatching {
+            context.startActivity(chooser)
+            true
+        }.getOrDefault(false)
     }
 
     fun openByDefaultSettings(context: Context) {
