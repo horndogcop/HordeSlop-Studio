@@ -11,7 +11,10 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -63,6 +66,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
@@ -85,6 +89,7 @@ import net.hordeslop.studio.ui.MainViewModel
 import net.hordeslop.studio.ui.theme.HordeColors
 import kotlin.math.roundToInt
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun SettingsScreen(
     vm: MainViewModel,
@@ -244,65 +249,102 @@ fun SettingsScreen(
             )
 
             if (!aiHordeCollapsed) {
-                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                    Text("API Key", fontSize = 12.sp, color = HordeColors.TextSecondary)
-                }
-                Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
-                    OutlinedTextField(
-                        value = draftHordeKey,
-                        onValueChange = { draftHordeKey = it },
-                        singleLine = true,
-                        visualTransformation = if (showHordeKey) VisualTransformation.None else PasswordVisualTransformation(),
-                        trailingIcon = {
-                            IconButton(onClick = { showHordeKey = !showHordeKey }) {
-                                Icon(if (showHordeKey) Icons.Outlined.VisibilityOff else Icons.Outlined.Visibility, null)
+                val apiKeySection: @Composable () -> Unit = {
+                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Text("API Key", fontSize = 12.sp, color = HordeColors.TextSecondary)
+                        Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+                            OutlinedTextField(
+                                value = draftHordeKey,
+                                onValueChange = { draftHordeKey = it },
+                                singleLine = true,
+                                visualTransformation = if (showHordeKey) VisualTransformation.None else PasswordVisualTransformation(),
+                                trailingIcon = {
+                                    IconButton(onClick = { showHordeKey = !showHordeKey }) {
+                                        Icon(
+                                            if (showHordeKey) Icons.Outlined.VisibilityOff else Icons.Outlined.Visibility,
+                                            contentDescription = if (showHordeKey) "Hide API Key" else "Show API Key",
+                                        )
+                                    }
+                                },
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .testTag("horde_api_key_input"),
+                            )
+                            Button(
+                                onClick = { vm.saveHordeApiKey(draftHordeKey) },
+                                colors = ButtonDefaults.buttonColors(containerColor = HordeColors.TealPrimary),
+                                modifier = Modifier.testTag("save_horde_api_key_button"),
+                            ) {
+                                Text("Save", color = Color(0xFF020617), fontWeight = FontWeight.SemiBold)
                             }
-                        },
-                        modifier = Modifier.weight(1f),
-                    )
-                    Button(
-                        onClick = { vm.saveHordeApiKey(draftHordeKey) },
-                        colors = ButtonDefaults.buttonColors(containerColor = HordeColors.TealPrimary),
-                    ) {
-                        Text("Save", color = Color(0xFF020617), fontWeight = FontWeight.SemiBold)
+                        }
                     }
                 }
 
-                HorizontalDivider(color = HordeColors.BorderSubtle)
-
-                Text("Server", fontSize = 12.sp, color = HordeColors.TextSecondary)
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    ToggleChipButton(
-                        text = "aihorde.net",
-                        selected = !endpointModeOther,
-                        onClick = {
-                            endpointModeOther = false
-                            draftEndpointUrl = HordeConstants.DEFAULT_API_BASE_URL
-                            vm.saveApiBaseUrl(HordeConstants.DEFAULT_API_BASE_URL)
-                        },
-                    )
-                    ToggleChipButton(
-                        text = "Other",
-                        selected = endpointModeOther,
-                        onClick = {
-                            endpointModeOther = true
-                            if (draftEndpointUrl.isBlank()) draftEndpointUrl = HordeConstants.DEFAULT_API_BASE_URL
-                        },
-                    )
-                }
-                if (endpointModeOther) {
-                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
-                        OutlinedTextField(
-                            value = draftEndpointUrl,
-                            onValueChange = { draftEndpointUrl = it },
-                            singleLine = true,
-                            modifier = Modifier.weight(1f),
-                        )
-                        Button(
-                            onClick = { vm.saveApiBaseUrl(draftEndpointUrl) },
-                            colors = ButtonDefaults.buttonColors(containerColor = HordeColors.TealPrimary),
+                val serverSection: @Composable () -> Unit = {
+                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Text("Server", fontSize = 12.sp, color = HordeColors.TextSecondary)
+                        FlowRow(
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalArrangement = Arrangement.spacedBy(6.dp),
                         ) {
-                            Text("Apply", color = Color(0xFF020617), fontWeight = FontWeight.SemiBold)
+                            ToggleChipButton(
+                                text = "aihorde.net",
+                                selected = !endpointModeOther,
+                                onClick = {
+                                    endpointModeOther = false
+                                    draftEndpointUrl = HordeConstants.DEFAULT_API_BASE_URL
+                                    vm.saveApiBaseUrl(HordeConstants.DEFAULT_API_BASE_URL)
+                                },
+                            )
+                            ToggleChipButton(
+                                text = "Other",
+                                selected = endpointModeOther,
+                                onClick = {
+                                    endpointModeOther = true
+                                    if (draftEndpointUrl.isBlank()) draftEndpointUrl = HordeConstants.DEFAULT_API_BASE_URL
+                                },
+                            )
+                        }
+                        if (endpointModeOther) {
+                            Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+                                OutlinedTextField(
+                                    value = draftEndpointUrl,
+                                    onValueChange = { draftEndpointUrl = it },
+                                    singleLine = true,
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .testTag("server_url_input"),
+                                )
+                                Button(
+                                    onClick = { vm.saveApiBaseUrl(draftEndpointUrl) },
+                                    colors = ButtonDefaults.buttonColors(containerColor = HordeColors.TealPrimary),
+                                    modifier = Modifier.testTag("apply_server_url_button"),
+                                ) {
+                                    Text("Apply", color = Color(0xFF020617), fontWeight = FontWeight.SemiBold)
+                                }
+                            }
+                        }
+                    }
+                }
+
+                BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
+                    if (maxWidth >= 520.dp) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .testTag("horde_key_server_dual_row"),
+                            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                            verticalAlignment = Alignment.Top,
+                        ) {
+                            Box(modifier = Modifier.weight(1f)) { apiKeySection() }
+                            Box(modifier = Modifier.weight(1f)) { serverSection() }
+                        }
+                    } else {
+                        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                            apiKeySection()
+                            HorizontalDivider(color = HordeColors.BorderSubtle)
+                            serverSection()
                         }
                     }
                 }
@@ -346,174 +388,175 @@ fun SettingsScreen(
                 onToggle = { interfaceCollapsed = !interfaceCollapsed },
             )
             if (!interfaceCollapsed) {
-                // App Icon Switcher
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(10.dp))
-                        .background(HordeColors.SubCardSurface)
-                        .border(1.dp, HordeColors.BorderSubtle, RoundedCornerShape(10.dp))
-                        .clickable { showLauncherIconModal = true }
-                        .padding(10.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                        if (settings.launcherIcon == LauncherIconChoice.ROBOT_PLACEHOLDER) {
-                            Icon(Icons.Outlined.Android, null, tint = HordeColors.TealSoft)
-                        } else {
-                            AsyncImage(
-                                model = R.drawable.ic_haidra_logo,
-                                contentDescription = "Haidra Logo",
-                                contentScale = ContentScale.Fit,
-                                modifier = Modifier.size(22.dp),
-                            )
+                val interfaceControlItems: List<@Composable () -> Unit> = listOf(
+                    {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(10.dp))
+                                .background(HordeColors.SubCardSurface)
+                                .border(1.dp, HordeColors.BorderSubtle, RoundedCornerShape(10.dp))
+                                .clickable { showLauncherIconModal = true }
+                                .padding(10.dp)
+                                .testTag("app_icon_setting_row"),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                                if (settings.launcherIcon == LauncherIconChoice.ROBOT_PLACEHOLDER) {
+                                    Icon(Icons.Outlined.Android, null, tint = HordeColors.TealSoft)
+                                } else {
+                                    AsyncImage(
+                                        model = R.drawable.ic_haidra_logo,
+                                        contentDescription = "Haidra Logo",
+                                        contentScale = ContentScale.Fit,
+                                        modifier = Modifier.size(22.dp),
+                                    )
+                                }
+                                Column {
+                                    Text("App Icon", fontSize = 13.sp, color = HordeColors.TextPrimary)
+                                    Text(
+                                        if (settings.launcherIcon == LauncherIconChoice.ROBOT_PLACEHOLDER) "Robot (Default)" else "Haidra Logo",
+                                        fontSize = 11.sp,
+                                        color = HordeColors.TextMuted,
+                                    )
+                                }
+                            }
+                            Text("Change", fontSize = 12.sp, color = HordeColors.TealSoft)
                         }
-                        Column {
-                            Text("App Icon", fontSize = 13.sp, color = HordeColors.TextPrimary)
-                            Text(
-                                if (settings.launcherIcon == LauncherIconChoice.ROBOT_PLACEHOLDER) "Robot (Default)" else "Haidra Logo",
-                                fontSize = 11.sp,
-                                color = HordeColors.TextMuted,
-                            )
+                    },
+                    {
+                        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                            Text("Navigation", fontSize = 12.sp, color = HordeColors.TextSecondary)
+                            FlowRow(
+                                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                verticalArrangement = Arrangement.spacedBy(6.dp),
+                            ) {
+                                NavLayoutMode.entries.forEach { mode ->
+                                    ToggleChipButton(
+                                        text = mode.label,
+                                        selected = settings.navLayout == mode,
+                                        onClick = { vm.setNavLayout(mode) },
+                                    )
+                                }
+                            }
+                        }
+                    },
+                    {
+                        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                            Text("Generate Button", fontSize = 12.sp, color = HordeColors.TextSecondary)
+                            FlowRow(
+                                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                verticalArrangement = Arrangement.spacedBy(6.dp),
+                            ) {
+                                GenerateButtonPlacement.entries.forEach { placement ->
+                                    ToggleChipButton(
+                                        text = placement.label,
+                                        selected = settings.generateButtonPlacement == placement,
+                                        onClick = { vm.setGenerateButtonPlacement(placement) },
+                                    )
+                                }
+                            }
+                        }
+                    },
+                    {
+                        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                            Text("Gallery Columns", fontSize = 12.sp, color = HordeColors.TextSecondary)
+                            FlowRow(
+                                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                verticalArrangement = Arrangement.spacedBy(6.dp),
+                            ) {
+                                (2..6).forEach { count ->
+                                    ToggleChipButton(
+                                        text = count.toString(),
+                                        selected = settings.galleryColumns == count,
+                                        onClick = { vm.setGalleryColumns(count) },
+                                    )
+                                }
+                            }
+                        }
+                    },
+                    {
+                        SettingsToggleRow(
+                            title = "Model previews",
+                            subtitle = "Show images when picking models",
+                            checked = settings.showModelPreviews,
+                            onCheckedChange = vm::setShowModelPreviews,
+                        )
+                    },
+                    {
+                        SettingsToggleRow(
+                            title = "Full-screen gallery",
+                            subtitle = "Open tapped images in full screen",
+                            checked = settings.skipGalleryModalToFullscreen,
+                            onCheckedChange = vm::setSkipGalleryModalToFullscreen,
+                        )
+                    },
+                    {
+                        SettingsToggleRow(
+                            title = "Gallery prompt preview",
+                            subtitle = "Show prompt text overlay on gallery cards",
+                            checked = settings.showGalleryPromptOverlay,
+                            onCheckedChange = vm::setShowGalleryPromptOverlay,
+                        )
+                    },
+                    {
+                        SettingsToggleRow(
+                            title = "Auto-clear completed requests",
+                            subtitle = "Automatically clear finished items from Queue",
+                            checked = settings.autoClearCompletedQueue,
+                            onCheckedChange = vm::setAutoClearCompletedQueue,
+                        )
+                    },
+                    {
+                        SettingsToggleRow(
+                            title = "Separate windows",
+                            subtitle = "Open screens separately in Recents",
+                            checked = settings.useSeparateActivities,
+                            onCheckedChange = vm::setUseSeparateActivities,
+                        )
+                    },
+                    {
+                        SettingsToggleRow(
+                            title = "Review raw API JSON",
+                            subtitle = "Inspect and edit request JSON before sending",
+                            checked = settings.showRawRequestReview,
+                            onCheckedChange = vm::setShowRawRequestReview,
+                        )
+                    },
+                )
+
+                BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
+                    if (maxWidth >= 520.dp) {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .testTag("interface_controls_dual_grid"),
+                            verticalArrangement = Arrangement.spacedBy(10.dp),
+                        ) {
+                            interfaceControlItems.chunked(2).forEach { rowItems ->
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                ) {
+                                    Box(modifier = Modifier.weight(1f)) { rowItems[0]() }
+                                    if (rowItems.size > 1) {
+                                        Box(modifier = Modifier.weight(1f)) { rowItems[1]() }
+                                    } else {
+                                        Spacer(modifier = Modifier.weight(1f))
+                                    }
+                                }
+                            }
+                        }
+                    } else {
+                        Column(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalArrangement = Arrangement.spacedBy(8.dp),
+                        ) {
+                            interfaceControlItems.forEach { item -> item() }
                         }
                     }
-                    Text("Change", fontSize = 12.sp, color = HordeColors.TealSoft)
-                }
-
-                // Navigation layout (fixed padding matching generate button)
-                Text("Navigation", fontSize = 12.sp, color = HordeColors.TextSecondary)
-                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    NavLayoutMode.entries.forEach { mode ->
-                        ToggleChipButton(
-                            text = mode.label,
-                            selected = settings.navLayout == mode,
-                            onClick = { vm.setNavLayout(mode) },
-                        )
-                    }
-                }
-
-                // Generate Button Placement
-                Text("Generate Button", fontSize = 12.sp, color = HordeColors.TextSecondary)
-                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    GenerateButtonPlacement.entries.forEach { placement ->
-                        ToggleChipButton(
-                            text = placement.label,
-                            selected = settings.generateButtonPlacement == placement,
-                            onClick = { vm.setGenerateButtonPlacement(placement) },
-                        )
-                    }
-                }
-
-                // Gallery Grid Density
-                Text("Gallery Columns", fontSize = 12.sp, color = HordeColors.TextSecondary)
-                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    (2..6).forEach { count ->
-                        ToggleChipButton(
-                            text = count.toString(),
-                            selected = settings.galleryColumns == count,
-                            onClick = { vm.setGalleryColumns(count) },
-                        )
-                    }
-                }
-
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable { vm.setShowModelPreviews(!settings.showModelPreviews) },
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Column(Modifier.weight(1f)) {
-                        Text("Model previews", fontSize = 13.sp, color = HordeColors.TextPrimary)
-                        Text("Show images when picking models", fontSize = 11.sp, color = HordeColors.TextMuted)
-                    }
-                    Checkbox(checked = settings.showModelPreviews, onCheckedChange = vm::setShowModelPreviews)
-                }
-
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable { vm.setSkipGalleryModalToFullscreen(!settings.skipGalleryModalToFullscreen) },
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Column(Modifier.weight(1f)) {
-                        Text("Full-screen gallery", fontSize = 13.sp, color = HordeColors.TextPrimary)
-                        Text("Open tapped images in full screen", fontSize = 11.sp, color = HordeColors.TextMuted)
-                    }
-                    Checkbox(
-                        checked = settings.skipGalleryModalToFullscreen,
-                        onCheckedChange = vm::setSkipGalleryModalToFullscreen,
-                    )
-                }
-
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable { vm.setShowGalleryPromptOverlay(!settings.showGalleryPromptOverlay) },
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Column(Modifier.weight(1f)) {
-                        Text("Gallery prompt preview", fontSize = 13.sp, color = HordeColors.TextPrimary)
-                        Text("Show prompt text overlay on gallery cards", fontSize = 11.sp, color = HordeColors.TextMuted)
-                    }
-                    Checkbox(
-                        checked = settings.showGalleryPromptOverlay,
-                        onCheckedChange = vm::setShowGalleryPromptOverlay,
-                    )
-                }
-
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable { vm.setAutoClearCompletedQueue(!settings.autoClearCompletedQueue) },
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Column(Modifier.weight(1f)) {
-                        Text("Auto-clear completed requests", fontSize = 13.sp, color = HordeColors.TextPrimary)
-                        Text("Automatically clear finished items from Queue", fontSize = 11.sp, color = HordeColors.TextMuted)
-                    }
-                    Checkbox(
-                        checked = settings.autoClearCompletedQueue,
-                        onCheckedChange = vm::setAutoClearCompletedQueue,
-                    )
-                }
-
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable { vm.setUseSeparateActivities(!settings.useSeparateActivities) },
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Column(Modifier.weight(1f)) {
-                        Text("Separate windows", fontSize = 13.sp, color = HordeColors.TextPrimary)
-                        Text("Open screens separately in Recents", fontSize = 11.sp, color = HordeColors.TextMuted)
-                    }
-                    Checkbox(
-                        checked = settings.useSeparateActivities,
-                        onCheckedChange = vm::setUseSeparateActivities,
-                    )
-                }
-
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable { vm.setShowRawRequestReview(!settings.showRawRequestReview) },
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Column(Modifier.weight(1f)) {
-                        Text("Review raw API JSON", fontSize = 13.sp, color = HordeColors.TextPrimary)
-                        Text("Inspect and edit request JSON before sending", fontSize = 11.sp, color = HordeColors.TextMuted)
-                    }
-                    Checkbox(
-                        checked = settings.showRawRequestReview,
-                        onCheckedChange = vm::setShowRawRequestReview,
-                    )
                 }
             }
 
@@ -1188,6 +1231,29 @@ private fun CollapsiblePrefHeader(
             )
         }
         trailing?.invoke()
+    }
+}
+
+@Composable
+private fun SettingsToggleRow(
+    title: String,
+    subtitle: String,
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { onCheckedChange(!checked) }
+            .padding(vertical = 2.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(Modifier.weight(1f)) {
+            Text(title, fontSize = 13.sp, color = HordeColors.TextPrimary)
+            Text(subtitle, fontSize = 11.sp, color = HordeColors.TextMuted)
+        }
+        Checkbox(checked = checked, onCheckedChange = onCheckedChange)
     }
 }
 
