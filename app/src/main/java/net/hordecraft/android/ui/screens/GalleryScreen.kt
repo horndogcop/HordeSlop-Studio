@@ -90,6 +90,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -101,8 +102,10 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontFamily
@@ -118,11 +121,12 @@ import kotlinx.coroutines.launch
 import net.hordeslop.studio.data.local.AppSettings
 import net.hordeslop.studio.domain.ActivityDestination
 import net.hordeslop.studio.domain.GalleryFilterState
+import net.hordeslop.studio.domain.GalleryGridEntry
+import net.hordeslop.studio.domain.GalleryPageAnchor
+import net.hordeslop.studio.domain.GalleryPaginationEngine
 import net.hordeslop.studio.domain.GallerySearchFilter
 import net.hordeslop.studio.domain.GalleryStatusCategory
 import net.hordeslop.studio.domain.GalleryTimestampFormatter
-import net.hordeslop.studio.domain.GalleryGridEntry
-import net.hordeslop.studio.domain.GalleryPaginationEngine
 import net.hordeslop.studio.domain.GenerationLifecycleClassifier
 import net.hordeslop.studio.domain.HordeJob
 import net.hordeslop.studio.domain.ImageMetadataExtractor
@@ -157,8 +161,9 @@ fun GalleryScreen(
     var isFullscreen by remember { mutableStateOf(false) }
     var fullscreenHudVisible by remember { mutableStateOf(false) }
     var columnsMenuExpanded by remember { mutableStateOf(false) }
-    var currentAnchorKey by remember { mutableStateOf<String?>(null) }
-    var currentStartIndex by remember { mutableStateOf(0) }
+    var pageAnchor by remember(searchQuery, favoritesOnly, filterState, settings.galleryPagedMode) {
+        mutableStateOf<GalleryPageAnchor?>(null)
+    }
 
     var inspectedImageUri by remember { mutableStateOf<Uri?>(null) }
     var inspectedMetadata by remember { mutableStateOf<ParsedImageMetadata?>(null) }
@@ -193,11 +198,6 @@ fun GalleryScreen(
 
     val favoritesEnabled = filterState.includesCompleteGenerations
 
-    LaunchedEffect(searchQuery, favoritesOnly, filterState) {
-        currentAnchorKey = null
-        currentStartIndex = 0
-    }
-
     LaunchedEffect(pendingSearchQuery) {
         if (!pendingSearchQuery.isNullOrBlank()) {
             searchQuery = pendingSearchQuery
@@ -208,8 +208,7 @@ fun GalleryScreen(
             viewerImagesSnapshot = null
             inspectedJobId = null
             isFullscreen = false
-            currentAnchorKey = null
-            currentStartIndex = 0
+            pageAnchor = null
             vm.clearPendingGallerySearchQuery()
         }
     }
@@ -236,6 +235,12 @@ fun GalleryScreen(
         val completed = filteredImages.map { GalleryGridEntry.Completed(it) }
         val jobItems = filteredJobs.map { GalleryGridEntry.JobItem(it) }
         GalleryPaginationEngine.sortEntries(completed + jobItems)
+    }
+
+    LaunchedEffect(settings.galleryPagedMode, searchQuery, favoritesOnly, filterState, gridEntries.isNotEmpty()) {
+        if (settings.galleryPagedMode && pageAnchor == null && gridEntries.isNotEmpty()) {
+            pageAnchor = GalleryPaginationEngine.anchorAt(gridEntries, 0)
+        }
     }
 
     val columns = settings.galleryColumns.coerceIn(2, 6)
@@ -490,20 +495,69 @@ fun GalleryScreen(
                     color = HordeColors.TextMuted,
                 )
             }
+        } else if (!settings.galleryPagedMode) {
+            LazyVerticalGrid(
+                columns = GridCells.Fixed(columns),
+                contentPadding = PaddingValues(bottom = 16.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier.fillMaxSize(),
+            ) {
+                itemsIndexed(gridEntries, key = { _, entry -> entry.stableKey }) { _, entry ->
+                    GalleryGridCard(
+                        entry = entry,
+                        settings = settings,
+                        onImageClick = { img ->
+                            val imgIdx = filteredImages.indexOfFirst { it.id == img.id }.coerceAtLeast(0)
+                            viewerStartIndex = imgIdx
+                            viewerImagesSnapshot = filteredImages
+                            isFullscreen = settings.skipGalleryModalToFullscreen
+                            fullscreenHudVisible = false
+                        },
+                        onToggleFavorite = { img -> vm.toggleImageFavorite(img.id, img.isFavorite) },
+                        onJobClick = { job -> inspectedJobId = job.id },
+                    )
+                }
+            }
         } else {
+            val density = LocalDensity.current
+            val initialFooterHeightPx = with(density) { 52.dp.roundToPx() }
+            var paginationBarHeightPx by remember { mutableIntStateOf(initialFooterHeightPx) }
+            val paginationBarHeightDp = with(density) { paginationBarHeightPx.toDp().value }
+
             BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
                 val availableWidth = maxWidth
                 val availableHeight = maxHeight
 
-                if (!settings.galleryPagedMode) {
+                val itemsPerPage = GalleryPaginationEngine.calculateItemsPerPage(
+                    availableWidthDp = availableWidth.value,
+                    availableHeightDp = availableHeight.value,
+                    columns = columns,
+                    paginationBarHeightDp = paginationBarHeightDp,
+                )
+
+                val pageResult = remember(gridEntries, itemsPerPage, pageAnchor) {
+                    GalleryPaginationEngine.paginateAnchored(
+                        entries = gridEntries,
+                        pageSize = itemsPerPage,
+                        anchor = pageAnchor,
+                    )
+                }
+
+                Column(
+                    modifier = Modifier.fillMaxSize(),
+                    verticalArrangement = Arrangement.SpaceBetween,
+                ) {
                     LazyVerticalGrid(
                         columns = GridCells.Fixed(columns),
-                        contentPadding = PaddingValues(bottom = 16.dp),
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
                         verticalArrangement = Arrangement.spacedBy(8.dp),
-                        modifier = Modifier.fillMaxSize(),
+                        modifier = Modifier
+                            .weight(1f, fill = false)
+                            .fillMaxWidth(),
+                        userScrollEnabled = false,
                     ) {
-                        itemsIndexed(gridEntries, key = { _, entry -> entry.stableKey }) { _, entry ->
+                        itemsIndexed(pageResult.items, key = { _, entry -> entry.stableKey }) { _, entry ->
                             GalleryGridCard(
                                 entry = entry,
                                 settings = settings,
@@ -519,167 +573,117 @@ fun GalleryScreen(
                             )
                         }
                     }
-                } else {
-                    val itemsPerPage = GalleryPaginationEngine.calculateItemsPerPage(
-                        availableWidthDp = availableWidth.value,
-                        availableHeightDp = availableHeight.value,
-                        columns = columns,
-                    )
 
-                    val pageResult = remember(gridEntries, itemsPerPage, currentAnchorKey, currentStartIndex) {
-                        GalleryPaginationEngine.paginate(
-                            entries = gridEntries,
-                            pageSize = itemsPerPage,
-                            anchorKey = currentAnchorKey,
-                            fallbackIndex = currentStartIndex,
-                        )
-                    }
-
-                    LaunchedEffect(pageResult.anchorKey, pageResult.startIndex) {
-                        currentAnchorKey = pageResult.anchorKey
-                        currentStartIndex = pageResult.startIndex
-                    }
-
-                    Column(
-                        modifier = Modifier.fillMaxSize(),
-                        verticalArrangement = Arrangement.SpaceBetween,
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .onSizeChanged { size ->
+                                if (size.height > 0 && size.height != paginationBarHeightPx) {
+                                    paginationBarHeightPx = size.height
+                                }
+                            }
+                            .padding(top = 8.dp, bottom = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween,
                     ) {
-                        LazyVerticalGrid(
-                            columns = GridCells.Fixed(columns),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                            verticalArrangement = Arrangement.spacedBy(8.dp),
-                            modifier = Modifier
-                                .weight(1f, fill = false)
-                                .fillMaxWidth(),
-                            userScrollEnabled = false,
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(2.dp),
+                            verticalAlignment = Alignment.CenterVertically,
                         ) {
-                            itemsIndexed(pageResult.items, key = { _, entry -> entry.stableKey }) { _, entry ->
-                                GalleryGridCard(
-                                    entry = entry,
-                                    settings = settings,
-                                    onImageClick = { img ->
-                                        val imgIdx = filteredImages.indexOfFirst { it.id == img.id }.coerceAtLeast(0)
-                                        viewerStartIndex = imgIdx
-                                        viewerImagesSnapshot = filteredImages
-                                        isFullscreen = settings.skipGalleryModalToFullscreen
-                                        fullscreenHudVisible = false
-                                    },
-                                    onToggleFavorite = { img -> vm.toggleImageFavorite(img.id, img.isFavorite) },
-                                    onJobClick = { job -> inspectedJobId = job.id },
+                            IconButton(
+                                onClick = {
+                                    pageAnchor = GalleryPaginationEngine.anchorAt(gridEntries, 0)
+                                },
+                                enabled = pageResult.hasPrevious,
+                                modifier = Modifier
+                                    .testTag("gallery_page_first")
+                                    .size(36.dp),
+                            ) {
+                                Icon(
+                                    Icons.Outlined.FirstPage,
+                                    contentDescription = "First Page",
+                                    tint = if (pageResult.hasPrevious) HordeColors.TextPrimary else HordeColors.TextMuted.copy(alpha = 0.35f),
+                                    modifier = Modifier.size(20.dp),
+                                )
+                            }
+
+                            IconButton(
+                                onClick = {
+                                    val prevIndex = (pageResult.startIndex - itemsPerPage).coerceAtLeast(0)
+                                    pageAnchor = GalleryPaginationEngine.anchorAt(gridEntries, prevIndex)
+                                },
+                                enabled = pageResult.hasPrevious,
+                                modifier = Modifier
+                                    .testTag("gallery_page_prev")
+                                    .size(36.dp),
+                            ) {
+                                Icon(
+                                    Icons.Outlined.ChevronLeft,
+                                    contentDescription = "Previous Page",
+                                    tint = if (pageResult.hasPrevious) HordeColors.TextPrimary else HordeColors.TextMuted.copy(alpha = 0.35f),
+                                    modifier = Modifier.size(20.dp),
+                                )
+                            }
+                        }
+
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            modifier = Modifier.testTag("gallery_page_indicator"),
+                        ) {
+                            Text(
+                                text = "Page ${pageResult.pageNumber} of ${pageResult.totalPages}",
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Medium,
+                                color = HordeColors.TextPrimary,
+                            )
+                            if (pageResult.totalItems > 0) {
+                                Text(
+                                    text = "${pageResult.startIndex + 1}–${pageResult.endIndex} of ${pageResult.totalItems}",
+                                    fontSize = 10.sp,
+                                    fontFamily = FontFamily.Monospace,
+                                    color = HordeColors.TextMuted,
                                 )
                             }
                         }
 
                         Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(vertical = 4.dp),
+                            horizontalArrangement = Arrangement.spacedBy(2.dp),
                             verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.SpaceBetween,
                         ) {
-                            Row(
-                                horizontalArrangement = Arrangement.spacedBy(2.dp),
-                                verticalAlignment = Alignment.CenterVertically,
+                            IconButton(
+                                onClick = {
+                                    val nextIndex = pageResult.endIndex.coerceIn(0, gridEntries.lastIndex)
+                                    pageAnchor = GalleryPaginationEngine.anchorAt(gridEntries, nextIndex)
+                                },
+                                enabled = pageResult.hasNext,
+                                modifier = Modifier
+                                    .testTag("gallery_page_next")
+                                    .size(36.dp),
                             ) {
-                                IconButton(
-                                    onClick = {
-                                        currentStartIndex = 0
-                                        currentAnchorKey = gridEntries.firstOrNull()?.stableKey
-                                    },
-                                    enabled = pageResult.hasPrevious,
-                                    modifier = Modifier
-                                        .testTag("gallery_page_first")
-                                        .size(36.dp),
-                                ) {
-                                    Icon(
-                                        Icons.Outlined.FirstPage,
-                                        contentDescription = "First Page",
-                                        tint = if (pageResult.hasPrevious) HordeColors.TextPrimary else HordeColors.TextMuted.copy(alpha = 0.35f),
-                                        modifier = Modifier.size(20.dp),
-                                    )
-                                }
-
-                                IconButton(
-                                    onClick = {
-                                        val prevIndex = (pageResult.startIndex - itemsPerPage).coerceAtLeast(0)
-                                        currentStartIndex = prevIndex
-                                        currentAnchorKey = gridEntries.getOrNull(prevIndex)?.stableKey
-                                    },
-                                    enabled = pageResult.hasPrevious,
-                                    modifier = Modifier
-                                        .testTag("gallery_page_prev")
-                                        .size(36.dp),
-                                ) {
-                                    Icon(
-                                        Icons.Outlined.ChevronLeft,
-                                        contentDescription = "Previous Page",
-                                        tint = if (pageResult.hasPrevious) HordeColors.TextPrimary else HordeColors.TextMuted.copy(alpha = 0.35f),
-                                        modifier = Modifier.size(20.dp),
-                                    )
-                                }
-                            }
-
-                            Column(
-                                horizontalAlignment = Alignment.CenterHorizontally,
-                                modifier = Modifier.testTag("gallery_page_indicator"),
-                            ) {
-                                Text(
-                                    text = "Page ${pageResult.pageNumber} of ${pageResult.totalPages}",
-                                    fontSize = 12.sp,
-                                    fontWeight = FontWeight.Medium,
-                                    color = HordeColors.TextPrimary,
+                                Icon(
+                                    Icons.Outlined.ChevronRight,
+                                    contentDescription = "Next Page",
+                                    tint = if (pageResult.hasNext) HordeColors.TextPrimary else HordeColors.TextMuted.copy(alpha = 0.35f),
+                                    modifier = Modifier.size(20.dp),
                                 )
-                                if (pageResult.totalItems > 0) {
-                                    Text(
-                                        text = "${pageResult.startIndex + 1}–${pageResult.endIndex} of ${pageResult.totalItems}",
-                                        fontSize = 10.sp,
-                                        fontFamily = FontFamily.Monospace,
-                                        color = HordeColors.TextMuted,
-                                    )
-                                }
                             }
 
-                            Row(
-                                horizontalArrangement = Arrangement.spacedBy(2.dp),
-                                verticalAlignment = Alignment.CenterVertically,
+                            IconButton(
+                                onClick = {
+                                    val lastPageStartIndex = ((pageResult.totalPages - 1) * itemsPerPage).coerceIn(0, gridEntries.lastIndex)
+                                    pageAnchor = GalleryPaginationEngine.anchorAt(gridEntries, lastPageStartIndex)
+                                },
+                                enabled = pageResult.hasNext,
+                                modifier = Modifier
+                                    .testTag("gallery_page_last")
+                                    .size(36.dp),
                             ) {
-                                IconButton(
-                                    onClick = {
-                                        val nextIndex = pageResult.endIndex.coerceIn(0, gridEntries.lastIndex)
-                                        currentStartIndex = nextIndex
-                                        currentAnchorKey = gridEntries.getOrNull(nextIndex)?.stableKey
-                                    },
-                                    enabled = pageResult.hasNext,
-                                    modifier = Modifier
-                                        .testTag("gallery_page_next")
-                                        .size(36.dp),
-                                ) {
-                                    Icon(
-                                        Icons.Outlined.ChevronRight,
-                                        contentDescription = "Next Page",
-                                        tint = if (pageResult.hasNext) HordeColors.TextPrimary else HordeColors.TextMuted.copy(alpha = 0.35f),
-                                        modifier = Modifier.size(20.dp),
-                                    )
-                                }
-
-                                IconButton(
-                                    onClick = {
-                                        val lastPageStartIndex = ((pageResult.totalPages - 1) * itemsPerPage).coerceIn(0, gridEntries.lastIndex)
-                                        currentStartIndex = lastPageStartIndex
-                                        currentAnchorKey = gridEntries.getOrNull(lastPageStartIndex)?.stableKey
-                                    },
-                                    enabled = pageResult.hasNext,
-                                    modifier = Modifier
-                                        .testTag("gallery_page_last")
-                                        .size(36.dp),
-                                ) {
-                                    Icon(
-                                        Icons.AutoMirrored.Outlined.LastPage,
-                                        contentDescription = "Last Page",
-                                        tint = if (pageResult.hasNext) HordeColors.TextPrimary else HordeColors.TextMuted.copy(alpha = 0.35f),
-                                        modifier = Modifier.size(20.dp),
-                                    )
-                                }
+                                Icon(
+                                    Icons.AutoMirrored.Outlined.LastPage,
+                                    contentDescription = "Last Page",
+                                    tint = if (pageResult.hasNext) HordeColors.TextPrimary else HordeColors.TextMuted.copy(alpha = 0.35f),
+                                    modifier = Modifier.size(20.dp),
+                                )
                             }
                         }
                     }

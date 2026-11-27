@@ -15,6 +15,12 @@ sealed interface GalleryGridEntry {
     }
 }
 
+data class GalleryPageAnchor(
+    val anchorKey: String? = null,
+    val fallbackKeys: List<String> = emptyList(),
+    val fallbackIndex: Int = 0,
+)
+
 data class GalleryPageResult<T : GalleryGridEntry>(
     val items: List<T>,
     val pageNumber: Int,
@@ -29,6 +35,8 @@ data class GalleryPageResult<T : GalleryGridEntry>(
 }
 
 object GalleryPaginationEngine {
+    const val DEFAULT_FALLBACK_WINDOW_SIZE: Int = 48
+
     val COMPARATOR: Comparator<GalleryGridEntry> =
         compareByDescending<GalleryGridEntry> { it.createdAtMillis }
             .thenBy { it.stableKey }
@@ -83,12 +91,12 @@ object GalleryPaginationEngine {
         availableWidthDp: Float,
         availableHeightDp: Float,
         columns: Int,
-        paginationBarHeightDp: Float = 52f,
+        paginationBarHeightDp: Float = 0f,
         horizontalSpacingDp: Float = 8f,
         verticalSpacingDp: Float = 8f,
     ): Int {
         val safeColumns = columns.coerceIn(2, 6)
-        val availableGridHeight = (availableHeightDp - paginationBarHeightDp - verticalSpacingDp).coerceAtLeast(1f)
+        val availableGridHeight = (availableHeightDp - paginationBarHeightDp).coerceAtLeast(1f)
         val totalHorizontalSpacing = horizontalSpacingDp * (safeColumns - 1)
         val itemWidth = ((availableWidthDp - totalHorizontalSpacing) / safeColumns).coerceAtLeast(1f)
         val rowHeight = itemWidth + verticalSpacingDp
@@ -96,12 +104,48 @@ object GalleryPaginationEngine {
         return (rows * safeColumns).coerceAtLeast(1)
     }
 
+    fun <T : GalleryGridEntry> anchorAt(
+        entries: List<T>,
+        startIndex: Int,
+        fallbackWindowSize: Int = DEFAULT_FALLBACK_WINDOW_SIZE,
+    ): GalleryPageAnchor? {
+        val sorted = sortEntries(entries)
+        if (sorted.isEmpty()) return null
+        val safeStart = startIndex.coerceIn(0, sorted.lastIndex)
+        val anchorKey = sorted[safeStart].stableKey
+        val fallbackEnd = (safeStart + 1 + fallbackWindowSize.coerceAtLeast(0)).coerceAtMost(sorted.size)
+        val fallbackKeys = if (safeStart + 1 < fallbackEnd) {
+            sorted.subList(safeStart + 1, fallbackEnd).map { it.stableKey }
+        } else {
+            emptyList()
+        }
+        return GalleryPageAnchor(
+            anchorKey = anchorKey,
+            fallbackKeys = fallbackKeys,
+            fallbackIndex = safeStart,
+        )
+    }
+
+    fun <T : GalleryGridEntry> paginateAnchored(
+        entries: List<T>,
+        pageSize: Int,
+        anchor: GalleryPageAnchor?,
+    ): GalleryPageResult<T> = paginate(
+        entries = entries,
+        pageSize = pageSize,
+        anchorKey = anchor?.anchorKey,
+        targetPage = null,
+        fallbackIndex = anchor?.fallbackIndex ?: 0,
+        fallbackKeys = anchor?.fallbackKeys ?: emptyList(),
+    )
+
     fun <T : GalleryGridEntry> paginate(
         entries: List<T>,
         pageSize: Int,
         anchorKey: String? = null,
         targetPage: Int? = null,
         fallbackIndex: Int = 0,
+        fallbackKeys: List<String> = emptyList(),
     ): GalleryPageResult<T> {
         val sorted = sortEntries(entries)
         val totalItems = sorted.size
@@ -129,10 +173,19 @@ object GalleryPaginationEngine {
                 val foundIndex = sorted.indexOfFirst { it.stableKey == anchorKey }
                 if (foundIndex >= 0) {
                     foundIndex
-                } else if (fallbackIndex >= totalItems) {
-                    ((totalPages - 1) * safePageSize).coerceAtLeast(0)
                 } else {
-                    fallbackIndex.coerceIn(0, totalItems - 1)
+                    val neighborIndex = if (fallbackKeys.isNotEmpty()) {
+                        val keyToIndex = HashMap<String, Int>(sorted.size)
+                        sorted.forEachIndexed { index, entry -> keyToIndex[entry.stableKey] = index }
+                        fallbackKeys.firstNotNullOfOrNull { keyToIndex[it] }
+                    } else {
+                        null
+                    }
+                    when {
+                        neighborIndex != null -> neighborIndex
+                        fallbackIndex >= totalItems -> ((totalPages - 1) * safePageSize).coerceAtLeast(0)
+                        else -> fallbackIndex.coerceIn(0, totalItems - 1)
+                    }
                 }
             }
             else -> {
@@ -171,6 +224,7 @@ object GalleryPaginationEngine {
         anchorKey: String? = null,
         targetPage: Int? = null,
         fallbackIndex: Int = 0,
+        fallbackKeys: List<String> = emptyList(),
     ): GalleryPageResult<GalleryGridEntry> {
         val entries = buildEntries(
             images = images,
@@ -185,6 +239,7 @@ object GalleryPaginationEngine {
             anchorKey = anchorKey,
             targetPage = targetPage,
             fallbackIndex = fallbackIndex,
+            fallbackKeys = fallbackKeys,
         )
     }
 }

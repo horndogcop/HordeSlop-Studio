@@ -76,14 +76,24 @@ class GalleryPaginationEngineTest {
 
     @Test
     fun calculateItemsPerPageFitsWholeRowsForScreenAndColumns() {
-        // availableWidth = 400dp, availableHeight = 800dp, columns = 4
-        // gridHeight = 800 - 52 - 8 = 740dp, spacing = 8dp * 3 = 24dp -> itemWidth = 94dp
-        // rowHeight = 102dp -> rows = (740 + 8) / 102 = 7 rows * 4 cols = 28 items
+        // availableWidth = 400dp, availableHeight = 800dp, columns = 4, measured bar = 52dp
+        // gridHeight = 800 - 52 = 748dp, spacing = 8dp * 3 = 24dp -> itemWidth = 94dp
+        // rowHeight = 102dp -> rows = (748 + 8) / 102 = 7 rows * 4 cols = 28 items
         assertEquals(
             28,
             GalleryPaginationEngine.calculateItemsPerPage(
                 availableWidthDp = 400f,
                 availableHeightDp = 800f,
+                columns = 4,
+                paginationBarHeightDp = 52f,
+            ),
+        )
+        // Exact boundary fit: 2 rows of 94dp + 8dp spacing = 196dp height with paginationBarHeightDp = 0f
+        assertEquals(
+            8,
+            GalleryPaginationEngine.calculateItemsPerPage(
+                availableWidthDp = 400f,
+                availableHeightDp = 196f,
                 columns = 4,
             ),
         )
@@ -240,6 +250,42 @@ class GalleryPaginationEngineTest {
         assertEquals(2, afterTrailingDelete.pageNumber)
         assertEquals(listOf("img:img_6", "img:img_5", "img:img_4", "img:img_3"), afterTrailingDelete.items.map { it.stableKey })
         assertFalse(afterTrailingDelete.hasNext)
+    }
+
+    @Test
+    fun anchorFallbackKeysKeepStableWindowWhenAnchorDeletedAfterPrecedingInsertions() {
+        val initial = (1..10).map { GalleryGridEntry.Completed(completedImage("img_$it", it * 100L)) }
+        // Descending: 10, 9, 8, 7, 6, 5, 4, 3, 2, 1. Page 2 (startIndex = 4) starts at img_6.
+        val page2Anchor = GalleryPaginationEngine.anchorAt(initial, startIndex = 4)
+
+        // Incoming items (11, 12, 13) arrive before page 2 AND anchor img_6 + img_5 are deleted.
+        // Without neighbor fallbackKeys, old fallbackIndex=4 would jump up to img_9!
+        // With neighbor fallbackKeys, the window stays pinned cleanly at img_4.
+        val incoming = (11..13).map { GalleryGridEntry.Completed(completedImage("img_$it", it * 100L)) }
+        val mutated = (initial + incoming).filterNot { it.image.id in setOf("img_6", "img_5") }
+
+        val resolved = GalleryPaginationEngine.paginateAnchored(
+            entries = mutated,
+            pageSize = 4,
+            anchor = page2Anchor,
+        )
+        assertEquals(
+            listOf("img:img_4", "img:img_3", "img:img_2", "img:img_1"),
+            resolved.items.map { it.stableKey },
+        )
+
+        // Even on page 1 (startIndex = 0), explicit anchor preserves displayed page across incoming generations
+        val page1Anchor = GalleryPaginationEngine.anchorAt(initial, startIndex = 0)
+        val page1AfterIncoming = GalleryPaginationEngine.paginateAnchored(
+            entries = initial + incoming,
+            pageSize = 4,
+            anchor = page1Anchor,
+        )
+        assertEquals(
+            listOf("img:img_10", "img:img_9", "img:img_8", "img:img_7"),
+            page1AfterIncoming.items.map { it.stableKey },
+        )
+        assertTrue(page1AfterIncoming.hasPrevious)
     }
 
     @Test
