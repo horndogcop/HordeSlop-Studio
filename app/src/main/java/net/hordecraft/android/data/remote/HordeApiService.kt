@@ -4,6 +4,8 @@ import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.jsonPrimitive
 import net.hordeslop.studio.domain.GenerationStatusSnapshot
 import retrofit2.http.Body
 import retrofit2.http.DELETE
@@ -94,6 +96,13 @@ data class GenerationStatusDto(
 }
 
 @Serializable
+data class GenerationMetadataStableDto(
+    val type: String = "",
+    val value: String = "",
+    val ref: String = "",
+)
+
+@Serializable
 data class GeneratedImageDto(
     val id: String = "",
     val img: String = "",
@@ -102,8 +111,36 @@ data class GeneratedImageDto(
     @SerialName("worker_id") val workerId: String = "",
     @SerialName("worker_name") val workerName: String = "",
     val censored: Boolean = false,
-    @SerialName("gen_metadata") val genMetadata: List<JsonElement> = emptyList(),
-)
+    /** Generation state from the worker: ok, censored, faulted, or csam. Prefer gen_metadata when present. */
+    val state: String = "ok",
+    @SerialName("gen_metadata") val genMetadata: List<GenerationMetadataStableDto> = emptyList(),
+) {
+    /**
+     * Classifies whether this generation is a discarded safety placeholder.
+     *
+     * Detection (case-insensitive, tolerant of missing/malformed metadata):
+     * - CSAM blocked: state == "csam", or gen_metadata type=="censorship" & value=="csam"
+     * - Censored NSFW: state == "censored", or gen_metadata type=="censorship" & value=="nsfw"
+     *
+     * [censored] alone is not enough to decide the reason. CSAM takes precedence over NSFW.
+     */
+    fun galleryBlockReason(): String? {
+        val stateNorm = state.trim().lowercase()
+        var metaNsfw = false
+        var metaCsam = false
+        for (entry in genMetadata) {
+            val type = entry.type.trim().lowercase()
+            if (type != "censorship") continue
+            when (entry.value.trim().lowercase()) {
+                "csam" -> metaCsam = true
+                "nsfw" -> metaNsfw = true
+            }
+        }
+        if (stateNorm == "csam" || metaCsam) return "CSAM blocked"
+        if (stateNorm == "censored" || metaNsfw) return "Censored NSFW"
+        return null
+    }
+}
 
 @Serializable
 data class ActiveModelDto(

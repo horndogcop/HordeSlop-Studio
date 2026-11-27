@@ -630,4 +630,142 @@ class IssueFixesTest {
         assertFalse(GallerySearchFilter.matchesJob(failedJob, "cyberpunk ### sharp"))
         assertTrue(GallerySearchFilter.matchesJob(failedJob, "bad params"))
     }
+
+    @Test
+    fun generatedImageDtoBlocksCensoredNsfwAndCsamWithoutTreatingOkAsBlocked() {
+        val ok = net.hordeslop.studio.data.remote.GeneratedImageDto(
+            id = "g1",
+            img = "data",
+            censored = false,
+            state = "ok",
+        )
+        assertEquals(null, ok.galleryBlockReason())
+
+        val stateCensored = net.hordeslop.studio.data.remote.GeneratedImageDto(
+            id = "g2",
+            img = "placeholder",
+            censored = false,
+            state = "censored",
+        )
+        assertEquals("Censored NSFW", stateCensored.galleryBlockReason())
+
+        val stateCsam = net.hordeslop.studio.data.remote.GeneratedImageDto(
+            id = "g3",
+            img = "placeholder",
+            censored = false,
+            state = "csam",
+        )
+        assertEquals("CSAM blocked", stateCsam.galleryBlockReason())
+
+        val metaNsfw = net.hordeslop.studio.data.remote.GeneratedImageDto(
+            id = "g4",
+            img = "placeholder",
+            censored = false,
+            state = "ok",
+            genMetadata = listOf(
+                net.hordeslop.studio.data.remote.GenerationMetadataStableDto(
+                    type = "censorship",
+                    value = "nsfw",
+                ),
+            ),
+        )
+        assertEquals("Censored NSFW", metaNsfw.galleryBlockReason())
+
+        val metaCsam = net.hordeslop.studio.data.remote.GeneratedImageDto(
+            id = "g5",
+            img = "placeholder",
+            censored = true,
+            state = "ok",
+            genMetadata = listOf(
+                net.hordeslop.studio.data.remote.GenerationMetadataStableDto(
+                    type = "censorship",
+                    value = "csam",
+                ),
+            ),
+        )
+        assertEquals("CSAM blocked", metaCsam.galleryBlockReason())
+
+        // censored flag alone is not enough without state/metadata
+        val censoredFlagOnly = net.hordeslop.studio.data.remote.GeneratedImageDto(
+            id = "g6",
+            img = "maybe-real",
+            censored = true,
+            state = "ok",
+        )
+        assertEquals(null, censoredFlagOnly.galleryBlockReason())
+
+        // missing / empty metadata
+        val missingMeta = net.hordeslop.studio.data.remote.GeneratedImageDto(
+            id = "g7",
+            img = "data",
+            state = "ok",
+            genMetadata = emptyList(),
+        )
+        assertEquals(null, missingMeta.galleryBlockReason())
+
+        // malformed / unexpected metadata values are ignored
+        val weirdMeta = net.hordeslop.studio.data.remote.GeneratedImageDto(
+            id = "g8",
+            img = "data",
+            state = "ok",
+            genMetadata = listOf(
+                net.hordeslop.studio.data.remote.GenerationMetadataStableDto(
+                    type = "other",
+                    value = "nsfw",
+                ),
+                net.hordeslop.studio.data.remote.GenerationMetadataStableDto(
+                    type = "censorship",
+                    value = "unknown",
+                ),
+            ),
+        )
+        assertEquals(null, weirdMeta.galleryBlockReason())
+
+        // case-insensitive state and metadata
+        val upperCsam = net.hordeslop.studio.data.remote.GeneratedImageDto(
+            id = "g9",
+            img = "placeholder",
+            state = "CSAM",
+            genMetadata = listOf(
+                net.hordeslop.studio.data.remote.GenerationMetadataStableDto(
+                    type = "Censorship",
+                    value = "NSFW",
+                ),
+            ),
+        )
+        assertEquals("CSAM blocked", upperCsam.galleryBlockReason())
+    }
+
+    @Test
+    fun persistGenerationsResultFormatsBlockCountsAndPrecedence() {
+        val none = net.hordeslop.studio.data.repository.HordecraftRepository.PersistGenerationsResult(
+            savedCount = 2,
+        )
+        assertEquals(null, none.errorMessage())
+        assertEquals(false, none.hasBlocks)
+        assertEquals(false, none.allBlocked)
+
+        val mixed = net.hordeslop.studio.data.repository.HordecraftRepository.PersistGenerationsResult(
+            savedCount = 1,
+            censoredCount = 2,
+            csamCount = 1,
+        )
+        assertEquals(true, mixed.hasBlocks)
+        assertEquals(false, mixed.allBlocked)
+        assertEquals(3, mixed.blockedCount)
+        assertEquals("CSAM blocked; Censored NSFW (2)", mixed.errorMessage())
+
+        val onlyCensored = net.hordeslop.studio.data.repository.HordecraftRepository.PersistGenerationsResult(
+            savedCount = 0,
+            censoredCount = 1,
+        )
+        assertEquals(true, onlyCensored.allBlocked)
+        assertEquals("Censored NSFW", onlyCensored.errorMessage())
+
+        val multiCsam = net.hordeslop.studio.data.repository.HordecraftRepository.PersistGenerationsResult(
+            savedCount = 0,
+            csamCount = 3,
+        )
+        assertEquals("CSAM blocked (3)", multiCsam.errorMessage())
+    }
 }
