@@ -30,6 +30,7 @@ import net.hordeslop.studio.domain.LauncherIconManager
 import net.hordeslop.studio.domain.LoraTriggerMode
 import net.hordeslop.studio.domain.MultiModelDispatchMode
 import net.hordeslop.studio.domain.NavLayoutMode
+import net.hordeslop.studio.domain.ParsedImageMetadata
 import net.hordeslop.studio.domain.PromptRecord
 import net.hordeslop.studio.domain.PromptTarget
 import net.hordeslop.studio.domain.SavedImage
@@ -455,6 +456,50 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 selectedStyleId = "none",
                 selectedStyleIds = listOf("none"),
             ).withRecomputedClipSkipLocation()
+        }
+    }
+
+    fun applyParsedImageMetadata(meta: ParsedImageMetadata) {
+        _studio.update { state ->
+            val nextModels = if (!meta.model.isNullOrBlank()) {
+                val matched = state.models.firstOrNull { it.name.equals(meta.model, ignoreCase = true) }?.name
+                listOf(matched ?: meta.model)
+            } else {
+                state.selectedModels
+            }
+            state.copy(
+                prompt = meta.prompt.ifBlank { state.prompt },
+                negativePrompt = meta.negativePrompt,
+                selectedModels = nextModels,
+                seed = meta.seed ?: state.seed,
+                steps = meta.steps ?: state.steps,
+                cfg = meta.cfg ?: state.cfg,
+                clipSkip = meta.clipSkip ?: state.clipSkip,
+                sampler = meta.sampler?.let { s ->
+                    state.allSamplers.firstOrNull { it.equals(s, ignoreCase = true) } ?: s
+                } ?: state.sampler,
+                scheduler = meta.scheduler?.let { sc ->
+                    HordeConstants.OFFICIAL_SCHEDULERS.firstOrNull { it.equals(sc, ignoreCase = true) } ?: sc
+                } ?: state.scheduler,
+                width = meta.width ?: state.width,
+                height = meta.height ?: state.height,
+                selectedStyleId = "none",
+                selectedStyleIds = listOf("none"),
+                toastMessage = "Applied metadata from image to Studio",
+            ).withRecomputedClipSkipLocation()
+        }
+        showToast("Applied metadata from image to Studio")
+    }
+
+    fun importExternalImage(uri: Uri, meta: ParsedImageMetadata) {
+        viewModelScope.launch {
+            runCatching {
+                repo.importExternalImage(uri, meta)
+            }.onSuccess {
+                showToast("Added image to gallery")
+            }.onFailure { err ->
+                showToast("Import failed: ${err.message ?: "Unable to save image"}")
+            }
         }
     }
 
