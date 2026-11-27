@@ -782,7 +782,7 @@ class HordecraftRepository(
 
     suspend fun fetchFullStatusAndSave(job: ActiveJobEntity, partialFromCancel: Boolean = false): Int {
         val statusDto: GenerationStatusDto = hordeApi.getGenerationStatus(job.id)
-        return persistGenerationsFromStatus(job, statusDto, partialFromCancel)
+        return persistGenerationsFromStatus(job, statusDto, partialFromCancel).savedCount
     }
 
     suspend fun cancelJobWithPartialRecovery(jobId: String): Int {
@@ -814,15 +814,21 @@ class HordecraftRepository(
             activeJobDao.upsert(job.applying(transient))
             return 0
         }
-        val savedCount = persistGenerationsFromStatus(job, statusDto, partialFromCancel = true)
+        val persistResult = persistGenerationsFromStatus(job, statusDto, partialFromCancel = true)
+        val savedCount = persistResult.savedCount
         val finalFinished = maxOf(job.finished, savedCount)
+        val errorMessage = when {
+            persistResult.hasBlocks -> persistResult.errorMessage()
+            finalFinished > 0 -> null
+            else -> "Cancelled"
+        }
         activeJobDao.upsert(
             job.copy(
                 status = if (finalFinished > 0) JobStatus.CANCELLED_PARTIAL.name else JobStatus.FAILED.name,
                 finished = finalFinished,
                 processing = 0,
                 waitTimeSeconds = 0,
-                errorMessage = if (finalFinished == 0) "Cancelled" else null,
+                errorMessage = errorMessage,
             ),
         )
         return savedCount
@@ -878,13 +884,19 @@ class HordecraftRepository(
                     job.toProgressState(),
                     PollApiOutcome.Success(statusDto.toSnapshot()),
                 )
-                val saved = persistGenerationsFromStatus(
+                val persistResult = persistGenerationsFromStatus(
                     job = job,
                     statusDto = statusDto,
                     partialFromCancel = statusTransition.nextStatus == JobStatus.FAILED ||
                         statusTransition.nextStatus == JobStatus.CANCELLED_PARTIAL,
                 )
-                val finalFinished = maxOf(job.finished, checkTransition.finished, statusTransition.finished, saved)
+                val saved = persistResult.savedCount
+                // Censored/CSAM placeholders must not count as successfully completed generations.
+                val finalFinished = if (persistResult.hasBlocks) {
+                    maxOf(job.finished, saved)
+                } else {
+                    maxOf(job.finished, checkTransition.finished, statusTransition.finished, saved)
+                }
 
                 if (!statusTransition.isTerminal) {
                     // Contradictory check vs status: keep non-terminal classified state and preserve progress.
@@ -894,40 +906,71 @@ class HordecraftRepository(
                     return null
                 }
 
+                if (persistResult.allBlocked) {
+                    activeJobDao.upsert(
+                        job.applying(
+                            transition = statusTransition.copy(
+                                nextStatus = JobStatus.FAILED,
+                                finished = finalFinished,
+                                errorMessage = persistResult.errorMessage()
+                                    ?: "Censored NSFW",
+                            ),
+                            dismissed = false,
+                        ),
+                    )
+                    return JobPollNotification(
+                        title = "Generation blocked",
+                        body = persistResult.errorMessage() ?: "Censored NSFW",
+                    )
+                }
+
                 if (statusTransition.nextStatus == JobStatus.FAILED ||
                     statusTransition.nextStatus == JobStatus.CANCELLED_PARTIAL
                 ) {
                     val terminalStatus = if (finalFinished > 0) JobStatus.CANCELLED_PARTIAL else JobStatus.FAILED
+                    val failBody = when {
+                        finalFinished > 0 && persistResult.hasBlocks ->
+                            "Saved $finalFinished image(s); ${persistResult.blockedCount} blocked"
+                        finalFinished > 0 -> "Saved $finalFinished image(s) before stop."
+                        persistResult.errorMessage() != null -> persistResult.errorMessage()!!
+                        else -> statusTransition.errorMessage ?: "Workers could not process this request."
+                    }
                     activeJobDao.upsert(
                         job.applying(
                             transition = statusTransition.copy(
                                 nextStatus = terminalStatus,
                                 finished = finalFinished,
+                                errorMessage = persistResult.errorMessage() ?: statusTransition.errorMessage,
                             ),
                             dismissed = false,
                         ),
                     )
                     return JobPollNotification(
                         title = if (finalFinished > 0) "Partial images saved" else "Generation failed",
-                        body = if (finalFinished > 0) {
-                            "Saved $finalFinished image(s) before stop."
-                        } else {
-                            statusTransition.errorMessage ?: "Workers could not process this request."
-                        },
+                        body = failBody,
                     )
                 }
 
                 val autoClear = settingsStore.settings.first().autoClearCompletedQueue
                 activeJobDao.upsert(
                     job.applying(
-                        transition = statusTransition.copy(finished = finalFinished),
+                        transition = statusTransition.copy(
+                            finished = finalFinished,
+                            errorMessage = persistResult.errorMessage() ?: statusTransition.errorMessage,
+                        ),
                         dismissed = autoClear,
                         dismissedAtFinishedCount = if (autoClear) finalFinished else 0,
                     ),
                 )
+                val blockNotice = persistResult.errorMessage()
                 JobPollNotification(
-                    title = "Saved $saved WebP image(s)",
-                    body = job.modelsJoined.replace("||", ", "),
+                    title = when {
+                        saved > 0 && blockNotice != null ->
+                            "Saved $saved image(s); ${persistResult.blockedCount} blocked"
+                        saved > 0 -> "Saved $saved WebP image(s)"
+                        else -> "Generation blocked"
+                    },
+                    body = blockNotice ?: job.modelsJoined.replace("||", ", "),
                 )
             }
         }
@@ -983,17 +1026,29 @@ class HordecraftRepository(
                 currentStatus == JobStatus.FAILED ||
                 statusTransition.nextStatus == JobStatus.FAILED ||
                 statusTransition.nextStatus == JobStatus.CANCELLED_PARTIAL
-            val saved = persistGenerationsFromStatus(job, statusDto, partialFromCancel = partial)
-            val finalFinished = maxOf(job.finished, checkTransition.finished, statusTransition.finished, saved)
-            val resolvedTransition = if (statusTransition.nextStatus == JobStatus.FAILED ||
-                statusTransition.nextStatus == JobStatus.CANCELLED_PARTIAL
-            ) {
-                statusTransition.copy(
+            val persistResult = persistGenerationsFromStatus(job, statusDto, partialFromCancel = partial)
+            val saved = persistResult.savedCount
+            val finalFinished = if (persistResult.hasBlocks) {
+                maxOf(job.finished, saved)
+            } else {
+                maxOf(job.finished, checkTransition.finished, statusTransition.finished, saved)
+            }
+            val resolvedTransition = when {
+                persistResult.allBlocked -> statusTransition.copy(
+                    nextStatus = JobStatus.FAILED,
+                    finished = finalFinished,
+                    errorMessage = persistResult.errorMessage() ?: "Censored NSFW",
+                )
+                statusTransition.nextStatus == JobStatus.FAILED ||
+                    statusTransition.nextStatus == JobStatus.CANCELLED_PARTIAL -> statusTransition.copy(
                     nextStatus = if (finalFinished > 0) JobStatus.CANCELLED_PARTIAL else JobStatus.FAILED,
                     finished = finalFinished,
+                    errorMessage = persistResult.errorMessage() ?: statusTransition.errorMessage,
                 )
-            } else {
-                statusTransition.copy(finished = finalFinished)
+                else -> statusTransition.copy(
+                    finished = finalFinished,
+                    errorMessage = persistResult.errorMessage() ?: statusTransition.errorMessage,
+                )
             }
 
             activeJobDao.upsert(
@@ -1005,13 +1060,20 @@ class HordecraftRepository(
             )
             notifications += if (resolvedTransition.nextStatus == JobStatus.FAILED) {
                 JobPollNotification(
-                    title = "Generation failed",
+                    title = if (persistResult.allBlocked) "Generation blocked" else "Generation failed",
                     body = resolvedTransition.errorMessage ?: "Workers could not process this request.",
                 )
             } else {
+                val blockNotice = persistResult.errorMessage()
                 JobPollNotification(
-                    title = "New result for request",
-                    body = "${job.modelsJoined.replace("||", ", ")} · $finalFinished/${job.total}",
+                    title = when {
+                        blockNotice != null && saved > 0 ->
+                            "Saved $saved image(s); ${persistResult.blockedCount} blocked"
+                        blockNotice != null -> "Generation blocked"
+                        else -> "New result for request"
+                    },
+                    body = blockNotice
+                        ?: "${job.modelsJoined.replace("||", ", ")} · $finalFinished/${job.total}",
                 )
             }
         }
@@ -1027,14 +1089,57 @@ class HordecraftRepository(
         activeJobDao.dismissCompleted()
     }
 
+    /**
+     * Result of attempting to persist generations from a status payload.
+     * Censored NSFW / CSAM placeholder images are never written to storage or
+     * [saved_images]; counts and reasons are reported so the job can surface under Errors.
+     */
+    data class PersistGenerationsResult(
+        val savedCount: Int,
+        val censoredCount: Int = 0,
+        val csamCount: Int = 0,
+    ) {
+        val blockedCount: Int get() = censoredCount + csamCount
+
+        /** True when the payload had only censored/CSAM placeholders and nothing was saved. */
+        val allBlocked: Boolean
+            get() = savedCount == 0 && blockedCount > 0
+
+        val hasBlocks: Boolean get() = blockedCount > 0
+
+        /**
+         * User-facing error / notice text. Null when nothing was blocked.
+         * Includes counts when more than one generation was blocked.
+         */
+        fun errorMessage(): String? {
+            if (!hasBlocks) return null
+            val parts = mutableListOf<String>()
+            if (csamCount > 0) {
+                parts += if (csamCount == 1) "CSAM blocked" else "CSAM blocked ($csamCount)"
+            }
+            if (censoredCount > 0) {
+                parts += if (censoredCount == 1) "Censored NSFW" else "Censored NSFW ($censoredCount)"
+            }
+            return parts.joinToString("; ")
+        }
+    }
+
     suspend fun persistGenerationsFromStatus(
         job: ActiveJobEntity,
         statusDto: GenerationStatusDto,
         partialFromCancel: Boolean,
-    ): Int {
+    ): PersistGenerationsResult {
         val settings = settingsStore.settings.first()
         var newlySaved = 0
+        var censoredCount = 0
+        var csamCount = 0
         for (gen: GeneratedImageDto in statusDto.generations) {
+            val blockReason = gen.galleryBlockReason()
+            if (blockReason != null) {
+                // Discard the white-on-black placeholder entirely — do not download or store.
+                if (blockReason == "CSAM blocked") csamCount++ else censoredCount++
+                continue
+            }
             if (gen.img.isBlank()) continue
             val existing = savedImageDao.findByGenerationId(gen.id)
             if (existing != null) continue
@@ -1086,7 +1191,11 @@ class HordecraftRepository(
             )
             newlySaved++
         }
-        return newlySaved
+        return PersistGenerationsResult(
+            savedCount = newlySaved,
+            censoredCount = censoredCount,
+            csamCount = csamCount,
+        )
     }
 
     private suspend fun downloadGenerationBytes(imgField: String): ByteArray? = withContext(Dispatchers.IO) {
