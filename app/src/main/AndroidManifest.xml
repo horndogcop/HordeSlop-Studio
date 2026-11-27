@@ -41,7 +41,21 @@
             android:label="@string/title_activity_image"
             android:launchMode="singleTask"
             android:taskAffinity="net.hordeslop.studio.task.studio"
-            android:windowSoftInputMode="adjustResize" />
+            android:windowSoftInputMode="adjustResize">
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="http" android:host="aihorde.net" />
+                <data android:scheme="https" android:host="aihorde.net" />
+                <data android:scheme="http" android:host="www.aihorde.net" />
+                <data android:scheme="https" android:host="www.aihorde.net" />
+                <data android:scheme="http" android:host="tinybots.net" android:pathPrefix="/artbot" />
+                <data android:scheme="https" android:host="tinybots.net" android:pathPrefix="/artbot" />
+                <data android:scheme="http" android:host="www.tinybots.net" android:pathPrefix="/artbot" />
+                <data android:scheme="https" android:host="www.tinybots.net" android:pathPrefix="/artbot" />
+            </intent-filter>
+        </activity>
 
         <!-- Switchable Launcher Icons -->
         <activity-alias

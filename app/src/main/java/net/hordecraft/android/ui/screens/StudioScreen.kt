@@ -32,6 +32,7 @@ import androidx.compose.material.icons.outlined.ArrowUpward
 import androidx.compose.material.icons.outlined.ChevronLeft
 import androidx.compose.material.icons.outlined.ChevronRight
 import androidx.compose.material.icons.outlined.Clear
+import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.Code
 import androidx.compose.material.icons.outlined.Collections
 import androidx.compose.material.icons.outlined.ContentCopy
@@ -41,11 +42,13 @@ import androidx.compose.material.icons.outlined.ExpandLess
 import androidx.compose.material.icons.outlined.ExpandMore
 import androidx.compose.material.icons.outlined.Fullscreen
 import androidx.compose.material.icons.outlined.History
+import androidx.compose.material.icons.outlined.Link
 import androidx.compose.material.icons.outlined.Pause
 import androidx.compose.material.icons.outlined.PlayArrow
 import androidx.compose.material.icons.outlined.RestartAlt
 import androidx.compose.material.icons.outlined.StarBorder
 import androidx.compose.material.icons.outlined.Stop
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Checkbox
@@ -91,8 +94,10 @@ import net.hordeslop.studio.data.local.AppSettings
 import net.hordeslop.studio.domain.ActivityDestination
 import net.hordeslop.studio.domain.AttachedLora
 import net.hordeslop.studio.domain.GenerateButtonPlacement
+import net.hordeslop.studio.domain.GenerationUrlParser
 import net.hordeslop.studio.domain.HordeConstants
 import net.hordeslop.studio.domain.HordeJob
+import net.hordeslop.studio.domain.ParsedImageMetadata
 import net.hordeslop.studio.domain.JobStatus
 import net.hordeslop.studio.domain.LoraTriggerMode
 import net.hordeslop.studio.domain.PromptRecord
@@ -133,6 +138,7 @@ fun StudioScreen(
 
     var showHistoryModalMode by remember { mutableStateOf<String?>(null) } // "history" | "favorites" | null
     var showFullscreenPrompt by remember { mutableStateOf(false) }
+    var showPasteUrlModal by remember { mutableStateOf(false) }
     var showModelModal by remember { mutableStateOf(false) }
     var showStylesModal by remember { mutableStateOf(false) }
     var showSizeModal by remember { mutableStateOf(false) }
@@ -220,6 +226,11 @@ fun StudioScreen(
                                 label = "Reset",
                                 icon = { Icon(Icons.Outlined.RestartAlt, null, modifier = Modifier.size(14.dp), tint = HordeColors.TextSecondary) },
                                 onClick = vm::resetPromptToTemplate,
+                            )
+                            SmallHeaderChip(
+                                label = "Paste URL",
+                                icon = { Icon(Icons.Outlined.Link, null, modifier = Modifier.size(14.dp), tint = HordeColors.TealSoft) },
+                                onClick = { showPasteUrlModal = true },
                             )
                             SmallHeaderChip(
                                 label = "Favorites",
@@ -993,6 +1004,16 @@ fun StudioScreen(
             prompt = studio.prompt,
             onChange = vm::updatePrompt,
             onDismiss = { showFullscreenPrompt = false },
+        )
+    }
+
+    if (showPasteUrlModal) {
+        PasteGenerationUrlModal(
+            onApply = { meta ->
+                vm.applyParsedImageMetadata(meta)
+                showPasteUrlModal = false
+            },
+            onDismiss = { showPasteUrlModal = false },
         )
     }
 
@@ -1849,4 +1870,128 @@ fun ToggleChipButton(
 private fun pasteClipboardText(context: Context): String? {
     val cm = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
     return cm.primaryClip?.getItemAt(0)?.coerceToText(context)?.toString()
+}
+
+@Composable
+fun PasteGenerationUrlModal(
+    onApply: (ParsedImageMetadata) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    val context = LocalContext.current
+    var urlText by remember { mutableStateOf("") }
+    var parseError by remember { mutableStateOf<String?>(null) }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        containerColor = HordeColors.CardSurface,
+        title = {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Icon(Icons.Outlined.Link, null, tint = HordeColors.TealSoft)
+                    Text("Paste Generation URL", fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = HordeColors.TextPrimary)
+                }
+                IconButton(onClick = onDismiss, modifier = Modifier.size(24.dp)) {
+                    Icon(Icons.Outlined.Close, "Close", tint = HordeColors.TextMuted, modifier = Modifier.size(18.dp))
+                }
+            }
+        },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Text(
+                    "Paste a generation URL from aihorde.net, ArtBot (tinybots.net), or StableUI to load its prompt, model, and parameters.",
+                    fontSize = 12.sp,
+                    color = HordeColors.TextSecondary,
+                )
+
+                OutlinedTextField(
+                    value = urlText,
+                    onValueChange = {
+                        urlText = it
+                        parseError = null
+                    },
+                    singleLine = false,
+                    maxLines = 3,
+                    placeholder = { Text("https://aihorde.net/?prompt=... or ArtBot link", fontSize = 12.sp) },
+                    trailingIcon = {
+                        if (urlText.isNotBlank()) {
+                            IconButton(onClick = { urlText = ""; parseError = null }) {
+                                Icon(Icons.Outlined.Clear, "Clear", tint = HordeColors.TextMuted)
+                            }
+                        }
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                )
+
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedButton(
+                        onClick = {
+                            val clipItem = pasteClipboardText(context)
+                            if (!clipItem.isNullOrBlank()) {
+                                urlText = clipItem.trim()
+                                parseError = null
+                            }
+                        },
+                    ) {
+                        Icon(Icons.Outlined.ContentPaste, null, modifier = Modifier.size(15.dp))
+                        Spacer(Modifier.size(4.dp))
+                        Text("Paste from Clipboard", fontSize = 11.sp)
+                    }
+                }
+
+                parseError?.let { err ->
+                    Text(err, fontSize = 11.sp, color = HordeColors.RoseText)
+                }
+
+                Surface(
+                    shape = RoundedCornerShape(10.dp),
+                    color = HordeColors.SubCardSurface,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .border(1.dp, HordeColors.BorderSubtle, RoundedCornerShape(10.dp))
+                        .padding(10.dp),
+                ) {
+                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Text("Open links in HordeSlop Studio", fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = HordeColors.TextSecondary)
+                        Text(
+                            "To automatically open supported links directly from browser or messaging apps, enable 'Open supported links' in system settings.",
+                            fontSize = 11.sp,
+                            color = HordeColors.TextMuted,
+                        )
+                        OutlinedButton(
+                            onClick = { GenerationUrlParser.openByDefaultSettings(context) },
+                            modifier = Modifier.padding(top = 2.dp),
+                        ) {
+                            Text("Open by Default Settings", fontSize = 11.sp)
+                        }
+                    }
+                }
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("Cancel") }
+        },
+        confirmButton = {
+            Button(
+                enabled = urlText.isNotBlank(),
+                colors = ButtonDefaults.buttonColors(containerColor = HordeColors.TealPrimary),
+                onClick = {
+                    val res = GenerationUrlParser.parseString(urlText)
+                    if (res != null && res.hasMetadata) {
+                        onApply(res.metadata)
+                    } else if (res != null) {
+                        GenerationUrlParser.forwardToBrowser(context, urlText)
+                        onDismiss()
+                    } else {
+                        parseError = "Invalid URL. Please enter a valid http/https link."
+                    }
+                },
+            ) {
+                Text("Apply Settings", color = Color(0xFF020617), fontWeight = FontWeight.SemiBold)
+            }
+        },
+    )
 }

@@ -10,6 +10,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import net.hordeslop.studio.domain.ActivityDestination
+import net.hordeslop.studio.domain.GenerationUrlParser
 import net.hordeslop.studio.ui.MainViewModel
 import net.hordeslop.studio.ui.components.EXTRA_SINGLE_ACTIVITY_DEST
 import net.hordeslop.studio.ui.components.HordeModeScaffold
@@ -34,9 +35,30 @@ abstract class BaseHordeActivity : ComponentActivity() {
         vm.setSingleActivityDestination(target)
     }
 
+    protected fun handleIncomingIntent(incoming: Intent?) {
+        val action = incoming?.action
+        val data = incoming?.data
+        if (action == Intent.ACTION_VIEW && data != null) {
+            val parsed = GenerationUrlParser.parse(data)
+            if (parsed.hasMetadata) {
+                vm.applyParsedImageMetadata(parsed.metadata)
+                vm.showToast("Applied generation settings from link")
+                if (this is MainActivity) {
+                    vm.setSingleActivityDestination(ActivityDestination.IMAGE_GEN)
+                }
+            } else {
+                GenerationUrlParser.forwardToBrowser(this, data.toString())
+                if (this is ImageGenActivity && (incoming.flags and Intent.FLAG_ACTIVITY_LAUNCHED_FROM_HISTORY == 0)) {
+                    finish()
+                }
+            }
+        }
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         applySingleActivityIntent(intent)
+        handleIncomingIntent(intent)
         if (intent?.action == Intent.ACTION_SET_WALLPAPER) {
             vm.showToast("Open an image → More → Set as wallpaper")
         }
@@ -159,11 +181,18 @@ class MainActivity : BaseHordeActivity() {
         super.onNewIntent(intent)
         setIntent(intent)
         applySingleActivityIntent(intent)
+        handleIncomingIntent(intent)
     }
 }
 
 class ImageGenActivity : BaseHordeActivity() {
     override val destination = ActivityDestination.IMAGE_GEN
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        handleIncomingIntent(intent)
+    }
 }
 
 class GalleryActivity : BaseHordeActivity() {
