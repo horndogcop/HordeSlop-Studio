@@ -520,6 +520,7 @@ class IssueFixesTest {
             """.trimIndent(),
         )
         assertEquals(listOf("first prompt", "second prompt"), parsed)
-        assertTrue(TemplatePrompts.PRESETS.size >= 55)
+        assertEquals(100, TemplatePrompts.PRESETS.size)
+        assertEquals(100, TemplatePrompts.PRESETS.distinct().size)
     }
 }
