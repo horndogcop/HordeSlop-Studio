@@ -640,114 +640,30 @@ class HordecraftRepository(
     }
 
     suspend fun submitGeneration(spec: StudioSubmissionSpec): List<ActiveJobEntity> {
-        val now = System.currentTimeMillis()
-        promptHistoryDao.upsert(
-            PromptHistoryEntity(
-                id = "h_${now}_${UUID.randomUUID().toString().take(6)}",
-                title = null,
-                prompt = spec.prompt,
-                negativePrompt = spec.negativePrompt,
-                model = spec.selectedModels.firstOrNull().orEmpty(),
-                steps = spec.steps,
-                cfg = spec.cfg,
-                clipSkip = spec.clipSkip,
-                sampler = spec.sampler,
-                scheduler = spec.scheduler,
-                timestampMillis = now,
-                isFavorite = false,
-            ),
+        val plan = SubmissionQueueCoordinator.planStudioSubmission(spec)
+        return SubmissionQueueCoordinator.persistAtomically(
+            plan = plan,
+            runInTransaction = { block -> database.withTransaction { block() } },
+            insertJobs = { jobs -> activeJobDao.upsertAll(jobs) },
+            insertHistory = { entries -> promptHistoryDao.upsertAll(entries) },
         )
-
-        val chunks: List<GenerationChunk> = StyleContractEngine.buildSubmissionChunks(spec)
-        val created = chunks.mapIndexed { idx, chunk ->
-            val promptFromPayload = chunk.payload["prompt"]?.jsonPrimitive?.contentOrNull ?: spec.prompt
-            ActiveJobEntity(
-                id = "local_${UUID.randomUUID()}",
-                requestId = "",
-                prompt = promptFromPayload.substringBefore("###").trim().ifEmpty { spec.prompt },
-                negativePrompt = spec.negativePrompt,
-                modelsJoined = chunk.models.joinToString("||"),
-                status = JobStatus.LOCAL_QUEUED.name,
-                waitTimeSeconds = 0,
-                queuePosition = 0,
-                finished = 0,
-                processing = 0,
-                total = chunk.count,
-                seed = spec.seed,
-                steps = chunk.steps ?: spec.steps,
-                cfg = chunk.cfg ?: spec.cfg,
-                clipSkip = chunk.clipSkip ?: spec.clipSkip,
-                sampler = chunk.sampler ?: spec.sampler,
-                scheduler = chunk.scheduler ?: spec.scheduler,
-                width = chunk.width ?: spec.width,
-                height = chunk.height ?: spec.height,
-                submittedPayloadJson = chunk.payloadJsonString,
-                errorMessage = null,
-                createdAtMillis = now + idx,
-            )
-        }
-        activeJobDao.upsertAll(created)
-        return created
     }
 
     suspend fun submitRawGenerationPayloads(
         spec: StudioSubmissionSpec,
         rawPayloadJsons: List<String>,
     ): List<ActiveJobEntity> {
-        val now = System.currentTimeMillis()
-        val parsedPayloads = rawPayloadJsons.map { raw ->
-            StyleContractEngine.normalizeCensorNsfwPayload(json.parseToJsonElement(raw).jsonObject)
-        }
-        promptHistoryDao.upsert(
-            PromptHistoryEntity(
-                id = "h_${now}_${UUID.randomUUID().toString().take(6)}",
-                title = null,
-                prompt = spec.prompt,
-                negativePrompt = spec.negativePrompt,
-                model = spec.selectedModels.firstOrNull().orEmpty(),
-                steps = spec.steps,
-                cfg = spec.cfg,
-                clipSkip = spec.clipSkip,
-                sampler = spec.sampler,
-                scheduler = spec.scheduler,
-                timestampMillis = now,
-                isFavorite = false,
-            ),
+        val plan = SubmissionQueueCoordinator.planRawSubmission(
+            spec = spec,
+            rawPayloadJsons = rawPayloadJsons,
+            json = json,
         )
-        val created = parsedPayloads.mapIndexed { idx, payload ->
-            val modelsFromPayload = payload["models"]?.let { elem ->
-                runCatching { elem.jsonArray.mapNotNull { it.jsonPrimitive.contentOrNull } }.getOrNull()
-            }?.takeIf { it.isNotEmpty() } ?: spec.selectedModels
-            val paramsObj = payload["params"]?.let { runCatching { it.jsonObject }.getOrNull() }
-            val countFromPayload = paramsObj?.get("n")?.jsonPrimitive?.intOrNull ?: 1
-            val promptFromPayload = payload["prompt"]?.jsonPrimitive?.contentOrNull ?: spec.prompt
-            ActiveJobEntity(
-                id = "local_${UUID.randomUUID()}",
-                requestId = "",
-                prompt = promptFromPayload.substringBefore("###").trim().ifEmpty { spec.prompt },
-                negativePrompt = spec.negativePrompt,
-                modelsJoined = modelsFromPayload.joinToString("||"),
-                status = JobStatus.LOCAL_QUEUED.name,
-                waitTimeSeconds = 0,
-                queuePosition = 0,
-                finished = 0,
-                processing = 0,
-                total = countFromPayload,
-                seed = spec.seed,
-                steps = paramsObj?.get("steps")?.jsonPrimitive?.intOrNull ?: spec.steps,
-                cfg = paramsObj?.get("cfg_scale")?.jsonPrimitive?.floatOrNull ?: spec.cfg,
-                clipSkip = paramsObj?.get("clip_skip")?.jsonPrimitive?.intOrNull ?: spec.clipSkip,
-                sampler = paramsObj?.get("sampler_name")?.jsonPrimitive?.contentOrNull ?: spec.sampler,
-                scheduler = paramsObj?.get("scheduler")?.jsonPrimitive?.contentOrNull ?: spec.scheduler,
-                width = paramsObj?.get("width")?.jsonPrimitive?.intOrNull ?: spec.width,
-                height = paramsObj?.get("height")?.jsonPrimitive?.intOrNull ?: spec.height,
-                submittedPayloadJson = json.encodeToString(JsonObject.serializer(), payload),
-                errorMessage = null,
-                createdAtMillis = now + idx,
-            )
-        }
-        activeJobDao.upsertAll(created)
-        return created
+        return SubmissionQueueCoordinator.persistAtomically(
+            plan = plan,
+            runInTransaction = { block -> database.withTransaction { block() } },
+            insertJobs = { jobs -> activeJobDao.upsertAll(jobs) },
+            insertHistory = { entries -> promptHistoryDao.upsertAll(entries) },
+        )
     }
 
     suspend fun enqueueReroll(image: SavedImage): ActiveJobEntity {

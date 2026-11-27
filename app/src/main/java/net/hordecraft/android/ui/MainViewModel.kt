@@ -516,10 +516,30 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun applyHistoryRecord(record: PromptRecord) {
         _studio.update { state ->
+            val resolvedModels = if (record.model.isBlank()) {
+                state.selectedModels
+            } else {
+                val exactMatch = state.models.firstOrNull { it.name.equals(record.model, ignoreCase = true) }?.name
+                if (exactMatch != null) {
+                    listOf(exactMatch)
+                } else {
+                    val split = record.model.split(",")
+                        .map { it.trim() }
+                        .filter { it.isNotEmpty() }
+                    if (split.isNotEmpty()) {
+                        split.map { part ->
+                            state.models.firstOrNull { it.name.equals(part, ignoreCase = true) }?.name ?: part
+                        }
+                    } else {
+                        state.selectedModels
+                    }
+                }
+            }
             state.copy(
                 prompt = record.prompt,
                 negativePrompt = record.negativePrompt,
-                selectedModels = if (record.model.isNotBlank()) listOf(record.model) else state.selectedModels,
+                selectedModels = resolvedModels,
+                multiModelEnabled = resolvedModels.size > 1,
                 steps = record.steps,
                 cfg = record.cfg,
                 clipSkip = record.clipSkip,
