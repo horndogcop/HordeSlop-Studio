@@ -37,6 +37,9 @@ abstract class BaseHordeActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         applySingleActivityIntent(intent)
+        if (intent?.action == Intent.ACTION_SET_WALLPAPER) {
+            vm.showToast("Open an image → More → Set as wallpaper")
+        }
         setContent {
             val settings by vm.settings.collectAsStateWithLifecycle()
             val studio by vm.studio.collectAsStateWithLifecycle()

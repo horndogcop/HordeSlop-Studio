@@ -7,6 +7,7 @@
     <string name="title_activity_models">HordeSlop Studio · Models</string>
     <string name="title_activity_text">HordeSlop Studio · Text</string>
     <string name="title_activity_alchemist">HordeSlop Studio · Alchemist</string>
+    <string name="title_wallpaper_gallery">HordeSlop Studio Gallery</string>
     <string name="shortcut_image_short">Image</string>
     <string name="shortcut_image_long">Generate Images</string>
     <string name="shortcut_gallery_short">Gallery</string>

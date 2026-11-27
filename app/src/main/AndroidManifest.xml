@@ -85,6 +85,19 @@
             android:launchMode="singleTask"
             android:taskAffinity="net.hordeslop.studio.task.gallery" />
 
+        <activity-alias
+            android:name=".WallpaperGalleryPicker"
+            android:enabled="true"
+            android:exported="true"
+            android:icon="@mipmap/ic_launcher_robot"
+            android:label="@string/title_wallpaper_gallery"
+            android:targetActivity=".ui.activities.GalleryActivity">
+            <intent-filter>
+                <action android:name="android.intent.action.SET_WALLPAPER" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+        </activity-alias>
+
         <activity
             android:name=".ui.activities.UserActivity"
             android:exported="true"
