@@ -59,6 +59,8 @@ import net.hordeslop.studio.domain.HordePerformanceSummary
 import net.hordeslop.studio.domain.HordeStyle
 import net.hordeslop.studio.domain.JobProgressState
 import net.hordeslop.studio.domain.JobStatus
+import net.hordeslop.studio.domain.LiveGenerationParser
+import net.hordeslop.studio.domain.LiveRemoteGeneration
 import net.hordeslop.studio.domain.ParsedImageMetadata
 import net.hordeslop.studio.domain.PollApiOutcome
 import net.hordeslop.studio.domain.PromptRecord
@@ -284,6 +286,150 @@ class HordecraftRepository(
                     kudosEarnedWorkers = dto.records?.contribution?.megapixelsteps ?: 0.0,
                 )
             }
+        }
+    }
+
+    suspend fun fetchLiveRemoteGenerations(): LiveGenerationsFetchResult {
+        val key = settingsStore.settings.first().hordeApiKey
+        val mode = AuthMode.inferFromKey(key)
+        if (mode != AuthMode.USER_KEY) {
+            return LiveGenerationsFetchResult(authMode = mode)
+        }
+
+        val userDto = try {
+            hordeApi.findUser()
+        } catch (t: Throwable) {
+            if (t is CancellationException) throw t
+            return LiveGenerationsFetchResult(
+                authMode = mode,
+                errorMessage = formatSubmissionError(t),
+            )
+        }
+
+        val imageIds = userDto.activeGenerations?.image.orEmpty().distinct()
+        val textIds = userDto.activeGenerations?.text.orEmpty().distinct()
+        val alchemyIds = userDto.activeGenerations?.alchemy.orEmpty().distinct()
+        if (imageIds.isEmpty()) {
+            return LiveGenerationsFetchResult(
+                authMode = mode,
+                items = emptyList(),
+                textRequestIds = textIds,
+                alchemyRequestIds = alchemyIds,
+            )
+        }
+
+        val trackedRequestIds = activeJobDao.getAll()
+            .filter { !it.dismissed }
+            .flatMap { listOf(it.id, it.requestId) }
+            .filter { it.isNotBlank() }
+            .toSet()
+
+        val items = mutableListOf<LiveRemoteGeneration>()
+        for (requestId in imageIds) {
+            var lookupError: String? = null
+            val requestJson = try {
+                hordeApi.getImageRequestParameters(requestId)
+            } catch (t: Throwable) {
+                if (t is CancellationException) throw t
+                lookupError = formatSubmissionError(t)
+                null
+            }
+
+            val checkSnapshot = try {
+                hordeApi.checkGeneration(requestId).toSnapshot()
+            } catch (t: Throwable) {
+                if (t is CancellationException) throw t
+                if (lookupError == null) {
+                    lookupError = formatSubmissionError(t)
+                }
+                null
+            }
+
+            items += LiveGenerationParser.parse(
+                requestId = requestId,
+                requestJson = requestJson,
+                check = checkSnapshot,
+                isTrackedLocally = requestId in trackedRequestIds,
+                requestLookupError = lookupError,
+            )
+        }
+
+        return LiveGenerationsFetchResult(
+            authMode = mode,
+            items = items,
+            textRequestIds = textIds,
+            alchemyRequestIds = alchemyIds,
+        )
+    }
+
+    suspend fun adoptRemoteGeneration(live: LiveRemoteGeneration) {
+        val existing = activeJobDao.findById(live.requestId)
+        val total = live.imageCount
+            .coerceAtLeast(live.finished + live.processing + live.waiting)
+            .coerceAtLeast(1)
+        val nextStatus = when {
+            live.processing > 0 -> JobStatus.PROCESSING
+            else -> JobStatus.QUEUED
+        }
+        val entity = if (existing != null) {
+            existing.copy(
+                requestId = live.requestId,
+                prompt = existing.prompt.ifBlank { live.prompt.ifBlank { "Request ${live.requestId.take(8)}" } },
+                negativePrompt = existing.negativePrompt.ifBlank { live.negativePrompt },
+                modelsJoined = existing.modelsJoined.ifBlank { live.models.joinToString("||") },
+                status = if (JobStatus.fromStorage(existing.status).isTerminal) existing.status else nextStatus.name,
+                waitTimeSeconds = live.waitTimeSeconds,
+                queuePosition = live.queuePosition,
+                finished = maxOf(existing.finished, live.finished),
+                processing = live.processing,
+                total = maxOf(existing.total, total),
+                submittedPayloadJson = existing.submittedPayloadJson.ifBlank { live.rawRequestJson },
+                dismissed = false,
+                dismissedAtFinishedCount = 0,
+            )
+        } else {
+            ActiveJobEntity(
+                id = live.requestId,
+                requestId = live.requestId,
+                prompt = live.prompt.ifBlank { "Request ${live.requestId.take(8)}" },
+                negativePrompt = live.negativePrompt,
+                modelsJoined = live.models.joinToString("||"),
+                status = nextStatus.name,
+                waitTimeSeconds = live.waitTimeSeconds,
+                queuePosition = live.queuePosition,
+                finished = live.finished,
+                processing = live.processing,
+                total = total,
+                seed = live.seed.orEmpty(),
+                steps = live.steps ?: 30,
+                cfg = live.cfg ?: 7.0f,
+                clipSkip = live.clipSkip ?: 1,
+                sampler = live.sampler ?: "k_euler",
+                scheduler = live.scheduler ?: "normal",
+                width = live.width ?: 512,
+                height = live.height ?: 512,
+                submittedPayloadJson = live.rawRequestJson,
+                errorMessage = null,
+                createdAtMillis = System.currentTimeMillis(),
+                dismissed = false,
+                dismissedAtFinishedCount = 0,
+            )
+        }
+        activeJobDao.upsert(entity)
+    }
+
+    suspend fun cancelRemoteGeneration(requestId: String): Boolean {
+        val existing = activeJobDao.findById(requestId)
+        if (existing != null) {
+            cancelJobWithPartialRecovery(requestId)
+            return true
+        }
+        return try {
+            hordeApi.cancelGeneration(requestId)
+            true
+        } catch (t: Throwable) {
+            if (t is CancellationException) throw t
+            false
         }
     }
 
@@ -1313,6 +1459,14 @@ class HordecraftRepository(
     data class JobPollNotification(
         val title: String,
         val body: String,
+    )
+
+    data class LiveGenerationsFetchResult(
+        val authMode: AuthMode,
+        val items: List<LiveRemoteGeneration> = emptyList(),
+        val textRequestIds: List<String> = emptyList(),
+        val alchemyRequestIds: List<String> = emptyList(),
+        val errorMessage: String? = null,
     )
 
     companion object {

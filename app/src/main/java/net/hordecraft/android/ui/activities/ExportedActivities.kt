@@ -150,9 +150,9 @@ abstract class BaseHordeActivity : ComponentActivity() {
                             pendingSearchQuery = pendingGalleryQuery,
                         )
                         ActivityDestination.USER -> UserScreen(
-                            stats = studio.userStats,
-                            performance = studio.hordePerformance,
-                            onRefreshStats = vm::refreshUserStats,
+                            vm = vm,
+                            studio = studio,
+                            settings = settings,
                         )
                         ActivityDestination.SETTINGS -> SettingsScreen(
                             vm = vm,
