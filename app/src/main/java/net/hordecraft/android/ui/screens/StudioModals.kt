@@ -148,7 +148,9 @@ fun HistoryFavoritesDialog(
         if (mode == "favorites" && !rec.isFavorite) return@filter false
         if (query.isBlank()) return@filter true
         val q = query.lowercase()
-        rec.prompt.lowercase().contains(q) || rec.model.lowercase().contains(q)
+        rec.prompt.lowercase().contains(q) ||
+            rec.model.lowercase().contains(q) ||
+            (rec.title?.lowercase()?.contains(q) == true)
     }
 
     HordeModalDialog(
@@ -201,6 +203,15 @@ fun HistoryFavoritesDialog(
                             horizontalArrangement = Arrangement.SpaceBetween,
                         ) {
                             Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                if (!rec.title.isNullOrBlank()) {
+                                    Text(
+                                        text = "Style: ${rec.title}",
+                                        fontSize = 10.sp,
+                                        color = HordeColors.TealSoft,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                    )
+                                }
                                 Text(
                                     text = rec.prompt,
                                     fontSize = 12.sp,
