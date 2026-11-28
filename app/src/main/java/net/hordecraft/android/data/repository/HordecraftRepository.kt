@@ -3,6 +3,7 @@ package net.hordeslop.studio.data.repository
 import android.content.Context
 import android.net.Uri
 import android.util.Base64
+import android.util.Log
 import androidx.room.withTransaction
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
@@ -1314,6 +1315,10 @@ class HordecraftRepository(
                 DatabaseBackupCodec.decodeJson(bytes.toString(Charsets.UTF_8))
             }
 
+            // Validate the entire bundle before touching any storage. A bad backup is rejected
+            // here with a clear error; neither Room nor DataStore is modified.
+            DatabaseBackupCodec.validateBackupBundle(bundle)
+
             val historyEntities = bundle.promptHistory.map { it.toEntity() }
             val defaultEntities = bundle.modelDefaults.map { it.toEntity() }
             val imageEntities = bundle.savedImages.map { it.toEntity() }
@@ -1341,6 +1346,22 @@ class HordecraftRepository(
                 DatabaseBackupCodec.mergeSettings(settingsDto, base)
             }
 
+            // For replace mode, snapshot the current Room contents before writing so we can
+            // attempt a rollback if the subsequent DataStore write fails. The snapshot is taken
+            // inside a read transaction to get a consistent view.
+            val roomSnapshot: RoomSnapshot? = if (replaceExisting && mergedSettings != null) {
+                database.withTransaction {
+                    RoomSnapshot(
+                        history = promptHistoryDao.getAll(),
+                        defaults = modelDefaultsDao.getAll(),
+                        images = savedImageDao.getAll(),
+                        jobs = activeJobDao.getAll(),
+                    )
+                }
+            } else {
+                null
+            }
+
             database.withTransaction {
                 if (replaceExisting) {
                     promptHistoryDao.deleteAll()
@@ -1355,9 +1376,43 @@ class HordecraftRepository(
             }
 
             // Apply portable settings atomically (single DataStore edit) after the Room
-            // transaction succeeds. Secrets and device-bound fields are never touched here.
+            // transaction succeeds. If DataStore fails and we have a Room snapshot (replace
+            // mode), attempt a best-effort rollback of Room before rethrowing so the user
+            // is not left with new DB data and old settings. The rollback itself may fail
+            // (e.g. disk full); that failure is logged but does not suppress the original error.
+            //
+            // In merge mode (no snapshot) a DataStore failure after a successful Room upsert
+            // leaves the upserted rows in place. The additive nature of a merge means partial
+            // state is recoverable on retry; a rollback attempt is not warranted.
+            var settingsApplied = false
             if (mergedSettings != null) {
-                settingsStore.applyPortableSettings(mergedSettings)
+                runCatching { settingsStore.applyPortableSettings(mergedSettings) }
+                    .onSuccess { settingsApplied = true }
+                    .onFailure { dsErr ->
+                        if (roomSnapshot != null) {
+                            runCatching {
+                                database.withTransaction {
+                                    promptHistoryDao.deleteAll()
+                                    modelDefaultsDao.deleteAll()
+                                    savedImageDao.deleteAll()
+                                    activeJobDao.deleteAll()
+                                    if (roomSnapshot.history.isNotEmpty()) promptHistoryDao.upsertAll(roomSnapshot.history)
+                                    if (roomSnapshot.defaults.isNotEmpty()) modelDefaultsDao.upsertAll(roomSnapshot.defaults)
+                                    if (roomSnapshot.images.isNotEmpty()) savedImageDao.upsertAll(roomSnapshot.images)
+                                    if (roomSnapshot.jobs.isNotEmpty()) activeJobDao.upsertAll(roomSnapshot.jobs)
+                                }
+                            }.onFailure { rollbackErr ->
+                                Log.w(
+                                    "HordecraftRepo",
+                                    "Room rollback failed after DataStore write error — " +
+                                        "database may be in partially-imported state. " +
+                                        "DataStore error: ${dsErr.message}",
+                                    rollbackErr,
+                                )
+                            }
+                        }
+                        throw dsErr
+                    }
             }
 
             DatabaseSyncCounts(
@@ -1365,6 +1420,7 @@ class HordecraftRepository(
                 modelDefaultsCount = defaultEntities.size,
                 savedImagesCount = imageEntities.size,
                 activeJobsCount = jobEntities.size,
+                settingsApplied = settingsApplied,
             )
         }
 
@@ -1522,6 +1578,14 @@ class HordecraftRepository(
         val textRequestIds: List<String> = emptyList(),
         val alchemyRequestIds: List<String> = emptyList(),
         val errorMessage: String? = null,
+    )
+
+    /** Snapshot of Room table contents taken before a replace-mode import. Used for rollback. */
+    private data class RoomSnapshot(
+        val history: List<PromptHistoryEntity>,
+        val defaults: List<ModelDefaultsEntity>,
+        val images: List<SavedImageEntity>,
+        val jobs: List<ActiveJobEntity>,
     )
 
     companion object {
