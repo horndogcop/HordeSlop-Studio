@@ -1319,6 +1319,28 @@ class HordecraftRepository(
             val imageEntities = bundle.savedImages.map { it.toEntity() }
             val jobEntities = bundle.activeJobs.map { it.toEntity() }
 
+            // Validate and compute the settings patch before touching Room so that a bad
+            // settings section cannot leave the database partially modified with no settings
+            // change applied. In replace mode the backup settings fully replace current
+            // portable settings; in merge mode they are overlaid on current values.
+            val mergedSettings: AppSettings? = bundle.appSettings?.let { settingsDto ->
+                val current = settingsStore.settings.first()
+                val base = if (replaceExisting) AppSettings(
+                    hordeApiKey = current.hordeApiKey,
+                    civitaiApiKey = current.civitaiApiKey,
+                    launcherIcon = current.launcherIcon,
+                    storageMode = current.storageMode,
+                    safTreeUri = current.safTreeUri,
+                    safFolderLabel = current.safFolderLabel,
+                    keepImagesInInternalStorage = current.keepImagesInInternalStorage,
+                    useSeparateActivities = current.useSeparateActivities,
+                    advancedCollapsed = current.advancedCollapsed,
+                    onboardingCompleted = current.onboardingCompleted,
+                    aiNoticeDismissed = current.aiNoticeDismissed,
+                ) else current
+                DatabaseBackupCodec.mergeSettings(settingsDto, base)
+            }
+
             database.withTransaction {
                 if (replaceExisting) {
                     promptHistoryDao.deleteAll()
@@ -1332,24 +1354,10 @@ class HordecraftRepository(
                 if (jobEntities.isNotEmpty()) activeJobDao.upsertAll(jobEntities)
             }
 
-            // Apply portable settings if the backup includes them. Secrets and device-bound
-            // fields are never present in a backup so the existing values are preserved.
-            bundle.appSettings?.let { settingsDto ->
-                val current = settingsStore.settings.first()
-                val merged = DatabaseBackupCodec.mergeSettings(settingsDto, current)
-                settingsStore.setApiBaseUrl(merged.apiBaseUrl)
-                settingsStore.setNavLayout(merged.navLayout)
-                settingsStore.setGenerateButtonPlacement(merged.generateButtonPlacement)
-                settingsStore.setShowModelPreviews(merged.showModelPreviews)
-                settingsStore.setSkipGalleryModalToFullscreen(merged.skipGalleryModalToFullscreen)
-                settingsStore.setAutoClearCompletedQueue(merged.autoClearCompletedQueue)
-                settingsStore.setShowRawRequestReview(merged.showRawRequestReview)
-                settingsStore.setStylesRepoUrls(merged.stylesRepoUrls)
-                settingsStore.setPreventMediaIndexing(merged.preventMediaIndexing)
-                settingsStore.setGlobalRateLimitSeconds(merged.globalRateLimitSeconds)
-                settingsStore.setGalleryColumns(merged.galleryColumns)
-                settingsStore.setShowGalleryPromptOverlay(merged.showGalleryPromptOverlay)
-                settingsStore.setGalleryPagedMode(merged.galleryPagedMode)
+            // Apply portable settings atomically (single DataStore edit) after the Room
+            // transaction succeeds. Secrets and device-bound fields are never touched here.
+            if (mergedSettings != null) {
+                settingsStore.applyPortableSettings(mergedSettings)
             }
 
             DatabaseSyncCounts(

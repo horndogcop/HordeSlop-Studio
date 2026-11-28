@@ -220,4 +220,29 @@ class SettingsDataStore(private val context: Context) {
     suspend fun setGlobalRateLimitSeconds(seconds: Int) {
         context.dataStore.edit { it[Keys.GLOBAL_RATE_LIMIT_SECONDS] = seconds.coerceIn(1, 30) }
     }
+
+    /**
+     * Apply all portable settings from [merged] in a single DataStore edit, keeping the write
+     * atomic. Device-bound and secret fields (API keys, SAF URI, storage mode, launcher icon,
+     * onboarding flags) are not touched; they must be managed via their own setters.
+     */
+    suspend fun applyPortableSettings(merged: AppSettings) {
+        context.dataStore.edit { prefs ->
+            prefs[Keys.API_BASE_URL] = HordeConstants.normalizeBaseUrl(merged.apiBaseUrl)
+            prefs[Keys.NAV_LAYOUT] = merged.navLayout.storageKey
+            prefs[Keys.GENERATE_BUTTON_PLACEMENT] = merged.generateButtonPlacement.storageKey
+            prefs[Keys.SHOW_MODEL_PREVIEWS] = merged.showModelPreviews
+            prefs[Keys.SKIP_GALLERY_TO_FULLSCREEN] = merged.skipGalleryModalToFullscreen
+            prefs[Keys.AUTO_CLEAR_COMPLETED_QUEUE] = merged.autoClearCompletedQueue
+            prefs[Keys.SHOW_RAW_REQUEST_REVIEW] = merged.showRawRequestReview
+            prefs[Keys.STYLES_REPO_URLS] = merged.stylesRepoUrls
+                .map { it.trim() }.filter { it.isNotEmpty() }.distinct()
+                .joinToString("\n")
+            prefs[Keys.PREVENT_MEDIA_INDEXING] = merged.preventMediaIndexing
+            prefs[Keys.GLOBAL_RATE_LIMIT_SECONDS] = merged.globalRateLimitSeconds.coerceIn(1, 30)
+            prefs[Keys.GALLERY_COLUMNS] = merged.galleryColumns.coerceIn(2, 6)
+            prefs[Keys.SHOW_GALLERY_PROMPT_OVERLAY] = merged.showGalleryPromptOverlay
+            prefs[Keys.GALLERY_PAGED_MODE] = merged.galleryPagedMode
+        }
+    }
 }
