@@ -1390,6 +1390,7 @@ class HordecraftRepository(
                     .onSuccess { settingsApplied = true }
                     .onFailure { dsErr ->
                         if (roomSnapshot != null) {
+                            var rollbackFailed = false
                             runCatching {
                                 database.withTransaction {
                                     promptHistoryDao.deleteAll()
@@ -1402,12 +1403,21 @@ class HordecraftRepository(
                                     if (roomSnapshot.jobs.isNotEmpty()) activeJobDao.upsertAll(roomSnapshot.jobs)
                                 }
                             }.onFailure { rollbackErr ->
+                                rollbackFailed = true
                                 Log.w(
                                     "HordecraftRepo",
                                     "Room rollback failed after DataStore write error — " +
                                         "database may be in partially-imported state. " +
                                         "DataStore error: ${dsErr.message}",
                                     rollbackErr,
+                                )
+                            }
+                            if (rollbackFailed) {
+                                throw IllegalStateException(
+                                    "Settings write failed and database rollback also failed — " +
+                                        "app data may be in a partially-imported state. " +
+                                        "Cause: ${dsErr.message}",
+                                    dsErr,
                                 )
                             }
                         }

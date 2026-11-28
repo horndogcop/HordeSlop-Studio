@@ -294,16 +294,22 @@ object DatabaseBackupCodec {
      * describing the first problem found, so callers can surface a clear error without touching
      * Room or DataStore.
      *
-     * Validation policy:
+     * Validation policy (two-layer design):
+     * - This function is the **import gate**: it rejects clearly invalid values so no writes occur.
+     * - [mergeSettings] is the **defensive layer**: it clamps the same numeric fields for direct
+     *   callers that construct a DTO without going through this validator (e.g. in tests or future
+     *   code paths). When called from [importDatabaseFromUri], validation always runs first, so
+     *   [mergeSettings] never sees out-of-range values from an import. The two layers are
+     *   intentionally redundant.
+     *
+     * Fields validated here:
      * - Format version must be >= 1 (also checked in [decodeJson]).
      * - If appSettings is present, `globalRateLimitSeconds` must be in [1, 30] and `galleryColumns`
-     *   in [2, 6]. These are numeric bounds where out-of-range values have no meaningful fallback.
-     *   `mergeSettings` also clamps these fields as a second line of defense for direct callers
-     *   that bypass validation.
+     *   in [2, 6].
      * - Enum-keyed string fields (`navLayout`, `generateButtonPlacement`) are intentionally NOT
-     *   validated here. An unrecognised key means the backup was produced by a newer app version
-     *   with an enum variant this version doesn't know. The `fromKey` helpers fall back to safe
-     *   defaults, which preserves forward compatibility.
+     *   validated. An unrecognised key means the backup was produced by a newer app version with
+     *   an enum variant this version doesn't know; the `fromKey` helpers fall back to safe
+     *   defaults, preserving forward compatibility.
      * - Database entities must have non-blank primary keys (id / modelName).
      */
     fun validateBackupBundle(bundle: DatabaseBackupBundle) {
