@@ -955,4 +955,91 @@ class IssueFixesTest {
             merged.stylesRepoUrls,
         )
     }
+
+    @Test
+    fun settingsBackupMalformedApiBaseUrlFallsBackToDefault() {
+        // A blank or whitespace-only apiBaseUrl should normalize to the default
+        val dtoBlank = net.hordeslop.studio.data.local.AppSettingsBackupDto(apiBaseUrl = "   ")
+        val current = net.hordeslop.studio.data.local.AppSettings()
+        val mergedBlank = net.hordeslop.studio.data.local.DatabaseBackupCodec.mergeSettings(dtoBlank, current)
+        assertEquals(net.hordeslop.studio.domain.HordeConstants.DEFAULT_API_BASE_URL, mergedBlank.apiBaseUrl)
+
+        // A well-formed custom URL should survive normalisation unchanged (trailing slash kept)
+        val dtoCustom = net.hordeslop.studio.data.local.AppSettingsBackupDto(
+            apiBaseUrl = "https://selfhosted.example.com/api/v2/",
+        )
+        val mergedCustom = net.hordeslop.studio.data.local.DatabaseBackupCodec.mergeSettings(dtoCustom, current)
+        assertEquals("https://selfhosted.example.com/api/v2/", mergedCustom.apiBaseUrl)
+    }
+
+    @Test
+    fun settingsBackupReplaceModeResetsPortableFieldsToBackupValues() {
+        // In replace mode the caller passes a fresh AppSettings base that retains only
+        // device-bound and secret fields; portable fields come entirely from the backup DTO.
+        val backupDto = net.hordeslop.studio.data.local.AppSettingsBackupDto(
+            navLayout = "menu",
+            galleryColumns = 5,
+            globalRateLimitSeconds = 15,
+            showModelPreviews = false,
+            stylesRepoUrls = listOf("https://styles.example.com/styles.json"),
+        )
+        // Simulate what importDatabaseFromUri does for replaceExisting == true:
+        // start from a fresh AppSettings that carries only non-portable fields.
+        val currentDeviceBound = net.hordeslop.studio.data.local.AppSettings(
+            hordeApiKey = "user_key",
+            civitaiApiKey = "civ_key",
+            storageMode = net.hordeslop.studio.domain.StorageMode.SAF,
+            safTreeUri = "content://com.example/tree/Primary",
+            launcherIcon = net.hordeslop.studio.domain.LauncherIconChoice.HORDE_HAIDRA,
+        )
+        val replaceBase = net.hordeslop.studio.data.local.AppSettings(
+            hordeApiKey = currentDeviceBound.hordeApiKey,
+            civitaiApiKey = currentDeviceBound.civitaiApiKey,
+            launcherIcon = currentDeviceBound.launcherIcon,
+            storageMode = currentDeviceBound.storageMode,
+            safTreeUri = currentDeviceBound.safTreeUri,
+            safFolderLabel = currentDeviceBound.safFolderLabel,
+            keepImagesInInternalStorage = currentDeviceBound.keepImagesInInternalStorage,
+            useSeparateActivities = currentDeviceBound.useSeparateActivities,
+            advancedCollapsed = currentDeviceBound.advancedCollapsed,
+            onboardingCompleted = currentDeviceBound.onboardingCompleted,
+            aiNoticeDismissed = currentDeviceBound.aiNoticeDismissed,
+        )
+        val replaced = net.hordeslop.studio.data.local.DatabaseBackupCodec.mergeSettings(backupDto, replaceBase)
+
+        // Portable fields come from the backup
+        assertEquals(net.hordeslop.studio.domain.NavLayoutMode.MENU, replaced.navLayout)
+        assertEquals(5, replaced.galleryColumns)
+        assertEquals(15, replaced.globalRateLimitSeconds)
+        assertEquals(false, replaced.showModelPreviews)
+        assertEquals(listOf("https://styles.example.com/styles.json"), replaced.stylesRepoUrls)
+
+        // Device-bound / secret fields are still preserved
+        assertEquals("user_key", replaced.hordeApiKey)
+        assertEquals("civ_key", replaced.civitaiApiKey)
+        assertEquals("content://com.example/tree/Primary", replaced.safTreeUri)
+        assertEquals(net.hordeslop.studio.domain.StorageMode.SAF, replaced.storageMode)
+        assertEquals(net.hordeslop.studio.domain.LauncherIconChoice.HORDE_HAIDRA, replaced.launcherIcon)
+    }
+
+    @Test
+    fun settingsBackupInvalidFormatVersionThrows() {
+        val badJson = """
+            {
+              "app": "hordeslop-studio",
+              "formatVersion": 0,
+              "exportedAtMillis": 1000,
+              "promptHistory": [],
+              "modelDefaults": [],
+              "savedImages": [],
+              "activeJobs": []
+            }
+        """.trimIndent()
+        try {
+            net.hordeslop.studio.data.local.DatabaseBackupCodec.decodeJson(badJson)
+            assertTrue("Expected an exception for formatVersion 0", false)
+        } catch (e: IllegalArgumentException) {
+            assertTrue(e.message?.contains("Unsupported backup format version") == true)
+        }
+    }
 }
