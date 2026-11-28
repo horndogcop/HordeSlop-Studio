@@ -1414,9 +1414,8 @@ class HordecraftRepository(
                             }
                             if (rollbackFailed) {
                                 throw IllegalStateException(
-                                    "Settings write failed and database rollback also failed — " +
-                                        "app data may be in a partially-imported state. " +
-                                        "Cause: ${dsErr.message}",
+                                    "Import failed: settings write error and database rollback also failed. " +
+                                        "App data may be in a partially-imported state.",
                                     dsErr,
                                 )
                             }

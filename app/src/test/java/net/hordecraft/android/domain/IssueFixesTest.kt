@@ -1334,9 +1334,8 @@ class IssueFixesTest {
 
         // Replicate the wrapping logic from importDatabaseFromUri
         val compoundException = IllegalStateException(
-            "Settings write failed and database rollback also failed — " +
-                "app data may be in a partially-imported state. " +
-                "Cause: ${dsError.message}",
+            "Import failed: settings write error and database rollback also failed. " +
+                "App data may be in a partially-imported state.",
             dsError,
         )
 
