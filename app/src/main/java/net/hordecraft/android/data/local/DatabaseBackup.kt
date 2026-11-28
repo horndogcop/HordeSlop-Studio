@@ -296,12 +296,15 @@ object DatabaseBackupCodec {
      *
      * Validation policy:
      * - Format version must be >= 1 (also checked in [decodeJson]).
-     * - If appSettings is present, globalRateLimitSeconds must be in [1, 30], galleryColumns in
-     *   [2, 6], and stylesRepoUrls must not be all blank (a fully blank list is replaced by the
-     *   default, not an error — but a list that is not a list is a parse error caught earlier).
+     * - If appSettings is present, `globalRateLimitSeconds` must be in [1, 30] and `galleryColumns`
+     *   in [2, 6]. These are numeric bounds where out-of-range values have no meaningful fallback.
+     *   `mergeSettings` also clamps these fields as a second line of defense for direct callers
+     *   that bypass validation.
+     * - Enum-keyed string fields (`navLayout`, `generateButtonPlacement`) are intentionally NOT
+     *   validated here. An unrecognised key means the backup was produced by a newer app version
+     *   with an enum variant this version doesn't know. The `fromKey` helpers fall back to safe
+     *   defaults, which preserves forward compatibility.
      * - Database entities must have non-blank primary keys (id / modelName).
-     * - SAF-bound values (safTreeUri, storageMode=SAF) must not be present in the backup DTO
-     *   (they are excluded at export time; presence would indicate a corrupt or hand-crafted file).
      */
     fun validateBackupBundle(bundle: DatabaseBackupBundle) {
         require(bundle.formatVersion >= 1) { "Unsupported backup format version: ${bundle.formatVersion}" }
