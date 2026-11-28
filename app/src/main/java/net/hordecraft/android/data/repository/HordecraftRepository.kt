@@ -1276,11 +1276,13 @@ class HordecraftRepository(
         val defaults = modelDefaultsDao.getAll()
         val images = savedImageDao.getAll()
         val jobs = activeJobDao.getAll()
+        val currentSettings = settingsStore.settings.first()
         val bundle = DatabaseBackupCodec.buildBundle(
             promptHistory = history,
             modelDefaults = defaults,
             savedImages = images,
             activeJobs = jobs,
+            settings = currentSettings,
         )
         val encoded = DatabaseBackupCodec.encodeJson(bundle)
         val outStream = context.contentResolver.openOutputStream(uri)
@@ -1328,6 +1330,26 @@ class HordecraftRepository(
                 if (defaultEntities.isNotEmpty()) modelDefaultsDao.upsertAll(defaultEntities)
                 if (imageEntities.isNotEmpty()) savedImageDao.upsertAll(imageEntities)
                 if (jobEntities.isNotEmpty()) activeJobDao.upsertAll(jobEntities)
+            }
+
+            // Apply portable settings if the backup includes them. Secrets and device-bound
+            // fields are never present in a backup so the existing values are preserved.
+            bundle.appSettings?.let { settingsDto ->
+                val current = settingsStore.settings.first()
+                val merged = DatabaseBackupCodec.mergeSettings(settingsDto, current)
+                settingsStore.setApiBaseUrl(merged.apiBaseUrl)
+                settingsStore.setNavLayout(merged.navLayout)
+                settingsStore.setGenerateButtonPlacement(merged.generateButtonPlacement)
+                settingsStore.setShowModelPreviews(merged.showModelPreviews)
+                settingsStore.setSkipGalleryModalToFullscreen(merged.skipGalleryModalToFullscreen)
+                settingsStore.setAutoClearCompletedQueue(merged.autoClearCompletedQueue)
+                settingsStore.setShowRawRequestReview(merged.showRawRequestReview)
+                settingsStore.setStylesRepoUrls(merged.stylesRepoUrls)
+                settingsStore.setPreventMediaIndexing(merged.preventMediaIndexing)
+                settingsStore.setGlobalRateLimitSeconds(merged.globalRateLimitSeconds)
+                settingsStore.setGalleryColumns(merged.galleryColumns)
+                settingsStore.setShowGalleryPromptOverlay(merged.showGalleryPromptOverlay)
+                settingsStore.setGalleryPagedMode(merged.galleryPagedMode)
             }
 
             DatabaseSyncCounts(

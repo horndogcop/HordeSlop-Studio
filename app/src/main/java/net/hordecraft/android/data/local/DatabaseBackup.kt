@@ -5,6 +5,11 @@ import android.database.sqlite.SQLiteDatabase
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
+import net.hordeslop.studio.domain.GenerateButtonPlacement
+import net.hordeslop.studio.domain.HordeConstants
+import net.hordeslop.studio.domain.LauncherIconChoice
+import net.hordeslop.studio.domain.NavLayoutMode
+import net.hordeslop.studio.domain.StorageMode
 import java.io.File
 
 @Serializable
@@ -85,11 +90,43 @@ data class ActiveJobBackupDto(
     val dismissedAtFinishedCount: Int = 0,
 )
 
+/**
+ * Portable app settings included in a backup.
+ *
+ * Portability policy:
+ * - INCLUDED: layout/UI prefs, gallery settings, style repo URLs, rate limit, generation button
+ *   placement, model preview toggle, gallery overlays, queue/review flags.
+ * - EXCLUDED (secrets): hordeApiKey, civitaiApiKey — never written to a backup.
+ * - EXCLUDED (device-bound): safTreeUri, launcherIcon, useSeparateActivities, onboardingCompleted,
+ *   aiNoticeDismissed, advancedCollapsed — omitted; safe defaults are used on restore.
+ * - EXCLUDED (device-bound storage): storageMode, safFolderLabel, keepImagesInInternalStorage —
+ *   device-specific, omitted.
+ * - apiBaseUrl: included because it may point to a private/self-hosted instance the user intentionally
+ *   configured.
+ */
+@Serializable
+data class AppSettingsBackupDto(
+    val apiBaseUrl: String = HordeConstants.DEFAULT_API_BASE_URL,
+    val navLayout: String = NavLayoutMode.BOTTOM.storageKey,
+    val generateButtonPlacement: String = GenerateButtonPlacement.SCROLLING.storageKey,
+    val showModelPreviews: Boolean = true,
+    val skipGalleryModalToFullscreen: Boolean = false,
+    val autoClearCompletedQueue: Boolean = false,
+    val showRawRequestReview: Boolean = false,
+    val stylesRepoUrls: List<String> = listOf(HordeConstants.DEFAULT_STYLES_REPO_URL),
+    val preventMediaIndexing: Boolean = false,
+    val globalRateLimitSeconds: Int = 3,
+    val galleryColumns: Int = 2,
+    val showGalleryPromptOverlay: Boolean = true,
+    val galleryPagedMode: Boolean = false,
+)
+
 @Serializable
 data class DatabaseBackupBundle(
     val app: String = "hordeslop-studio",
-    val formatVersion: Int = 1,
+    val formatVersion: Int = 2,
     val exportedAtMillis: Long = System.currentTimeMillis(),
+    val appSettings: AppSettingsBackupDto? = null,
     val promptHistory: List<PromptHistoryBackupDto> = emptyList(),
     val modelDefaults: List<ModelDefaultsBackupDto> = emptyList(),
     val savedImages: List<SavedImageBackupDto> = emptyList(),
@@ -119,9 +156,27 @@ object DatabaseBackupCodec {
         modelDefaults: List<ModelDefaultsEntity>,
         savedImages: List<SavedImageEntity>,
         activeJobs: List<ActiveJobEntity>,
+        settings: AppSettings? = null,
         exportedAtMillis: Long = System.currentTimeMillis(),
     ): DatabaseBackupBundle = DatabaseBackupBundle(
         exportedAtMillis = exportedAtMillis,
+        appSettings = settings?.let {
+            AppSettingsBackupDto(
+                apiBaseUrl = it.apiBaseUrl,
+                navLayout = it.navLayout.storageKey,
+                generateButtonPlacement = it.generateButtonPlacement.storageKey,
+                showModelPreviews = it.showModelPreviews,
+                skipGalleryModalToFullscreen = it.skipGalleryModalToFullscreen,
+                autoClearCompletedQueue = it.autoClearCompletedQueue,
+                showRawRequestReview = it.showRawRequestReview,
+                stylesRepoUrls = it.stylesRepoUrls,
+                preventMediaIndexing = it.preventMediaIndexing,
+                globalRateLimitSeconds = it.globalRateLimitSeconds,
+                galleryColumns = it.galleryColumns,
+                showGalleryPromptOverlay = it.showGalleryPromptOverlay,
+                galleryPagedMode = it.galleryPagedMode,
+            )
+        },
         promptHistory = promptHistory.map {
             PromptHistoryBackupDto(
                 id = it.id,
@@ -209,6 +264,28 @@ object DatabaseBackupCodec {
         require(parsed.formatVersion >= 1) { "Unsupported backup format version" }
         return parsed
     }
+
+    /**
+     * Convert a decoded [AppSettingsBackupDto] into an [AppSettings] patch that can be applied
+     * via [SettingsDataStore]. Returns the target settings with portable fields merged over
+     * [current]. Device-bound and secret fields in [current] are preserved unchanged.
+     */
+    fun mergeSettings(dto: AppSettingsBackupDto, current: AppSettings): AppSettings = current.copy(
+        apiBaseUrl = HordeConstants.normalizeBaseUrl(dto.apiBaseUrl),
+        navLayout = NavLayoutMode.fromKey(dto.navLayout),
+        generateButtonPlacement = GenerateButtonPlacement.fromKey(dto.generateButtonPlacement),
+        showModelPreviews = dto.showModelPreviews,
+        skipGalleryModalToFullscreen = dto.skipGalleryModalToFullscreen,
+        autoClearCompletedQueue = dto.autoClearCompletedQueue,
+        showRawRequestReview = dto.showRawRequestReview,
+        stylesRepoUrls = dto.stylesRepoUrls.map { it.trim() }.filter { it.isNotEmpty() }.distinct()
+            .ifEmpty { listOf(HordeConstants.DEFAULT_STYLES_REPO_URL) },
+        preventMediaIndexing = dto.preventMediaIndexing,
+        globalRateLimitSeconds = dto.globalRateLimitSeconds.coerceIn(1, 30),
+        galleryColumns = dto.galleryColumns.coerceIn(2, 6),
+        showGalleryPromptOverlay = dto.showGalleryPromptOverlay,
+        galleryPagedMode = dto.galleryPagedMode,
+    )
 
     fun isSqliteDatabaseBytes(bytes: ByteArray): Boolean {
         if (bytes.size < SQLITE_MAGIC.size) return false
