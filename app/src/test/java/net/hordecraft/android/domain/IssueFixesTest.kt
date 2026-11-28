@@ -768,4 +768,191 @@ class IssueFixesTest {
         )
         assertEquals("CSAM blocked (3)", multiCsam.errorMessage())
     }
+
+    // ── Issue 53: settings backup ─────────────────────────────────────────────
+
+    @Test
+    fun settingsBackupRoundTripsPortableFields() {
+        val dto = net.hordeslop.studio.data.local.AppSettingsBackupDto(
+            apiBaseUrl = "https://example.com/api/v2/",
+            navLayout = "menu",
+            generateButtonPlacement = "bottom",
+            showModelPreviews = false,
+            skipGalleryModalToFullscreen = true,
+            autoClearCompletedQueue = true,
+            showRawRequestReview = true,
+            stylesRepoUrls = listOf("https://styles.example.com/styles.json"),
+            preventMediaIndexing = true,
+            globalRateLimitSeconds = 10,
+            galleryColumns = 4,
+            showGalleryPromptOverlay = false,
+            galleryPagedMode = true,
+        )
+        val bundle = net.hordeslop.studio.data.local.DatabaseBackupCodec.buildBundle(
+            promptHistory = emptyList(),
+            modelDefaults = emptyList(),
+            savedImages = emptyList(),
+            activeJobs = emptyList(),
+            settings = net.hordeslop.studio.data.local.AppSettings(
+                apiBaseUrl = "https://example.com/api/v2/",
+                navLayout = net.hordeslop.studio.domain.NavLayoutMode.MENU,
+                generateButtonPlacement = net.hordeslop.studio.domain.GenerateButtonPlacement.BOTTOM,
+                showModelPreviews = false,
+                skipGalleryModalToFullscreen = true,
+                autoClearCompletedQueue = true,
+                showRawRequestReview = true,
+                stylesRepoUrls = listOf("https://styles.example.com/styles.json"),
+                preventMediaIndexing = true,
+                globalRateLimitSeconds = 10,
+                galleryColumns = 4,
+                showGalleryPromptOverlay = false,
+                galleryPagedMode = true,
+                // secrets and device-bound fields — should NOT appear in appSettings dto
+                hordeApiKey = "super_secret_key",
+                civitaiApiKey = "civ_secret",
+                safTreeUri = "content://com.example/tree/primary%3AHordeSlop",
+                storageMode = net.hordeslop.studio.domain.StorageMode.SAF,
+                launcherIcon = net.hordeslop.studio.domain.LauncherIconChoice.HORDE_HAIDRA,
+            ),
+        )
+
+        val encoded = net.hordeslop.studio.data.local.DatabaseBackupCodec.encodeJson(bundle)
+        val decoded = net.hordeslop.studio.data.local.DatabaseBackupCodec.decodeJson(encoded)
+        val settings = decoded.appSettings
+        assertFalse("appSettings must be present in format-2 bundle", settings == null)
+        requireNotNull(settings)
+
+        // Portable fields round-trip
+        assertEquals("https://example.com/api/v2/", settings.apiBaseUrl)
+        assertEquals("menu", settings.navLayout)
+        assertEquals("bottom", settings.generateButtonPlacement)
+        assertEquals(false, settings.showModelPreviews)
+        assertEquals(true, settings.skipGalleryModalToFullscreen)
+        assertEquals(true, settings.autoClearCompletedQueue)
+        assertEquals(true, settings.showRawRequestReview)
+        assertEquals(listOf("https://styles.example.com/styles.json"), settings.stylesRepoUrls)
+        assertEquals(true, settings.preventMediaIndexing)
+        assertEquals(10, settings.globalRateLimitSeconds)
+        assertEquals(4, settings.galleryColumns)
+        assertEquals(false, settings.showGalleryPromptOverlay)
+        assertEquals(true, settings.galleryPagedMode)
+
+        // Secrets must NOT appear anywhere in the JSON output
+        assertFalse("API key must not be in backup JSON", encoded.contains("super_secret_key"))
+        assertFalse("Civitai key must not be in backup JSON", encoded.contains("civ_secret"))
+
+        // Device-bound SAF URI must NOT appear
+        assertFalse("SAF tree URI must not be in backup JSON", encoded.contains("primary%3AHordeSlop"))
+    }
+
+    @Test
+    fun settingsBackupSecretsAbsentFromJson() {
+        val bundle = net.hordeslop.studio.data.local.DatabaseBackupCodec.buildBundle(
+            promptHistory = emptyList(),
+            modelDefaults = emptyList(),
+            savedImages = emptyList(),
+            activeJobs = emptyList(),
+            settings = net.hordeslop.studio.data.local.AppSettings(
+                hordeApiKey = "0000111122223333",
+                civitaiApiKey = "civ_abc123",
+            ),
+        )
+        val json = net.hordeslop.studio.data.local.DatabaseBackupCodec.encodeJson(bundle)
+        assertFalse("Horde key must not appear in JSON", json.contains("0000111122223333"))
+        assertFalse("Civitai key must not appear in JSON", json.contains("civ_abc123"))
+    }
+
+    @Test
+    fun settingsBackupMergePreservesSecrets() {
+        val dto = net.hordeslop.studio.data.local.AppSettingsBackupDto(
+            navLayout = "menu",
+            galleryColumns = 3,
+        )
+        val current = net.hordeslop.studio.data.local.AppSettings(
+            hordeApiKey = "my_real_key",
+            civitaiApiKey = "my_civ_key",
+            safTreeUri = "content://com.example/tree/Primary",
+            storageMode = net.hordeslop.studio.domain.StorageMode.SAF,
+        )
+        val merged = net.hordeslop.studio.data.local.DatabaseBackupCodec.mergeSettings(dto, current)
+
+        // Secrets preserved unchanged
+        assertEquals("my_real_key", merged.hordeApiKey)
+        assertEquals("my_civ_key", merged.civitaiApiKey)
+
+        // Device-bound storage preserved unchanged
+        assertEquals("content://com.example/tree/Primary", merged.safTreeUri)
+        assertEquals(net.hordeslop.studio.domain.StorageMode.SAF, merged.storageMode)
+
+        // Portable fields updated
+        assertEquals(net.hordeslop.studio.domain.NavLayoutMode.MENU, merged.navLayout)
+        assertEquals(3, merged.galleryColumns)
+    }
+
+    @Test
+    fun settingsBackupV1BundleDecodesWithoutSettings() {
+        // A v1 backup (no appSettings field) should decode cleanly with appSettings == null
+        val v1Json = """
+            {
+              "app": "hordeslop-studio",
+              "formatVersion": 1,
+              "exportedAtMillis": 1000,
+              "promptHistory": [],
+              "modelDefaults": [],
+              "savedImages": [],
+              "activeJobs": []
+            }
+        """.trimIndent()
+        val bundle = net.hordeslop.studio.data.local.DatabaseBackupCodec.decodeJson(v1Json)
+        assertEquals(1, bundle.formatVersion)
+        assertEquals(null, bundle.appSettings)
+    }
+
+    @Test
+    fun settingsBackupUnknownFieldsAreIgnoredOnImport() {
+        // A future backup with extra unknown fields should not throw
+        val futureJson = """
+            {
+              "app": "hordeslop-studio",
+              "formatVersion": 2,
+              "exportedAtMillis": 2000,
+              "appSettings": {
+                "navLayout": "bottom",
+                "unknownFutureField": true,
+                "galleryColumns": 2
+              },
+              "promptHistory": [],
+              "modelDefaults": [],
+              "savedImages": [],
+              "activeJobs": []
+            }
+        """.trimIndent()
+        val bundle = net.hordeslop.studio.data.local.DatabaseBackupCodec.decodeJson(futureJson)
+        assertEquals(2, bundle.formatVersion)
+        assertEquals("bottom", bundle.appSettings?.navLayout)
+        assertEquals(2, bundle.appSettings?.galleryColumns)
+    }
+
+    @Test
+    fun settingsBackupInvalidStylesUrlsAreFilteredOnMerge() {
+        val dto = net.hordeslop.studio.data.local.AppSettingsBackupDto(
+            stylesRepoUrls = listOf("  ", "", "https://valid.example.com/styles.json", "  "),
+        )
+        val current = net.hordeslop.studio.data.local.AppSettings()
+        val merged = net.hordeslop.studio.data.local.DatabaseBackupCodec.mergeSettings(dto, current)
+        assertEquals(listOf("https://valid.example.com/styles.json"), merged.stylesRepoUrls)
+    }
+
+    @Test
+    fun settingsBackupEmptyStylesUrlsFallsBackToDefault() {
+        val dto = net.hordeslop.studio.data.local.AppSettingsBackupDto(
+            stylesRepoUrls = listOf("  ", ""),
+        )
+        val current = net.hordeslop.studio.data.local.AppSettings()
+        val merged = net.hordeslop.studio.data.local.DatabaseBackupCodec.mergeSettings(dto, current)
+        assertEquals(
+            listOf(net.hordeslop.studio.domain.HordeConstants.DEFAULT_STYLES_REPO_URL),
+            merged.stylesRepoUrls,
+        )
+    }
 }
