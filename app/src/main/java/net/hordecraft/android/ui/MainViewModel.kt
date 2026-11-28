@@ -1027,8 +1027,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 .onSuccess { counts ->
                     refreshCatalogs(force = true)
                     refreshQueueTracking()
+                    val settingsNote = if (counts.settingsApplied) ", settings restored" else ""
                     showToast(
-                        "Imported ${counts.promptHistoryCount} prompts, ${counts.savedImagesCount} images, ${counts.modelDefaultsCount} model defaults",
+                        "Imported ${counts.promptHistoryCount} prompts, ${counts.savedImagesCount} images, ${counts.modelDefaultsCount} model defaults$settingsNote",
                     )
                 }
                 .onFailure { err ->

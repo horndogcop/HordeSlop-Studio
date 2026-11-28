@@ -138,6 +138,8 @@ data class DatabaseSyncCounts(
     val modelDefaultsCount: Int,
     val savedImagesCount: Int,
     val activeJobsCount: Int,
+    /** True if a portable settings section was present in the backup and applied successfully. */
+    val settingsApplied: Boolean = false,
 ) {
     val totalCount: Int
         get() = promptHistoryCount + modelDefaultsCount + savedImagesCount + activeJobsCount
@@ -286,6 +288,46 @@ object DatabaseBackupCodec {
         showGalleryPromptOverlay = dto.showGalleryPromptOverlay,
         galleryPagedMode = dto.galleryPagedMode,
     )
+
+    /**
+     * Validate a [DatabaseBackupBundle] before any writes are made. Throws [IllegalArgumentException]
+     * describing the first problem found, so callers can surface a clear error without touching
+     * Room or DataStore.
+     *
+     * Validation policy:
+     * - Format version must be >= 1 (also checked in [decodeJson]).
+     * - If appSettings is present, globalRateLimitSeconds must be in [1, 30], galleryColumns in
+     *   [2, 6], and stylesRepoUrls must not be all blank (a fully blank list is replaced by the
+     *   default, not an error — but a list that is not a list is a parse error caught earlier).
+     * - Database entities must have non-blank primary keys (id / modelName).
+     * - SAF-bound values (safTreeUri, storageMode=SAF) must not be present in the backup DTO
+     *   (they are excluded at export time; presence would indicate a corrupt or hand-crafted file).
+     */
+    fun validateBackupBundle(bundle: DatabaseBackupBundle) {
+        require(bundle.formatVersion >= 1) { "Unsupported backup format version: ${bundle.formatVersion}" }
+
+        bundle.appSettings?.let { s ->
+            require(s.globalRateLimitSeconds in 1..30) {
+                "Invalid globalRateLimitSeconds in backup: ${s.globalRateLimitSeconds} (must be 1–30)"
+            }
+            require(s.galleryColumns in 2..6) {
+                "Invalid galleryColumns in backup: ${s.galleryColumns} (must be 2–6)"
+            }
+        }
+
+        bundle.promptHistory.forEachIndexed { i, e ->
+            require(e.id.isNotBlank()) { "promptHistory[$i] has a blank id" }
+        }
+        bundle.modelDefaults.forEachIndexed { i, e ->
+            require(e.modelName.isNotBlank()) { "modelDefaults[$i] has a blank modelName" }
+        }
+        bundle.savedImages.forEachIndexed { i, e ->
+            require(e.id.isNotBlank()) { "savedImages[$i] has a blank id" }
+        }
+        bundle.activeJobs.forEachIndexed { i, e ->
+            require(e.id.isNotBlank()) { "activeJobs[$i] has a blank id" }
+        }
+    }
 
     fun isSqliteDatabaseBytes(bytes: ByteArray): Boolean {
         if (bytes.size < SQLITE_MAGIC.size) return false

@@ -1042,4 +1042,126 @@ class IssueFixesTest {
             assertTrue(e.message?.contains("Unsupported backup format version") == true)
         }
     }
+
+    @Test
+    fun settingsBackupValidationRejectsOutOfRangeAndBlankPrimaryKeys() {
+        val baseBundle = net.hordeslop.studio.data.local.DatabaseBackupBundle(
+            formatVersion = 1,
+            promptHistory = emptyList(),
+            modelDefaults = emptyList(),
+            savedImages = emptyList(),
+            activeJobs = emptyList(),
+        )
+
+        // Out-of-range globalRateLimitSeconds
+        try {
+            net.hordeslop.studio.data.local.DatabaseBackupCodec.validateBackupBundle(
+                baseBundle.copy(
+                    formatVersion = 2,
+                    appSettings = net.hordeslop.studio.data.local.AppSettingsBackupDto(
+                        globalRateLimitSeconds = 0,
+                    ),
+                ),
+            )
+            assertTrue("Expected exception for globalRateLimitSeconds=0", false)
+        } catch (e: IllegalArgumentException) {
+            assertTrue(e.message?.contains("globalRateLimitSeconds") == true)
+        }
+
+        // Out-of-range galleryColumns
+        try {
+            net.hordeslop.studio.data.local.DatabaseBackupCodec.validateBackupBundle(
+                baseBundle.copy(
+                    formatVersion = 2,
+                    appSettings = net.hordeslop.studio.data.local.AppSettingsBackupDto(
+                        galleryColumns = 1,
+                    ),
+                ),
+            )
+            assertTrue("Expected exception for galleryColumns=1", false)
+        } catch (e: IllegalArgumentException) {
+            assertTrue(e.message?.contains("galleryColumns") == true)
+        }
+
+        // Blank prompt history id
+        try {
+            net.hordeslop.studio.data.local.DatabaseBackupCodec.validateBackupBundle(
+                baseBundle.copy(
+                    promptHistory = listOf(
+                        net.hordeslop.studio.data.local.PromptHistoryBackupDto(id = "  ", prompt = "test"),
+                    ),
+                ),
+            )
+            assertTrue("Expected exception for blank promptHistory id", false)
+        } catch (e: IllegalArgumentException) {
+            assertTrue(e.message?.contains("promptHistory") == true)
+        }
+
+        // A valid bundle should not throw
+        net.hordeslop.studio.data.local.DatabaseBackupCodec.validateBackupBundle(baseBundle)
+    }
+
+    @Test
+    fun applyPortableSettingsUpdatesExpectedFields() {
+        // Test that mergeSettings produces the right AppSettings object (which is what
+        // applyPortableSettings receives). This covers the DataStore observation contract
+        // without requiring a real DataStore instance.
+        val dto = net.hordeslop.studio.data.local.AppSettingsBackupDto(
+            navLayout = "menu",
+            galleryColumns = 4,
+            globalRateLimitSeconds = 10,
+            showModelPreviews = false,
+            autoClearCompletedQueue = true,
+            stylesRepoUrls = listOf("https://styles.example.com/styles.json"),
+            galleryPagedMode = true,
+        )
+        val current = net.hordeslop.studio.data.local.AppSettings(
+            hordeApiKey = "secret",
+            navLayout = net.hordeslop.studio.domain.NavLayoutMode.BOTTOM,
+            galleryColumns = 2,
+        )
+        val merged = net.hordeslop.studio.data.local.DatabaseBackupCodec.mergeSettings(dto, current)
+
+        // Portable fields updated from DTO
+        assertEquals(net.hordeslop.studio.domain.NavLayoutMode.MENU, merged.navLayout)
+        assertEquals(4, merged.galleryColumns)
+        assertEquals(10, merged.globalRateLimitSeconds)
+        assertEquals(false, merged.showModelPreviews)
+        assertEquals(true, merged.autoClearCompletedQueue)
+        assertEquals(listOf("https://styles.example.com/styles.json"), merged.stylesRepoUrls)
+        assertEquals(true, merged.galleryPagedMode)
+
+        // Secret preserved
+        assertEquals("secret", merged.hordeApiKey)
+
+        // The merged AppSettings is what applyPortableSettings would write atomically.
+        // Verify all fields it touches are present and correct (the portable field set).
+        assertEquals(merged.navLayout.storageKey, net.hordeslop.studio.domain.NavLayoutMode.MENU.storageKey)
+        assertEquals(merged.globalRateLimitSeconds, 10)
+    }
+
+    @Test
+    fun settingsBackupDeviceSpecificSafReferencesIgnoredOnMerge() {
+        // A backup created on another device may contain a SAF URI that is invalid on this
+        // device. mergeSettings excludes SAF/storage fields entirely from the DTO, so any
+        // device-specific SAF state on the current device is always preserved unchanged.
+        val dtoWithNoSaf = net.hordeslop.studio.data.local.AppSettingsBackupDto(
+            navLayout = "menu",
+        )
+        val currentWithSaf = net.hordeslop.studio.data.local.AppSettings(
+            safTreeUri = "content://com.android.externalstorage.documents/tree/primary%3AHordeSlop",
+            storageMode = net.hordeslop.studio.domain.StorageMode.SAF,
+            safFolderLabel = "DCIM/HordeSlop",
+        )
+        val merged = net.hordeslop.studio.data.local.DatabaseBackupCodec.mergeSettings(
+            dtoWithNoSaf,
+            currentWithSaf,
+        )
+        // SAF fields preserved unchanged from device settings
+        assertEquals(currentWithSaf.safTreeUri, merged.safTreeUri)
+        assertEquals(net.hordeslop.studio.domain.StorageMode.SAF, merged.storageMode)
+        assertEquals("DCIM/HordeSlop", merged.safFolderLabel)
+        // Portable field updated
+        assertEquals(net.hordeslop.studio.domain.NavLayoutMode.MENU, merged.navLayout)
+    }
 }
